@@ -509,7 +509,7 @@ class CircuitSimulator {
     }
 
     drawCustomComponent(component) {
-        const { x, y, label } = component;
+        const { x, y, label, customDefinition } = component;
 
         // Draw component body
         this.ctx.fillStyle = '#fff3e0';
@@ -539,12 +539,34 @@ class CircuitSimulator {
             this.ctx.fillText(label, x, y);
         }
 
-        // Draw ports
-        component.inputs.forEach(port => {
+        // Draw ports with labels
+        this.ctx.font = 'bold 8px Arial';
+        this.ctx.fillStyle = '#666';
+
+        // Draw input ports with labels
+        component.inputs.forEach((port, index) => {
             this.drawPort(port.x, port.y, false);
+
+            // Draw input label to the left of the port
+            if (customDefinition && customDefinition.inputPorts[index]) {
+                const inputLabel = customDefinition.inputPorts[index].label;
+                this.ctx.textAlign = 'right';
+                this.ctx.textBaseline = 'middle';
+                this.ctx.fillText(inputLabel, port.x - 8, port.y);
+            }
         });
-        component.outputs.forEach(port => {
+
+        // Draw output ports with labels
+        component.outputs.forEach((port, index) => {
             this.drawPort(port.x, port.y, true);
+
+            // Draw output label to the right of the port
+            if (customDefinition && customDefinition.outputPorts[index]) {
+                const outputLabel = customDefinition.outputPorts[index].label;
+                this.ctx.textAlign = 'left';
+                this.ctx.textBaseline = 'middle';
+                this.ctx.fillText(outputLabel, port.x + 8, port.y);
+            }
         });
     }
 
@@ -702,11 +724,18 @@ class CircuitSimulator {
             });
         }
 
-        // Get the output value from the first OUTPUT component
-        const outputPort = def.outputPorts[0];
-        const internalOutput = tempComponents.find(c => c.id === outputPort.id);
+        // Get ALL output values (not just the first one!)
+        const outputValues = [];
+        def.outputPorts.forEach(outputPort => {
+            const internalOutput = tempComponents.find(c => c.id === outputPort.id);
+            outputValues.push(internalOutput ? internalOutput.value : null);
+        });
 
-        return internalOutput ? internalOutput.value : null;
+        // Store output values in the component for multi-output support
+        component.outputValues = outputValues;
+
+        // Return first output for backward compatibility with single-output components
+        return outputValues[0];
     }
 
     calculateInternalComponentValue(component, components, connections) {
@@ -766,6 +795,11 @@ class CircuitSimulator {
     }
 
     getPortValue(component, portIndex) {
+        // For custom components with multiple outputs, return the specific output value
+        if (component.type === 'CUSTOM' && component.outputValues) {
+            return component.outputValues[portIndex] !== undefined ? component.outputValues[portIndex] : null;
+        }
+        // For regular components with single output
         return component.value;
     }
 

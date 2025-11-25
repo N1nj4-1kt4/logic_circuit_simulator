@@ -155,8 +155,13 @@ One of the most powerful features is the ability to save circuits as reusable co
 1. After saving, your component appears in the "Custom Components" section of the toolbar
 2. Click on your custom component to select it
 3. Place it on the breadboard like any other component
-4. Connect it to other gates, inputs, or outputs
-5. The component will automatically simulate its internal circuit
+4. **Port Labels**: Each port shows its name (e.g., "A", "B" for inputs, "Sum", "Carry" for outputs)
+   - Input labels appear to the left of input ports
+   - Output labels appear to the right of output ports
+   - This makes it easy to connect the right signals!
+5. Connect it to other gates, inputs, or outputs
+6. The component will automatically simulate its internal circuit
+7. **Multi-output support**: Components with multiple outputs (like HalfAdder) correctly simulate all outputs
 
 #### Managing Custom Components
 
