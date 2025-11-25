@@ -14,6 +14,7 @@ class CircuitSimulator {
         this.currentCycleIndex = 0;
         this.customComponents = {};
         this.renameTarget = null;
+        this.darkMode = localStorage.getItem('darkMode') === 'true';
 
         this.init();
     }
@@ -23,6 +24,7 @@ class CircuitSimulator {
         this.setupEventListeners();
         this.drawGrid();
         this.updateCustomComponentsList();
+        this.applyTheme();
     }
 
     setupEventListeners() {
@@ -137,6 +139,11 @@ class CircuitSimulator {
 
         document.getElementById('confirmRename').addEventListener('click', () => {
             this.confirmRename();
+        });
+
+        // Theme Toggle
+        document.getElementById('themeToggle').addEventListener('click', () => {
+            this.toggleTheme();
         });
 
         // Canvas click
@@ -421,7 +428,7 @@ class CircuitSimulator {
     }
 
     drawConnections() {
-        this.connections.forEach(conn => {
+        this.connections.forEach((conn, index) => {
             const from = this.components.find(c => c.id === conn.from);
             const to = this.components.find(c => c.id === conn.to);
 
@@ -430,19 +437,36 @@ class CircuitSimulator {
             const fromPort = from.outputs[conn.fromPort];
             const toPort = to.inputs[conn.toPort];
 
-            // Determine color based on signal value
+            // Determine color based on signal value and theme
             const value = this.getPortValue(from, conn.fromPort);
-            this.ctx.strokeStyle = value === 1 ? '#4caf50' : value === 0 ? '#f44336' : '#666';
+            this.ctx.strokeStyle = value === 1 ? '#4caf50' :
+                                   value === 0 ? '#f44336' :
+                                   (this.darkMode ? '#888' : '#666');
             this.ctx.lineWidth = 3;
 
             this.ctx.beginPath();
             this.ctx.moveTo(fromPort.x, fromPort.y);
 
-            // Draw with right angles
-            const midX = (fromPort.x + toPort.x) / 2;
-            this.ctx.lineTo(midX, fromPort.y);
-            this.ctx.lineTo(midX, toPort.y);
-            this.ctx.lineTo(toPort.x, toPort.y);
+            // Improved routing with offset to avoid overlaps
+            const dx = toPort.x - fromPort.x;
+            const dy = toPort.y - fromPort.y;
+
+            // Calculate offset based on port index to spread wires
+            const offset = (conn.toPort - 0.5) * 10;
+
+            if (Math.abs(dx) > Math.abs(dy)) {
+                // Horizontal preference
+                const midX = fromPort.x + dx * 0.6;
+                this.ctx.lineTo(midX, fromPort.y);
+                this.ctx.lineTo(midX, toPort.y + offset * 0.3);
+                this.ctx.lineTo(toPort.x, toPort.y);
+            } else {
+                // Vertical preference
+                const midY = fromPort.y + dy * 0.6;
+                this.ctx.lineTo(fromPort.x, midY);
+                this.ctx.lineTo(toPort.x, midY);
+                this.ctx.lineTo(toPort.x, toPort.y);
+            }
 
             this.ctx.stroke();
         });
@@ -459,32 +483,36 @@ class CircuitSimulator {
             this.ctx.beginPath();
             this.ctx.arc(x, y, 20, 0, Math.PI * 2);
             this.ctx.fill();
-            this.ctx.strokeStyle = '#333';
+            this.ctx.strokeStyle = this.darkMode ? '#e9e9e9' : '#333';
             this.ctx.lineWidth = 2;
             this.ctx.stroke();
 
             // Label
-            this.ctx.fillStyle = 'white';
+            this.ctx.fillStyle = this.darkMode ? '#e9e9e9' : '#333';
             this.ctx.font = 'bold 14px Arial';
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
             this.ctx.fillText(component.label, x, y - 35);
+
+            this.ctx.fillStyle = 'white';
             this.ctx.fillText(value.toString(), x, y);
 
             // Output port
             this.drawPort(component.outputs[0].x, component.outputs[0].y, true);
         } else if (type === 'OUTPUT') {
-            // Draw output as a square
+            // Draw output as a circle (same as input)
             const outputValue = this.getComponentValue(component);
             this.ctx.fillStyle = outputValue === 1 ? '#4caf50' :
-                                outputValue === 0 ? '#f44336' : '#ccc';
-            this.ctx.fillRect(x - 20, y - 20, 40, 40);
-            this.ctx.strokeStyle = '#333';
+                                outputValue === 0 ? '#f44336' : (this.darkMode ? '#555' : '#ccc');
+            this.ctx.beginPath();
+            this.ctx.arc(x, y, 20, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.strokeStyle = this.darkMode ? '#e9e9e9' : '#333';
             this.ctx.lineWidth = 2;
-            this.ctx.strokeRect(x - 20, y - 20, 40, 40);
+            this.ctx.stroke();
 
             // Label
-            this.ctx.fillStyle = '#333';
+            this.ctx.fillStyle = this.darkMode ? '#e9e9e9' : '#333';
             this.ctx.font = 'bold 14px Arial';
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
@@ -511,15 +539,15 @@ class CircuitSimulator {
     drawCustomComponent(component) {
         const { x, y, label, customDefinition } = component;
 
-        // Draw component body
-        this.ctx.fillStyle = '#fff3e0';
-        this.ctx.strokeStyle = '#ff9800';
+        // Draw component body with theme colors
+        this.ctx.fillStyle = this.darkMode ? '#1a1a2e' : '#fff3e0';
+        this.ctx.strokeStyle = this.darkMode ? '#f39c12' : '#ff9800';
         this.ctx.lineWidth = 3;
         this.ctx.fillRect(x - 30, y - 30, 60, 60);
         this.ctx.strokeRect(x - 30, y - 30, 60, 60);
 
         // Draw label
-        this.ctx.fillStyle = '#ff9800';
+        this.ctx.fillStyle = this.darkMode ? '#f39c12' : '#ff9800';
         this.ctx.font = 'bold 10px Arial';
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
@@ -541,7 +569,7 @@ class CircuitSimulator {
 
         // Draw ports with labels
         this.ctx.font = 'bold 8px Arial';
-        this.ctx.fillStyle = '#666';
+        this.ctx.fillStyle = this.darkMode ? '#b3b3b3' : '#666';
 
         // Draw input ports with labels
         component.inputs.forEach((port, index) => {
@@ -573,38 +601,38 @@ class CircuitSimulator {
     drawGate(component) {
         const { type, x, y } = component;
 
-        // Draw gate body
-        this.ctx.fillStyle = '#e3f2fd';
-        this.ctx.strokeStyle = '#1976d2';
+        const fillColor = this.darkMode ? '#0f3460' : '#e3f2fd';
+        const strokeColor = this.darkMode ? '#53a8f4' : '#1976d2';
+        const textColor = this.darkMode ? '#53a8f4' : '#1976d2';
+
+        this.ctx.fillStyle = fillColor;
+        this.ctx.strokeStyle = strokeColor;
         this.ctx.lineWidth = 2;
 
-        if (type === 'NOT') {
-            // Triangle for NOT gate
-            this.ctx.beginPath();
-            this.ctx.moveTo(x - 20, y - 20);
-            this.ctx.lineTo(x - 20, y + 20);
-            this.ctx.lineTo(x + 20, y);
-            this.ctx.closePath();
-            this.ctx.fill();
-            this.ctx.stroke();
-
-            // Inversion circle
-            this.ctx.beginPath();
-            this.ctx.arc(x + 25, y, 5, 0, Math.PI * 2);
-            this.ctx.fill();
-            this.ctx.stroke();
-        } else {
-            // Rectangle for other gates
-            this.ctx.fillRect(x - 25, y - 25, 50, 50);
-            this.ctx.strokeRect(x - 25, y - 25, 50, 50);
+        // Draw standard logic gate symbols
+        switch(type) {
+            case 'AND':
+                this.drawAndGate(x, y, false);
+                break;
+            case 'OR':
+                this.drawOrGate(x, y, false);
+                break;
+            case 'NOT':
+                this.drawNotGate(x, y);
+                break;
+            case 'XOR':
+                this.drawOrGate(x, y, true);
+                break;
+            case 'NAND':
+                this.drawAndGate(x, y, true);
+                break;
+            case 'NOR':
+                this.drawOrGate(x, y, false, true);
+                break;
+            case 'XNOR':
+                this.drawOrGate(x, y, true, true);
+                break;
         }
-
-        // Gate label
-        this.ctx.fillStyle = '#1976d2';
-        this.ctx.font = 'bold 12px Arial';
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(type, x, y);
 
         // Draw ports
         component.inputs.forEach(port => {
@@ -613,6 +641,73 @@ class CircuitSimulator {
         component.outputs.forEach(port => {
             this.drawPort(port.x, port.y, true);
         });
+    }
+
+    drawAndGate(x, y, inverted) {
+        // AND gate shape (D-shape)
+        this.ctx.beginPath();
+        this.ctx.moveTo(x - 25, y - 20);
+        this.ctx.lineTo(x, y - 20);
+        this.ctx.arc(x, y, 20, -Math.PI/2, Math.PI/2);
+        this.ctx.lineTo(x - 25, y + 20);
+        this.ctx.closePath();
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        if (inverted) {
+            // Add inversion bubble for NAND
+            this.ctx.beginPath();
+            this.ctx.arc(x + 25, y, 5, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.stroke();
+        }
+    }
+
+    drawOrGate(x, y, isXor, inverted) {
+        // OR/XOR gate shape
+        this.ctx.beginPath();
+        this.ctx.moveTo(x - 25, y - 20);
+        // Curved back
+        this.ctx.quadraticCurveTo(x - 15, y, x - 25, y + 20);
+        // Bottom to output curve
+        this.ctx.quadraticCurveTo(x - 5, y + 15, x + 20, y);
+        // Top curve back
+        this.ctx.quadraticCurveTo(x - 5, y - 15, x - 25, y - 20);
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        if (isXor) {
+            // Extra line for XOR
+            this.ctx.beginPath();
+            this.ctx.moveTo(x - 30, y - 20);
+            this.ctx.quadraticCurveTo(x - 20, y, x - 30, y + 20);
+            this.ctx.stroke();
+        }
+
+        if (inverted) {
+            // Add inversion bubble for NOR/XNOR
+            this.ctx.beginPath();
+            this.ctx.arc(x + 25, y, 5, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.stroke();
+        }
+    }
+
+    drawNotGate(x, y) {
+        // NOT gate - triangle with bubble
+        this.ctx.beginPath();
+        this.ctx.moveTo(x - 20, y - 15);
+        this.ctx.lineTo(x - 20, y + 15);
+        this.ctx.lineTo(x + 15, y);
+        this.ctx.closePath();
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        // Inversion circle
+        this.ctx.beginPath();
+        this.ctx.arc(x + 20, y, 5, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke();
     }
 
     drawPort(x, y, isOutput) {
@@ -1393,6 +1488,24 @@ class CircuitSimulator {
 
         document.getElementById('renameDialog').style.display = 'none';
         this.renameTarget = null;
+    }
+
+    // Theme Management Methods
+    applyTheme() {
+        if (this.darkMode) {
+            document.body.classList.add('dark-mode');
+            document.getElementById('themeToggle').textContent = '☀️';
+        } else {
+            document.body.classList.remove('dark-mode');
+            document.getElementById('themeToggle').textContent = '🌙';
+        }
+        this.redraw();
+    }
+
+    toggleTheme() {
+        this.darkMode = !this.darkMode;
+        localStorage.setItem('darkMode', this.darkMode);
+        this.applyTheme();
     }
 }
 

@@ -168,11 +168,31 @@ header p {
 .canvas-header {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     margin-bottom: 15px;
     padding: 10px;
     background: #f5f5f5;
     border-radius: 5px;
     font-weight: 600;
+    gap: 15px;
+}
+
+.theme-toggle {
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.theme-toggle:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
 }
 
 #modeIndicator {
@@ -486,4 +506,106 @@ header p {
 .truth-table-panel::-webkit-scrollbar-thumb:hover,
 .dialog-panel::-webkit-scrollbar-thumb:hover {
     background: #764ba2;
+}
+
+/* Dark Mode Styles */
+body.dark-mode {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+}
+
+body.dark-mode .toolbar,
+body.dark-mode .canvas-container,
+body.dark-mode .truth-table-panel,
+body.dark-mode .dialog-panel {
+    background: #0f3460;
+    color: #e9e9e9;
+}
+
+body.dark-mode .canvas-header {
+    background: #16213e;
+    color: #e9e9e9;
+}
+
+body.dark-mode #breadboard {
+    background:
+        repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 49px,
+            #1a1a2e 49px,
+            #1a1a2e 50px
+        ),
+        repeating-linear-gradient(
+            90deg,
+            transparent,
+            transparent 49px,
+            #1a1a2e 49px,
+            #1a1a2e 50px
+        );
+    background-color: #16213e;
+    border-color: #1a1a2e;
+}
+
+body.dark-mode .tool-section h4,
+body.dark-mode .info-panel h4,
+body.dark-mode h3 {
+    color: #53a8f4;
+}
+
+body.dark-mode .info-panel {
+    background: #1a1a2e;
+    color: #b3b3b3;
+}
+
+body.dark-mode .info-panel ul {
+    color: #b3b3b3;
+}
+
+body.dark-mode .library-item {
+    background: #1a1a2e;
+    border-color: #53a8f4;
+}
+
+body.dark-mode .library-item-name {
+    color: #53a8f4;
+}
+
+body.dark-mode .library-item-description,
+body.dark-mode .library-item-info {
+    color: #b3b3b3;
+}
+
+body.dark-mode #truthTableContent th {
+    background: #53a8f4;
+    color: #0f3460;
+}
+
+body.dark-mode #truthTableContent tr:nth-child(even) {
+    background: #1a1a2e;
+}
+
+body.dark-mode #truthTableContent tr:hover {
+    background: #16213e;
+}
+
+body.dark-mode .form-group input[type="text"],
+body.dark-mode .form-group textarea {
+    background: #1a1a2e;
+    border-color: #53a8f4;
+    color: #e9e9e9;
+}
+
+body.dark-mode .info-box {
+    background: #1a1a2e;
+    border-left-color: #53a8f4;
+    color: #b3b3b3;
+}
+
+body.dark-mode .panel-header h3,
+body.dark-mode .dialog-content p {
+    color: #e9e9e9;
+}
+
+body.dark-mode .form-group label {
+    color: #b3b3b3;
 }
