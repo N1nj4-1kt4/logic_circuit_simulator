@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logic Circuit Simulator</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Logic Circuit Simulator</h1>
+            <p>Design and simulate digital logic circuits</p>
+        </header>
+
+        <div class="main-content">
+            <!-- Toolbar -->
+            <div class="toolbar">
+                <h3>Components</h3>
+
+                <div class="tool-section">
+                    <h4>Logic Gates</h4>
+                    <button class="tool-btn" data-type="AND">AND Gate</button>
+                    <button class="tool-btn" data-type="OR">OR Gate</button>
+                    <button class="tool-btn" data-type="NOT">NOT Gate</button>
+                    <button class="tool-btn" data-type="XOR">XOR Gate</button>
+                    <button class="tool-btn" data-type="NAND">NAND Gate</button>
+                    <button class="tool-btn" data-type="NOR">NOR Gate</button>
+                    <button class="tool-btn" data-type="XNOR">XNOR Gate</button>
+                </div>
+
+                <div class="tool-section">
+                    <h4>I/O Components</h4>
+                    <button class="tool-btn" data-type="INPUT">Input</button>
+                    <button class="tool-btn" data-type="OUTPUT">Output</button>
+                </div>
+
+                <div class="tool-section">
+                    <h4>Actions</h4>
+                    <button class="action-btn" id="connectMode">Connect Mode</button>
+                    <button class="action-btn" id="deleteMode">Delete Mode</button>
+                    <button class="action-btn" id="clearBoard">Clear Board</button>
+                    <button class="action-btn" id="simulate">Simulate</button>
+                    <button class="action-btn" id="truthTable">Truth Table</button>
+                </div>
+
+                <div class="info-panel">
+                    <h4>Instructions</h4>
+                    <ul>
+                        <li>Click a component to select it</li>
+                        <li>Click on breadboard to place</li>
+                        <li>Use Connect Mode to wire gates</li>
+                        <li>Click inputs to toggle 0/1</li>
+                        <li>Click Simulate to see outputs</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Breadboard Canvas -->
+            <div class="canvas-container">
+                <div class="canvas-header">
+                    <span id="modeIndicator">Mode: Place Component</span>
+                    <span id="selectedComponent"></span>
+                </div>
+                <canvas id="breadboard" width="1000" height="700"></canvas>
+            </div>
+
+            <!-- Truth Table Panel -->
+            <div id="truthTablePanel" class="truth-table-panel" style="display: none;">
+                <div class="panel-header">
+                    <h3>Truth Table</h3>
+                    <button id="closeTruthTable">Close</button>
+                </div>
+                <div id="truthTableContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="circuit-simulator.js"></script>
+</body>
+</html>
