@@ -35,6 +35,11 @@
                     <button class="tool-btn" data-type="OUTPUT">Output</button>
                 </div>
 
+                <div class="tool-section" id="customComponentsSection" style="display: none;">
+                    <h4>Custom Components</h4>
+                    <div id="customComponentsList"></div>
+                </div>
+
                 <div class="tool-section">
                     <h4>Actions</h4>
                     <button class="action-btn" id="connectMode">Connect Mode</button>
@@ -42,6 +47,12 @@
                     <button class="action-btn" id="clearBoard">Clear Board</button>
                     <button class="action-btn" id="simulate">Simulate</button>
                     <button class="action-btn" id="truthTable">Truth Table</button>
+                </div>
+
+                <div class="tool-section">
+                    <h4>Component Library</h4>
+                    <button class="action-btn" id="saveComponent">Save as Component</button>
+                    <button class="action-btn" id="manageComponents">Manage Library</button>
                 </div>
 
                 <div class="info-panel">
@@ -72,6 +83,44 @@
                     <button id="closeTruthTable">Close</button>
                 </div>
                 <div id="truthTableContent"></div>
+            </div>
+
+            <!-- Save Component Dialog -->
+            <div id="saveComponentDialog" class="dialog-panel" style="display: none;">
+                <div class="panel-header">
+                    <h3>Save Circuit as Component</h3>
+                    <button id="closeSaveDialog">Close</button>
+                </div>
+                <div class="dialog-content">
+                    <p>Save the current circuit as a reusable component.</p>
+                    <div class="form-group">
+                        <label for="componentName">Component Name:</label>
+                        <input type="text" id="componentName" placeholder="e.g., HalfAdder, Multiplexer" />
+                    </div>
+                    <div class="form-group">
+                        <label for="componentDescription">Description (optional):</label>
+                        <textarea id="componentDescription" placeholder="What does this component do?" rows="3"></textarea>
+                    </div>
+                    <div class="info-box">
+                        <strong>Note:</strong> All INPUT components will become input ports, and all OUTPUT components will become output ports of the new component.
+                    </div>
+                    <div class="dialog-actions">
+                        <button class="action-btn" id="confirmSave">Save Component</button>
+                        <button class="action-btn" id="cancelSave">Cancel</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Manage Components Dialog -->
+            <div id="manageComponentsDialog" class="dialog-panel" style="display: none;">
+                <div class="panel-header">
+                    <h3>Component Library</h3>
+                    <button id="closeManageDialog">Close</button>
+                </div>
+                <div class="dialog-content">
+                    <p>Manage your saved custom components.</p>
+                    <div id="componentLibraryList"></div>
+                </div>
             </div>
         </div>
     </div>

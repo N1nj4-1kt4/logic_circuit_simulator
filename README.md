@@ -11,6 +11,7 @@ A web-based interactive logic circuit simulator that allows you to design, simul
 - **Real-time Simulation**: Simulate circuit behavior and see signal propagation
 - **Truth Table Generation**: Automatically generate truth tables for your entire circuit
 - **Interactive Design**: Click-and-place interface with visual feedback
+- **Custom Components**: Save circuits as reusable components to build larger, more complex circuits
 
 ## How to Use
 
@@ -83,6 +84,59 @@ A web-based interactive logic circuit simulator that allows you to design, simul
 1. Click the "Clear Board" button
 2. Confirm the action in the dialog
 3. All components and connections will be removed
+
+### Creating and Using Custom Components
+
+One of the most powerful features is the ability to save circuits as reusable components. This allows you to build complex systems from smaller, tested building blocks.
+
+#### Saving a Circuit as a Custom Component
+
+1. Build and test a circuit with at least one INPUT and one OUTPUT
+2. Click the "Save as Component" button in the toolbar
+3. Enter a name for your component (e.g., "HalfAdder", "Multiplexer")
+4. Optionally add a description
+5. Click "Save Component"
+
+**Important Notes:**
+- All INPUT components in your circuit become input ports of the custom component
+- All OUTPUT components become output ports of the custom component
+- The internal logic is encapsulated - users only see the inputs and outputs
+- Components are saved to browser localStorage and persist across sessions
+
+#### Using Custom Components
+
+1. After saving, your component appears in the "Custom Components" section of the toolbar
+2. Click on your custom component to select it
+3. Place it on the breadboard like any other component
+4. Connect it to other gates, inputs, or outputs
+5. The component will automatically simulate its internal circuit
+
+#### Managing Custom Components
+
+1. Click "Manage Library" to view all saved components
+2. See component details: number of inputs/outputs, creation date, description
+3. Delete components you no longer need
+4. Components are marked with an orange "Custom" badge
+
+#### Example Workflow: Building a Full Adder
+
+1. **Create a Half Adder:**
+   - Place 2 inputs (A, B), 1 XOR gate, 1 AND gate, 2 outputs (Sum, Carry)
+   - Connect: A→XOR, B→XOR, XOR→Sum, A→AND, B→AND, AND→Carry
+   - Test with simulation
+   - Save as "HalfAdder"
+
+2. **Use Half Adder in Full Adder:**
+   - Place 3 inputs (A, B, Cin)
+   - Place 2 "HalfAdder" components
+   - Place 1 OR gate and 1 output (Cout)
+   - Connect them appropriately
+   - Save as "FullAdder"
+
+3. **Build a 4-bit Adder:**
+   - Use 4 "FullAdder" components
+   - Chain them together
+   - This demonstrates hierarchical design!
 
 ## Supported Logic Gates
 

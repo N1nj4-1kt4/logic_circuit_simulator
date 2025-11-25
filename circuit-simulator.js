@@ -12,13 +12,16 @@ class CircuitSimulator {
         this.isAutoCycling = false;
         this.autoCycleTimeout = null;
         this.currentCycleIndex = 0;
+        this.customComponents = {};
 
         this.init();
     }
 
     init() {
+        this.loadCustomComponents();
         this.setupEventListeners();
         this.drawGrid();
+        this.updateCustomComponentsList();
     }
 
     setupEventListeners() {
@@ -70,6 +73,32 @@ class CircuitSimulator {
             document.getElementById('truthTablePanel').style.display = 'none';
         });
 
+        // Save Component
+        document.getElementById('saveComponent').addEventListener('click', () => {
+            this.showSaveComponentDialog();
+        });
+
+        document.getElementById('closeSaveDialog').addEventListener('click', () => {
+            document.getElementById('saveComponentDialog').style.display = 'none';
+        });
+
+        document.getElementById('cancelSave').addEventListener('click', () => {
+            document.getElementById('saveComponentDialog').style.display = 'none';
+        });
+
+        document.getElementById('confirmSave').addEventListener('click', () => {
+            this.saveCurrentCircuitAsComponent();
+        });
+
+        // Manage Components
+        document.getElementById('manageComponents').addEventListener('click', () => {
+            this.showManageComponentsDialog();
+        });
+
+        document.getElementById('closeManageDialog').addEventListener('click', () => {
+            document.getElementById('manageComponentsDialog').style.display = 'none';
+        });
+
         // Canvas click
         this.canvas.addEventListener('click', (e) => {
             this.handleCanvasClick(e);
@@ -113,16 +142,33 @@ class CircuitSimulator {
     }
 
     placeComponent(x, y, type) {
+        let customName = null;
+        let actualType = type;
+
+        // Check if this is a custom component
+        if (type.startsWith('CUSTOM:')) {
+            customName = type.substring(7);
+            actualType = 'CUSTOM';
+
+            if (!this.customComponents[customName]) {
+                alert('Custom component not found!');
+                return;
+            }
+        }
+
         const component = {
             id: this.nextId++,
-            type: type,
+            type: actualType,
             x: Math.round(x / 50) * 50,
             y: Math.round(y / 50) * 50,
-            value: type === 'INPUT' ? 0 : null,
+            value: actualType === 'INPUT' ? 0 : null,
             inputs: [],
             outputs: [],
-            label: type === 'INPUT' ? `I${this.getInputCount() + 1}` :
-                   type === 'OUTPUT' ? `O${this.getOutputCount() + 1}` : null
+            label: actualType === 'INPUT' ? `I${this.getInputCount() + 1}` :
+                   actualType === 'OUTPUT' ? `O${this.getOutputCount() + 1}` :
+                   actualType === 'CUSTOM' ? customName : null,
+            customName: customName,
+            customDefinition: customName ? this.customComponents[customName] : null
         };
 
         // Define input/output ports
@@ -142,6 +188,27 @@ class CircuitSimulator {
         } else if (type === 'NOT') {
             component.inputs.push({ x: x - 10, y: y });
             component.outputs.push({ x: x + 50, y: y });
+        } else if (type === 'CUSTOM') {
+            // Custom component ports based on saved definition
+            const def = component.customDefinition;
+            const numInputs = def.inputPorts.length;
+            const numOutputs = def.outputPorts.length;
+
+            // Calculate spacing for ports
+            const inputSpacing = Math.min(30, 60 / (numInputs + 1));
+            const outputSpacing = Math.min(30, 60 / (numOutputs + 1));
+
+            // Create input ports on the left
+            for (let i = 0; i < numInputs; i++) {
+                const offsetY = (i - (numInputs - 1) / 2) * inputSpacing;
+                component.inputs.push({ x: x - 35, y: y + offsetY });
+            }
+
+            // Create output ports on the right
+            for (let i = 0; i < numOutputs; i++) {
+                const offsetY = (i - (numOutputs - 1) / 2) * outputSpacing;
+                component.outputs.push({ x: x + 35, y: y + offsetY });
+            }
         } else {
             // Two-input gates
             component.inputs.push({ x: x - 10, y: y - 15 });
@@ -210,7 +277,12 @@ class CircuitSimulator {
 
     findComponent(x, y) {
         return this.components.find(c => {
-            const size = c.type === 'INPUT' || c.type === 'OUTPUT' ? 30 : 40;
+            let size = 40;
+            if (c.type === 'INPUT' || c.type === 'OUTPUT') {
+                size = 30;
+            } else if (c.type === 'CUSTOM') {
+                size = 60;
+            }
             return x >= c.x - size/2 && x <= c.x + size/2 &&
                    y >= c.y - size/2 && y <= c.y + size/2;
         });
@@ -380,12 +452,55 @@ class CircuitSimulator {
 
             // Input port
             this.drawPort(component.inputs[0].x, component.inputs[0].y, false);
+        } else if (type === 'CUSTOM') {
+            // Draw custom component
+            this.drawCustomComponent(component);
         } else {
             // Draw logic gate
             this.drawGate(component);
         }
 
         this.ctx.restore();
+    }
+
+    drawCustomComponent(component) {
+        const { x, y, label } = component;
+
+        // Draw component body
+        this.ctx.fillStyle = '#fff3e0';
+        this.ctx.strokeStyle = '#ff9800';
+        this.ctx.lineWidth = 3;
+        this.ctx.fillRect(x - 30, y - 30, 60, 60);
+        this.ctx.strokeRect(x - 30, y - 30, 60, 60);
+
+        // Draw label
+        this.ctx.fillStyle = '#ff9800';
+        this.ctx.font = 'bold 10px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+
+        // Wrap text if too long
+        const maxWidth = 50;
+        if (this.ctx.measureText(label).width > maxWidth) {
+            const words = label.split(/(?=[A-Z])/); // Split on capital letters
+            if (words.length > 1) {
+                this.ctx.fillText(words[0], x, y - 5);
+                this.ctx.fillText(words.slice(1).join(''), x, y + 5);
+            } else {
+                this.ctx.fillText(label.substring(0, 8), x, y - 5);
+                this.ctx.fillText(label.substring(8), x, y + 5);
+            }
+        } else {
+            this.ctx.fillText(label, x, y);
+        }
+
+        // Draw ports
+        component.inputs.forEach(port => {
+            this.drawPort(port.x, port.y, false);
+        });
+        component.outputs.forEach(port => {
+            this.drawPort(port.x, port.y, true);
+        });
     }
 
     drawGate(component) {
@@ -498,6 +613,78 @@ class CircuitSimulator {
         }
 
         // Calculate output based on gate type
+        if (component.type === 'CUSTOM') {
+            return this.evaluateCustomComponent(component, inputValues);
+        } else {
+            return this.evaluateGate(component.type, inputValues);
+        }
+    }
+
+    evaluateCustomComponent(component, inputValues) {
+        const def = component.customDefinition;
+
+        // Create a temporary circuit for simulation
+        const tempComponents = JSON.parse(JSON.stringify(def.components));
+        const tempConnections = JSON.parse(JSON.stringify(def.connections));
+
+        // Set input values on the internal INPUT components
+        def.inputPorts.forEach((inputPort, index) => {
+            const internalInput = tempComponents.find(c => c.id === inputPort.id);
+            if (internalInput) {
+                internalInput.value = inputValues[index];
+            }
+        });
+
+        // Simulate the internal circuit
+        let changed = true;
+        let iterations = 0;
+        const maxIterations = 100;
+
+        while (changed && iterations < maxIterations) {
+            changed = false;
+            iterations++;
+
+            tempComponents.forEach(comp => {
+                if (comp.type === 'INPUT') return;
+
+                const oldValue = comp.value;
+                const newValue = this.calculateInternalComponentValue(comp, tempComponents, tempConnections);
+
+                if (newValue !== null && newValue !== oldValue) {
+                    comp.value = newValue;
+                    changed = true;
+                }
+            });
+        }
+
+        // Get the output value from the first OUTPUT component
+        const outputPort = def.outputPorts[0];
+        const internalOutput = tempComponents.find(c => c.id === outputPort.id);
+
+        return internalOutput ? internalOutput.value : null;
+    }
+
+    calculateInternalComponentValue(component, components, connections) {
+        const inputValues = [];
+
+        // Get input values from internal connections
+        for (let i = 0; i < component.inputs.length; i++) {
+            const connection = connections.find(
+                c => c.to === component.id && c.toPort === i
+            );
+
+            if (!connection) {
+                return null;
+            }
+
+            const sourceComponent = components.find(c => c.id === connection.from);
+            if (!sourceComponent || sourceComponent.value === null) {
+                return null;
+            }
+
+            inputValues.push(sourceComponent.value);
+        }
+
         return this.evaluateGate(component.type, inputValues);
     }
 
@@ -720,6 +907,181 @@ class CircuitSimulator {
         this.autoCycleTimeout = setTimeout(() => {
             this.autoCycleStep();
         }, 800); // 800ms delay between combinations
+    }
+
+    // Custom Component Management Methods
+    loadCustomComponents() {
+        const saved = localStorage.getItem('customComponents');
+        if (saved) {
+            try {
+                this.customComponents = JSON.parse(saved);
+            } catch (e) {
+                console.error('Failed to load custom components:', e);
+                this.customComponents = {};
+            }
+        }
+    }
+
+    saveCustomComponentsToStorage() {
+        try {
+            localStorage.setItem('customComponents', JSON.stringify(this.customComponents));
+        } catch (e) {
+            console.error('Failed to save custom components:', e);
+            alert('Failed to save components to storage.');
+        }
+    }
+
+    showSaveComponentDialog() {
+        if (this.components.length === 0) {
+            alert('Please create a circuit before saving it as a component.');
+            return;
+        }
+
+        const inputs = this.components.filter(c => c.type === 'INPUT');
+        const outputs = this.components.filter(c => c.type === 'OUTPUT');
+
+        if (inputs.length === 0 || outputs.length === 0) {
+            alert('Your circuit must have at least one INPUT and one OUTPUT to be saved as a component.');
+            return;
+        }
+
+        // Clear form
+        document.getElementById('componentName').value = '';
+        document.getElementById('componentDescription').value = '';
+
+        // Show dialog
+        document.getElementById('saveComponentDialog').style.display = 'block';
+    }
+
+    saveCurrentCircuitAsComponent() {
+        const name = document.getElementById('componentName').value.trim();
+        const description = document.getElementById('componentDescription').value.trim();
+
+        if (!name) {
+            alert('Please enter a component name.');
+            return;
+        }
+
+        // Check if name already exists
+        if (this.customComponents[name]) {
+            if (!confirm(`A component named "${name}" already exists. Overwrite it?`)) {
+                return;
+            }
+        }
+
+        // Prepare component data
+        const inputs = this.components.filter(c => c.type === 'INPUT').sort((a, b) =>
+            a.label.localeCompare(b.label));
+        const outputs = this.components.filter(c => c.type === 'OUTPUT').sort((a, b) =>
+            a.label.localeCompare(b.label));
+
+        // Deep clone components and connections
+        const componentData = {
+            name: name,
+            description: description,
+            components: JSON.parse(JSON.stringify(this.components)),
+            connections: JSON.parse(JSON.stringify(this.connections)),
+            inputPorts: inputs.map(i => ({ id: i.id, label: i.label })),
+            outputPorts: outputs.map(o => ({ id: o.id, label: o.label })),
+            created: new Date().toISOString()
+        };
+
+        this.customComponents[name] = componentData;
+        this.saveCustomComponentsToStorage();
+        this.updateCustomComponentsList();
+
+        document.getElementById('saveComponentDialog').style.display = 'none';
+        alert(`Component "${name}" saved successfully!`);
+    }
+
+    updateCustomComponentsList() {
+        const list = document.getElementById('customComponentsList');
+        const section = document.getElementById('customComponentsSection');
+
+        const componentNames = Object.keys(this.customComponents);
+
+        if (componentNames.length === 0) {
+            section.style.display = 'none';
+            list.innerHTML = '';
+            return;
+        }
+
+        section.style.display = 'block';
+        list.innerHTML = '';
+
+        componentNames.sort().forEach(name => {
+            const btn = document.createElement('button');
+            btn.className = 'tool-btn';
+            btn.dataset.type = 'CUSTOM';
+            btn.dataset.customName = name;
+            btn.innerHTML = `${name}<span class="custom-component-badge">Custom</span>`;
+
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+                this.selectedTool = 'CUSTOM:' + name;
+                this.mode = 'place';
+                this.updateModeIndicator();
+            });
+
+            list.appendChild(btn);
+        });
+    }
+
+    showManageComponentsDialog() {
+        this.updateComponentLibraryList();
+        document.getElementById('manageComponentsDialog').style.display = 'block';
+    }
+
+    updateComponentLibraryList() {
+        const list = document.getElementById('componentLibraryList');
+        const componentNames = Object.keys(this.customComponents);
+
+        if (componentNames.length === 0) {
+            list.innerHTML = `
+                <div class="empty-library">
+                    <div class="empty-library-icon">📦</div>
+                    <p>No custom components saved yet.</p>
+                    <p style="font-size: 0.9em;">Create a circuit and click "Save as Component" to get started.</p>
+                </div>
+            `;
+            return;
+        }
+
+        list.innerHTML = '';
+
+        componentNames.sort().forEach(name => {
+            const component = this.customComponents[name];
+            const item = document.createElement('div');
+            item.className = 'library-item';
+
+            const date = new Date(component.created).toLocaleDateString();
+
+            item.innerHTML = `
+                <div class="library-item-header">
+                    <div class="library-item-name">${name}</div>
+                </div>
+                ${component.description ? `<div class="library-item-description">${component.description}</div>` : ''}
+                <div class="library-item-info">
+                    ${component.inputPorts.length} input(s), ${component.outputPorts.length} output(s) • Created: ${date}
+                </div>
+                <div class="library-item-actions">
+                    <button class="delete-btn" data-name="${name}">Delete</button>
+                </div>
+            `;
+
+            // Add delete handler
+            item.querySelector('.delete-btn').addEventListener('click', () => {
+                if (confirm(`Delete component "${name}"?`)) {
+                    delete this.customComponents[name];
+                    this.saveCustomComponentsToStorage();
+                    this.updateCustomComponentsList();
+                    this.updateComponentLibraryList();
+                }
+            });
+
+            list.appendChild(item);
+        });
     }
 }
 

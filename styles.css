@@ -275,25 +275,202 @@ header p {
     background: #f0f0f0;
 }
 
+/* Dialog Panels */
+.dialog-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+    max-width: 500px;
+    width: 90%;
+    max-height: 90%;
+    overflow: auto;
+    z-index: 1000;
+}
+
+.dialog-content {
+    margin-top: 15px;
+}
+
+.dialog-content p {
+    color: #666;
+    margin-bottom: 20px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: #444;
+    font-weight: 600;
+}
+
+.form-group input[type="text"],
+.form-group textarea {
+    width: 100%;
+    padding: 10px;
+    border: 2px solid #ddd;
+    border-radius: 5px;
+    font-size: 14px;
+    font-family: inherit;
+    transition: border-color 0.3s;
+}
+
+.form-group input[type="text"]:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.info-box {
+    background: #e3f2fd;
+    padding: 12px;
+    border-radius: 5px;
+    border-left: 4px solid #667eea;
+    margin: 15px 0;
+    font-size: 0.9em;
+    color: #555;
+}
+
+.dialog-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.dialog-actions .action-btn {
+    flex: 1;
+}
+
+/* Component Library List */
+#componentLibraryList {
+    margin-top: 15px;
+}
+
+.library-item {
+    background: #f9f9f9;
+    border: 2px solid #ddd;
+    border-radius: 5px;
+    padding: 15px;
+    margin-bottom: 10px;
+    transition: all 0.3s;
+}
+
+.library-item:hover {
+    border-color: #667eea;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+}
+
+.library-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.library-item-name {
+    font-weight: 600;
+    color: #667eea;
+    font-size: 1.1em;
+}
+
+.library-item-description {
+    color: #666;
+    font-size: 0.9em;
+    margin-bottom: 10px;
+}
+
+.library-item-info {
+    color: #999;
+    font-size: 0.85em;
+    margin-bottom: 10px;
+}
+
+.library-item-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.library-item-actions button {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 600;
+    transition: all 0.3s;
+}
+
+.library-item-actions .delete-btn {
+    background: #f44336;
+    color: white;
+}
+
+.library-item-actions .delete-btn:hover {
+    background: #da190b;
+}
+
+.library-item-actions .load-btn {
+    background: #4caf50;
+    color: white;
+}
+
+.library-item-actions .load-btn:hover {
+    background: #45a049;
+}
+
+.empty-library {
+    text-align: center;
+    padding: 40px 20px;
+    color: #999;
+}
+
+.empty-library-icon {
+    font-size: 3em;
+    margin-bottom: 10px;
+}
+
+/* Custom Component Styling */
+.custom-component-badge {
+    display: inline-block;
+    background: #ff9800;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.7em;
+    margin-left: 5px;
+}
+
 /* Scrollbar Styling */
 .toolbar::-webkit-scrollbar,
-.truth-table-panel::-webkit-scrollbar {
+.truth-table-panel::-webkit-scrollbar,
+.dialog-panel::-webkit-scrollbar {
     width: 8px;
 }
 
 .toolbar::-webkit-scrollbar-track,
-.truth-table-panel::-webkit-scrollbar-track {
+.truth-table-panel::-webkit-scrollbar-track,
+.dialog-panel::-webkit-scrollbar-track {
     background: #f1f1f1;
     border-radius: 10px;
 }
 
 .toolbar::-webkit-scrollbar-thumb,
-.truth-table-panel::-webkit-scrollbar-thumb {
+.truth-table-panel::-webkit-scrollbar-thumb,
+.dialog-panel::-webkit-scrollbar-thumb {
     background: #667eea;
     border-radius: 10px;
 }
 
 .toolbar::-webkit-scrollbar-thumb:hover,
-.truth-table-panel::-webkit-scrollbar-thumb:hover {
+.truth-table-panel::-webkit-scrollbar-thumb:hover,
+.dialog-panel::-webkit-scrollbar-thumb:hover {
     background: #764ba2;
 }
