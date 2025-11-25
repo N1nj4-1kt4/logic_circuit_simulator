@@ -292,6 +292,10 @@ header p {
     z-index: 1000;
 }
 
+.dialog-panel.small-dialog {
+    max-width: 350px;
+}
+
 .dialog-content {
     margin-top: 15px;
 }
@@ -417,13 +421,22 @@ header p {
     background: #da190b;
 }
 
-.library-item-actions .load-btn {
-    background: #4caf50;
+.library-item-actions .edit-btn {
+    background: #2196f3;
     color: white;
 }
 
-.library-item-actions .load-btn:hover {
-    background: #45a049;
+.library-item-actions .edit-btn:hover {
+    background: #0b7dda;
+}
+
+.library-item-actions .export-btn {
+    background: #ff9800;
+    color: white;
+}
+
+.library-item-actions .export-btn:hover {
+    background: #e68900;
 }
 
 .empty-library {

@@ -50,9 +50,19 @@
                 </div>
 
                 <div class="tool-section">
+                    <h4>Simulation Controls</h4>
+                    <button class="action-btn" id="prevStep">◀ Previous</button>
+                    <button class="action-btn" id="nextStep">Next ▶</button>
+                    <button class="action-btn" id="resetSim">Reset</button>
+                </div>
+
+                <div class="tool-section">
                     <h4>Component Library</h4>
                     <button class="action-btn" id="saveComponent">Save as Component</button>
                     <button class="action-btn" id="manageComponents">Manage Library</button>
+                    <button class="action-btn" id="exportComponent">Export Component</button>
+                    <button class="action-btn" id="importComponent">Import Component</button>
+                    <input type="file" id="importFile" accept=".json" style="display: none;" />
                 </div>
 
                 <div class="info-panel">
@@ -120,6 +130,24 @@
                 <div class="dialog-content">
                     <p>Manage your saved custom components.</p>
                     <div id="componentLibraryList"></div>
+                </div>
+            </div>
+
+            <!-- Rename Dialog -->
+            <div id="renameDialog" class="dialog-panel small-dialog" style="display: none;">
+                <div class="panel-header">
+                    <h3>Rename Component</h3>
+                    <button id="closeRenameDialog">Close</button>
+                </div>
+                <div class="dialog-content">
+                    <div class="form-group">
+                        <label for="newComponentLabel">New Label:</label>
+                        <input type="text" id="newComponentLabel" placeholder="Enter new label" />
+                    </div>
+                    <div class="dialog-actions">
+                        <button class="action-btn" id="confirmRename">Rename</button>
+                        <button class="action-btn" id="cancelRename">Cancel</button>
+                    </div>
                 </div>
             </div>
         </div>

@@ -13,6 +13,7 @@ class CircuitSimulator {
         this.autoCycleTimeout = null;
         this.currentCycleIndex = 0;
         this.customComponents = {};
+        this.renameTarget = null;
 
         this.init();
     }
@@ -99,9 +100,53 @@ class CircuitSimulator {
             document.getElementById('manageComponentsDialog').style.display = 'none';
         });
 
+        // Export/Import Components
+        document.getElementById('exportComponent').addEventListener('click', () => {
+            this.exportComponentToFile();
+        });
+
+        document.getElementById('importComponent').addEventListener('click', () => {
+            document.getElementById('importFile').click();
+        });
+
+        document.getElementById('importFile').addEventListener('change', (e) => {
+            this.importComponentFromFile(e);
+        });
+
+        // Manual Simulation Controls
+        document.getElementById('nextStep').addEventListener('click', () => {
+            this.stepSimulation(1);
+        });
+
+        document.getElementById('prevStep').addEventListener('click', () => {
+            this.stepSimulation(-1);
+        });
+
+        document.getElementById('resetSim').addEventListener('click', () => {
+            this.resetSimulation();
+        });
+
+        // Rename Dialog
+        document.getElementById('closeRenameDialog').addEventListener('click', () => {
+            document.getElementById('renameDialog').style.display = 'none';
+        });
+
+        document.getElementById('cancelRename').addEventListener('click', () => {
+            document.getElementById('renameDialog').style.display = 'none';
+        });
+
+        document.getElementById('confirmRename').addEventListener('click', () => {
+            this.confirmRename();
+        });
+
         // Canvas click
         this.canvas.addEventListener('click', (e) => {
             this.handleCanvasClick(e);
+        });
+
+        // Canvas double-click for rename
+        this.canvas.addEventListener('dblclick', (e) => {
+            this.handleCanvasDoubleClick(e);
         });
 
         // Canvas hover for connection preview
@@ -1066,9 +1111,21 @@ class CircuitSimulator {
                     ${component.inputPorts.length} input(s), ${component.outputPorts.length} output(s) • Created: ${date}
                 </div>
                 <div class="library-item-actions">
+                    <button class="edit-btn" data-name="${name}">Edit</button>
+                    <button class="export-btn" data-name="${name}">Export</button>
                     <button class="delete-btn" data-name="${name}">Delete</button>
                 </div>
             `;
+
+            // Add edit handler
+            item.querySelector('.edit-btn').addEventListener('click', () => {
+                this.loadComponentForEditing(name);
+            });
+
+            // Add export handler
+            item.querySelector('.export-btn').addEventListener('click', () => {
+                this.downloadComponent(name);
+            });
 
             // Add delete handler
             item.querySelector('.delete-btn').addEventListener('click', () => {
@@ -1082,6 +1139,220 @@ class CircuitSimulator {
 
             list.appendChild(item);
         });
+    }
+
+    // Export/Import Methods
+    exportComponentToFile() {
+        const componentNames = Object.keys(this.customComponents);
+
+        if (componentNames.length === 0) {
+            alert('No custom components to export. Please save a component first.');
+            return;
+        }
+
+        if (componentNames.length === 1) {
+            // Export the only component
+            this.downloadComponent(componentNames[0]);
+        } else {
+            // Let user choose which component to export
+            const name = prompt('Enter component name to export:\n\n' + componentNames.join('\n'));
+            if (name && this.customComponents[name]) {
+                this.downloadComponent(name);
+            } else if (name) {
+                alert('Component not found.');
+            }
+        }
+    }
+
+    downloadComponent(name) {
+        const component = this.customComponents[name];
+        const dataStr = JSON.stringify(component, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(dataBlob);
+
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${name}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        alert(`Component "${name}" exported successfully!`);
+    }
+
+    importComponentFromFile(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const componentData = JSON.parse(e.target.result);
+
+                // Validate component data
+                if (!componentData.name || !componentData.components || !componentData.connections) {
+                    throw new Error('Invalid component file format');
+                }
+
+                // Check if component already exists
+                if (this.customComponents[componentData.name]) {
+                    if (!confirm(`Component "${componentData.name}" already exists. Overwrite it?`)) {
+                        return;
+                    }
+                }
+
+                this.customComponents[componentData.name] = componentData;
+                this.saveCustomComponentsToStorage();
+                this.updateCustomComponentsList();
+
+                alert(`Component "${componentData.name}" imported successfully!`);
+            } catch (error) {
+                alert('Failed to import component: ' + error.message);
+            }
+        };
+        reader.readAsText(file);
+
+        // Reset file input
+        event.target.value = '';
+    }
+
+    // Edit Component Method
+    loadComponentForEditing(name) {
+        if (!this.customComponents[name]) {
+            alert('Component not found.');
+            return;
+        }
+
+        if (this.components.length > 0) {
+            if (!confirm('This will clear the current board. Continue?')) {
+                return;
+            }
+        }
+
+        this.stopAutoCycle();
+
+        const componentData = this.customComponents[name];
+
+        // Deep clone the component data
+        this.components = JSON.parse(JSON.stringify(componentData.components));
+        this.connections = JSON.parse(JSON.stringify(componentData.connections));
+
+        // Update nextId to avoid conflicts
+        const maxId = Math.max(...this.components.map(c => c.id), 0);
+        this.nextId = maxId + 1;
+
+        this.redraw();
+        document.getElementById('manageComponentsDialog').style.display = 'none';
+
+        alert(`Component "${name}" loaded for editing. Make your changes and save it again.`);
+    }
+
+    // Manual Simulation Step Controls
+    stepSimulation(direction) {
+        const inputs = this.components.filter(c => c.type === 'INPUT').sort((a, b) =>
+            a.label.localeCompare(b.label));
+
+        if (inputs.length === 0) {
+            alert('Please add at least one input to simulate.');
+            return;
+        }
+
+        const totalCombinations = Math.pow(2, inputs.length);
+
+        // If no current index, start from 0
+        if (this.currentCycleIndex === undefined || this.currentCycleIndex === null) {
+            this.currentCycleIndex = 0;
+        }
+
+        // Calculate new index
+        this.currentCycleIndex += direction;
+
+        // Wrap around
+        if (this.currentCycleIndex < 0) {
+            this.currentCycleIndex = totalCombinations - 1;
+        } else if (this.currentCycleIndex >= totalCombinations) {
+            this.currentCycleIndex = 0;
+        }
+
+        // Set input values
+        inputs.forEach((input, index) => {
+            const bitValue = (this.currentCycleIndex >> (inputs.length - 1 - index)) & 1;
+            input.value = bitValue;
+        });
+
+        // Simulate
+        this.simulate();
+
+        // Update display
+        document.getElementById('selectedComponent').textContent =
+            `Combination ${this.currentCycleIndex + 1} / ${totalCombinations}`;
+    }
+
+    resetSimulation() {
+        const inputs = this.components.filter(c => c.type === 'INPUT');
+
+        if (inputs.length === 0) {
+            alert('No inputs to reset.');
+            return;
+        }
+
+        this.currentCycleIndex = 0;
+
+        // Set all inputs to 0
+        inputs.forEach(input => {
+            input.value = 0;
+        });
+
+        // Simulate
+        this.simulate();
+
+        const totalCombinations = Math.pow(2, inputs.length);
+        document.getElementById('selectedComponent').textContent =
+            `Combination 1 / ${totalCombinations}`;
+    }
+
+    // Rename Methods
+    handleCanvasDoubleClick(e) {
+        const rect = this.canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        const component = this.findComponent(x, y);
+
+        if (component && (component.type === 'INPUT' || component.type === 'OUTPUT')) {
+            this.showRenameDialog(component);
+        }
+    }
+
+    showRenameDialog(component) {
+        this.renameTarget = component;
+        document.getElementById('newComponentLabel').value = component.label;
+        document.getElementById('renameDialog').style.display = 'block';
+
+        // Focus and select the input
+        setTimeout(() => {
+            const input = document.getElementById('newComponentLabel');
+            input.focus();
+            input.select();
+        }, 100);
+    }
+
+    confirmRename() {
+        const newLabel = document.getElementById('newComponentLabel').value.trim();
+
+        if (!newLabel) {
+            alert('Please enter a label.');
+            return;
+        }
+
+        if (this.renameTarget) {
+            this.renameTarget.label = newLabel;
+            this.redraw();
+        }
+
+        document.getElementById('renameDialog').style.display = 'none';
+        this.renameTarget = null;
     }
 }
 
