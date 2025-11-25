@@ -672,11 +672,17 @@ class CircuitSimulator {
             }
 
             const sourceComponent = this.components.find(c => c.id === connection.from);
-            if (!sourceComponent || sourceComponent.value === null) {
-                return null; // Source not yet calculated
+            if (!sourceComponent) {
+                return null; // Source component not found
             }
 
-            inputValues.push(sourceComponent.value);
+            // Get value from the specific output port (critical for multi-output components!)
+            const portValue = this.getPortValue(sourceComponent, connection.fromPort);
+            if (portValue === null) {
+                return null; // Source port not yet calculated
+            }
+
+            inputValues.push(portValue);
         }
 
         // Calculate output based on gate type
