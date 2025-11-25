@@ -9,6 +9,9 @@ class CircuitSimulator {
         this.mode = 'place'; // place, connect, delete
         this.connectStart = null;
         this.nextId = 1;
+        this.isAutoCycling = false;
+        this.autoCycleTimeout = null;
+        this.currentCycleIndex = 0;
 
         this.init();
     }
@@ -44,6 +47,7 @@ class CircuitSimulator {
 
         document.getElementById('clearBoard').addEventListener('click', () => {
             if (confirm('Clear entire board?')) {
+                this.stopAutoCycle();
                 this.components = [];
                 this.connections = [];
                 this.redraw();
@@ -51,7 +55,11 @@ class CircuitSimulator {
         });
 
         document.getElementById('simulate').addEventListener('click', () => {
-            this.simulate();
+            if (this.isAutoCycling) {
+                this.stopAutoCycle();
+            } else {
+                this.startAutoCycle();
+            }
         });
 
         document.getElementById('truthTable').addEventListener('click', () => {
@@ -630,6 +638,88 @@ class CircuitSimulator {
             indicator.textContent = 'Mode: Delete Component/Connection';
             selected.textContent = 'Click on component or connection to delete';
         }
+    }
+
+    startAutoCycle() {
+        const inputs = this.components.filter(c => c.type === 'INPUT').sort((a, b) =>
+            a.label.localeCompare(b.label));
+
+        if (inputs.length === 0) {
+            alert('Please add at least one input to simulate.');
+            return;
+        }
+
+        const outputs = this.components.filter(c => c.type === 'OUTPUT');
+        if (outputs.length === 0) {
+            alert('Please add at least one output to simulate.');
+            return;
+        }
+
+        this.isAutoCycling = true;
+        this.currentCycleIndex = 0;
+        this.totalCombinations = Math.pow(2, inputs.length);
+
+        // Update button text
+        const btn = document.getElementById('simulate');
+        btn.textContent = 'Stop Simulation';
+        btn.style.background = '#f44336';
+
+        // Update mode indicator
+        const indicator = document.getElementById('modeIndicator');
+        indicator.textContent = 'Mode: Auto-Cycling Inputs';
+        document.getElementById('selectedComponent').textContent =
+            `Combination ${this.currentCycleIndex + 1} / ${this.totalCombinations}`;
+
+        this.autoCycleStep();
+    }
+
+    stopAutoCycle() {
+        this.isAutoCycling = false;
+        if (this.autoCycleTimeout) {
+            clearTimeout(this.autoCycleTimeout);
+            this.autoCycleTimeout = null;
+        }
+
+        // Reset button text
+        const btn = document.getElementById('simulate');
+        btn.textContent = 'Simulate';
+        btn.style.background = '#4caf50';
+
+        // Reset mode indicator
+        this.updateModeIndicator();
+    }
+
+    autoCycleStep() {
+        if (!this.isAutoCycling) return;
+
+        const inputs = this.components.filter(c => c.type === 'INPUT').sort((a, b) =>
+            a.label.localeCompare(b.label));
+
+        if (this.currentCycleIndex >= this.totalCombinations) {
+            // Finished all combinations, restart
+            this.currentCycleIndex = 0;
+        }
+
+        // Set input values for current combination
+        inputs.forEach((input, index) => {
+            const bitValue = (this.currentCycleIndex >> (inputs.length - 1 - index)) & 1;
+            input.value = bitValue;
+        });
+
+        // Simulate circuit
+        this.simulate();
+
+        // Update display
+        document.getElementById('selectedComponent').textContent =
+            `Combination ${this.currentCycleIndex + 1} / ${this.totalCombinations}`;
+
+        // Move to next combination
+        this.currentCycleIndex++;
+
+        // Schedule next cycle
+        this.autoCycleTimeout = setTimeout(() => {
+            this.autoCycleStep();
+        }, 800); // 800ms delay between combinations
     }
 }
 

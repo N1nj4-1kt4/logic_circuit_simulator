@@ -51,13 +51,19 @@ A web-based interactive logic circuit simulator that allows you to design, simul
 
 ### Simulating Your Circuit
 
-1. After building your circuit and setting input values, click the "Simulate" button
-2. The simulator will calculate all gate outputs based on the inputs
+1. After building your circuit with inputs and outputs, click the "Simulate" button
+2. The simulator will **automatically cycle through all input combinations**:
+   - Input values change automatically (cycling through 00, 01, 10, 11, etc.)
+   - Each combination is displayed for 800ms
+   - The cycle repeats continuously, showing all possible input states
+   - The current combination number is displayed (e.g., "Combination 3 / 8")
 3. Connections will change color to show signal values:
    - **Green**: Logic 1 (HIGH)
    - **Red**: Logic 0 (LOW)
    - **Gray**: Undefined/unconnected
-4. Output components will display their calculated values
+4. Output components will display their calculated values in real-time
+5. Click "Stop Simulation" (the button changes when running) to stop the auto-cycle
+6. You can also manually toggle individual inputs by clicking them when not in simulation mode
 
 ### Generating Truth Tables
 
