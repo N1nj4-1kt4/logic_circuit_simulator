@@ -2432,10 +2432,15 @@ class CircuitSimulator {
     }
 
     saveBoardState() {
+        const truthTablePanel = document.getElementById('truthTablePanel');
         const state = {
             components: this.components,
             connections: this.connections,
-            nextId: this.nextId
+            nextId: this.nextId,
+            currentComponentName: this.currentComponentName,
+            currentBoardName: this.currentBoardName,
+            truthTableState: this.truthTableState,
+            truthTableVisible: truthTablePanel ? truthTablePanel.style.display !== 'none' : false
         };
         localStorage.setItem('circuitBoardState', JSON.stringify(state));
     }
@@ -2449,9 +2454,29 @@ class CircuitSimulator {
                 this.connections = state.connections || [];
                 this.nextId = state.nextId || 1;
 
+                // Restore component/board name
+                this.currentComponentName = state.currentComponentName || null;
+                this.currentBoardName = state.currentBoardName || null;
+
+                // Restore truth table state
+                this.truthTableState = state.truthTableState || null;
+
+                // Restore truth table column order if saved
+                if (this.truthTableState && this.truthTableState.columnOrder) {
+                    this.truthTableColumnOrder = [...this.truthTableState.columnOrder];
+                }
+
                 // Recalculate port positions for auto-saved state (migrate to new positions)
                 if (this.components.length > 0) {
                     this.migrateComponentPorts();
+                }
+
+                // Restore truth table visibility if it was open
+                if (state.truthTableVisible) {
+                    // Delay slightly to ensure DOM is ready
+                    setTimeout(() => {
+                        this.generateTruthTable();
+                    }, 100);
                 }
             } catch (e) {
                 console.error('Failed to load board state:', e);
