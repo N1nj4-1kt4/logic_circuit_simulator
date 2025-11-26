@@ -706,3 +706,112 @@ body.dark-mode .action-btn.active {
     color: white;
     box-shadow: 0 0 0 3px rgba(118, 75, 162, 0.5);
 }
+
+/* Board Management Styles */
+.current-board-info {
+    padding: 8px;
+    background: #f0f0f0;
+    border-radius: 5px;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.current-board-info small {
+    color: #666;
+    font-size: 0.85em;
+}
+
+.current-board-info span {
+    font-weight: 600;
+    color: #667eea;
+}
+
+body.dark-mode .current-board-info {
+    background: #1a1a2e;
+}
+
+body.dark-mode .current-board-info small {
+    color: #b3b3b3;
+}
+
+body.dark-mode .current-board-info span {
+    color: #53a8f4;
+}
+
+/* Save Options Dialog */
+.save-options {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 20px;
+}
+
+.save-option-btn {
+    width: 100%;
+    padding: 16px;
+    border: 2px solid #667eea;
+    background: white;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.3s ease;
+}
+
+.save-option-btn:hover {
+    background: #f0f4ff;
+    transform: translateX(4px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+}
+
+.save-option-btn.discard-btn {
+    border-color: #f44336;
+}
+
+.save-option-btn.discard-btn:hover {
+    background: #ffebee;
+}
+
+.option-title {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: #667eea;
+    margin-bottom: 4px;
+}
+
+.save-option-btn.discard-btn .option-title {
+    color: #f44336;
+}
+
+.option-desc {
+    font-size: 0.9em;
+    color: #666;
+}
+
+body.dark-mode .save-option-btn {
+    background: #0f3460;
+    border-color: #53a8f4;
+}
+
+body.dark-mode .save-option-btn:hover {
+    background: #16213e;
+}
+
+body.dark-mode .save-option-btn.discard-btn {
+    border-color: #f44336;
+}
+
+body.dark-mode .save-option-btn.discard-btn:hover {
+    background: #2d1414;
+}
+
+body.dark-mode .option-title {
+    color: #53a8f4;
+}
+
+body.dark-mode .save-option-btn.discard-btn .option-title {
+    color: #ff6b6b;
+}
+
+body.dark-mode .option-desc {
+    color: #b3b3b3;
+}

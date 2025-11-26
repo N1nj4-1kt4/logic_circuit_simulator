@@ -110,6 +110,21 @@
                 </div>
 
                 <div class="tool-section">
+                    <h4>Board Management</h4>
+                    <div class="current-board-info">
+                        <small>Current: <span id="currentBoardName">Unsaved Board</span></small>
+                    </div>
+                    <button class="action-btn" id="newBoard">📋 New Board</button>
+                    <button class="action-btn" id="saveBoard">💾 Save Board</button>
+                    <div id="savedBoardsSection" style="display: none; margin-top: 8px;">
+                        <label style="font-size: 12px; color: var(--text-secondary);">Load Board:</label>
+                        <select id="savedBoardsDropdown" class="custom-dropdown">
+                            <option value="">Select a board...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="tool-section">
                     <h4>Component Library</h4>
                     <button class="action-btn" id="saveComponent">Save as Component</button>
                     <button class="action-btn" id="manageComponents">Manage Library</button>
@@ -203,6 +218,53 @@
                     <div class="dialog-actions">
                         <button class="action-btn" id="confirmRename">Rename</button>
                         <button class="action-btn" id="cancelRename">Cancel</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Save Options Dialog -->
+            <div id="saveOptionsDialog" class="dialog-panel" style="display: none;">
+                <div class="panel-header">
+                    <h3>Save Current Work</h3>
+                    <button id="closeSaveOptions">Close</button>
+                </div>
+                <div class="dialog-content">
+                    <p>You have unsaved changes. How would you like to save your work?</p>
+                    <div class="save-options">
+                        <button class="save-option-btn" id="saveAsCurrentBoard">
+                            <div class="option-title">💾 Update Current Board</div>
+                            <div class="option-desc">Save changes to <strong id="currentBoardNameInDialog"></strong></div>
+                        </button>
+                        <button class="save-option-btn" id="saveAsNewBoard">
+                            <div class="option-title">📋 Save as New Board</div>
+                            <div class="option-desc">Create a new work-in-progress board</div>
+                        </button>
+                        <button class="save-option-btn" id="saveAsNewComponent">
+                            <div class="option-title">🔧 Save as Component</div>
+                            <div class="option-desc">Finalize as a reusable component</div>
+                        </button>
+                        <button class="save-option-btn discard-btn" id="discardChanges">
+                            <div class="option-title">🗑️ Discard Changes</div>
+                            <div class="option-desc">Don't save, just proceed</div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Board Name Dialog -->
+            <div id="boardNameDialog" class="dialog-panel small-dialog" style="display: none;">
+                <div class="panel-header">
+                    <h3>Board Name</h3>
+                    <button id="closeBoardNameDialog">Close</button>
+                </div>
+                <div class="dialog-content">
+                    <div class="form-group">
+                        <label for="boardNameInput">Board Name:</label>
+                        <input type="text" id="boardNameInput" placeholder="e.g., Board01" />
+                    </div>
+                    <div class="dialog-actions">
+                        <button class="action-btn" id="confirmBoardName">Save</button>
+                        <button class="action-btn" id="cancelBoardName">Cancel</button>
                     </div>
                 </div>
             </div>

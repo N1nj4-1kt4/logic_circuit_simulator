@@ -22,17 +22,27 @@ class CircuitSimulator {
         this.dragStartPos = null;
         this.hasMoved = false;
 
+        // Board management
+        this.currentBoardName = null; // null means unsaved board
+        this.savedBoards = {};
+        this.lastSavedState = null; // To track if board has been modified
+        this.pendingActionAfterSave = null; // Callback after save dialog
+
         this.init();
     }
 
     init() {
         this.loadCustomComponents();
+        this.loadSavedBoards();
         this.setupEventListeners();
+        this.setupBoardManagementListeners();
         this.setupDraggableTruthTable();
         this.setupAutoSave();
         this.loadBoardState();
         this.drawGrid();
         this.updateCustomComponentsList();
+        this.updateBoardsList();
+        this.updateCurrentBoardDisplay();
         this.applyTheme();
     }
 
@@ -132,17 +142,14 @@ class CircuitSimulator {
         });
 
         document.getElementById('clearBoard').addEventListener('click', () => {
-            const hasComponents = this.components.length > 0;
-            const message = hasComponents
-                ? 'Clear entire board? This will delete the auto-saved board state.'
-                : 'Clear entire board?';
-
-            if (confirm(message)) {
-                this.stopAutoCycle();
-                this.components = [];
-                this.connections = [];
-                this.clearBoardState();
-                this.redraw();
+            if (this.hasUnsavedChanges()) {
+                this.showSaveOptionsDialog(() => {
+                    this.createNewBoard();
+                });
+            } else {
+                if (confirm('Clear entire board?')) {
+                    this.createNewBoard();
+                }
             }
         });
 
@@ -1575,42 +1582,34 @@ class CircuitSimulator {
             return;
         }
 
-        if (this.components.length > 0) {
-            // First ask if they want to continue
-            const continueMessage = 'Loading this component will replace your current board.\n\n' +
-                                  'Do you want to continue?';
-            if (!confirm(continueMessage)) {
-                return;
-            }
+        const doLoad = () => {
+            this.stopAutoCycle();
 
-            // Then ask if they want to save
-            const saveMessage = 'Would you like to save the current board state?\n\n' +
-                              'OK = Save current board (can restore by reloading page)\n' +
-                              'Cancel = Discard current board';
-            if (confirm(saveMessage)) {
-                this.saveBoardState();
-            } else {
-                // User chose to discard - clear the auto-saved state
-                this.clearBoardState();
-            }
+            const componentData = this.customComponents[name];
+
+            // Deep clone the component data
+            this.components = JSON.parse(JSON.stringify(componentData.components));
+            this.connections = JSON.parse(JSON.stringify(componentData.connections));
+
+            // Update nextId to avoid conflicts
+            const maxId = Math.max(...this.components.map(c => c.id), 0);
+            this.nextId = maxId + 1;
+
+            // Track that this is loaded from a component (not a board)
+            this.currentBoardName = null;
+            this.lastSavedState = null;
+
+            this.redraw();
+            this.updateCurrentBoardDisplay();
+            document.getElementById('manageComponentsDialog').style.display = 'none';
+            alert(`Component "${name}" loaded for editing. Make your changes and save it again.`);
+        };
+
+        if (this.hasUnsavedChanges()) {
+            this.showSaveOptionsDialog(doLoad);
+        } else {
+            doLoad();
         }
-
-        this.stopAutoCycle();
-
-        const componentData = this.customComponents[name];
-
-        // Deep clone the component data
-        this.components = JSON.parse(JSON.stringify(componentData.components));
-        this.connections = JSON.parse(JSON.stringify(componentData.connections));
-
-        // Update nextId to avoid conflicts
-        const maxId = Math.max(...this.components.map(c => c.id), 0);
-        this.nextId = maxId + 1;
-
-        this.redraw();
-        document.getElementById('manageComponentsDialog').style.display = 'none';
-
-        alert(`Component "${name}" loaded for editing. Make your changes and save it again.`);
     }
 
     // Manual Simulation Step Controls
@@ -1815,6 +1814,305 @@ class CircuitSimulator {
 
     clearBoardState() {
         localStorage.removeItem('circuitBoardState');
+    }
+
+    // ===== BOARD MANAGEMENT METHODS =====
+
+    loadSavedBoards() {
+        const saved = localStorage.getItem('savedBoards');
+        if (saved) {
+            try {
+                this.savedBoards = JSON.parse(saved);
+            } catch (e) {
+                console.error('Failed to load saved boards:', e);
+                this.savedBoards = {};
+            }
+        }
+    }
+
+    saveBoardsToStorage() {
+        localStorage.setItem('savedBoards', JSON.stringify(this.savedBoards));
+    }
+
+    getNextBoardName() {
+        let counter = 1;
+        let name;
+        do {
+            name = `Board${String(counter).padStart(2, '0')}`;
+            counter++;
+        } while (this.savedBoards[name] || this.customComponents[name]);
+        return name;
+    }
+
+    getCurrentState() {
+        return {
+            components: JSON.parse(JSON.stringify(this.components)),
+            connections: JSON.parse(JSON.stringify(this.connections)),
+            nextId: this.nextId
+        };
+    }
+
+    hasUnsavedChanges() {
+        if (this.components.length === 0 && !this.currentBoardName) {
+            return false; // Empty unsaved board
+        }
+
+        const currentState = JSON.stringify(this.getCurrentState());
+        return currentState !== this.lastSavedState;
+    }
+
+    saveCurrentBoard(boardName) {
+        const state = this.getCurrentState();
+        this.savedBoards[boardName] = {
+            ...state,
+            savedAt: Date.now(),
+            createdFrom: this.currentBoardName ?
+                { type: 'board', name: this.currentBoardName } : null
+        };
+        this.saveBoardsToStorage();
+        this.currentBoardName = boardName;
+        this.lastSavedState = JSON.stringify(state);
+        this.updateCurrentBoardDisplay();
+        this.updateBoardsList();
+        console.log(`Board saved: ${boardName}`);
+    }
+
+    loadBoard(boardName) {
+        if (!this.savedBoards[boardName]) {
+            alert(`Board "${boardName}" not found.`);
+            return;
+        }
+
+        const board = this.savedBoards[boardName];
+        this.components = JSON.parse(JSON.stringify(board.components || []));
+        this.connections = JSON.parse(JSON.stringify(board.connections || []));
+        this.nextId = board.nextId || 1;
+        this.currentBoardName = boardName;
+        this.lastSavedState = JSON.stringify(this.getCurrentState());
+        this.redraw();
+        this.updateCurrentBoardDisplay();
+        console.log(`Board loaded: ${boardName}`);
+    }
+
+    createNewBoard() {
+        this.components = [];
+        this.connections = [];
+        this.nextId = 1;
+        this.currentBoardName = null;
+        this.lastSavedState = null;
+        this.redraw();
+        this.updateCurrentBoardDisplay();
+        console.log('New board created');
+    }
+
+    deleteBoard(boardName) {
+        if (confirm(`Are you sure you want to delete board "${boardName}"?`)) {
+            delete this.savedBoards[boardName];
+            this.saveBoardsToStorage();
+            if (this.currentBoardName === boardName) {
+                this.currentBoardName = null;
+            }
+            this.updateBoardsList();
+            this.updateCurrentBoardDisplay();
+            console.log(`Board deleted: ${boardName}`);
+        }
+    }
+
+    updateCurrentBoardDisplay() {
+        const displayElement = document.getElementById('currentBoardName');
+        if (displayElement) {
+            displayElement.textContent = this.currentBoardName || 'Unsaved Board';
+        }
+    }
+
+    updateBoardsList() {
+        const dropdown = document.getElementById('savedBoardsDropdown');
+        const section = document.getElementById('savedBoardsSection');
+
+        const boardNames = Object.keys(this.savedBoards);
+
+        if (boardNames.length === 0) {
+            section.style.display = 'none';
+            return;
+        }
+
+        section.style.display = 'block';
+        dropdown.innerHTML = '<option value="">Select a board...</option>';
+
+        boardNames.sort().forEach(name => {
+            const option = document.createElement('option');
+            option.value = name;
+            option.textContent = name;
+            if (name === this.currentBoardName) {
+                option.textContent += ' (current)';
+            }
+            dropdown.appendChild(option);
+        });
+    }
+
+    showSaveOptionsDialog(onComplete) {
+        this.pendingActionAfterSave = onComplete;
+
+        const dialog = document.getElementById('saveOptionsDialog');
+        const currentBoardBtn = document.getElementById('saveAsCurrentBoard');
+        const boardNameDisplay = document.getElementById('currentBoardNameInDialog');
+
+        // Update the current board option
+        if (this.currentBoardName) {
+            currentBoardBtn.style.display = 'block';
+            boardNameDisplay.textContent = this.currentBoardName;
+        } else {
+            currentBoardBtn.style.display = 'none';
+        }
+
+        dialog.style.display = 'block';
+    }
+
+    hideSaveOptionsDialog() {
+        document.getElementById('saveOptionsDialog').style.display = 'none';
+        this.pendingActionAfterSave = null;
+    }
+
+    promptForBoardName(defaultName, onSave) {
+        const dialog = document.getElementById('boardNameDialog');
+        const input = document.getElementById('boardNameInput');
+
+        input.value = defaultName || this.getNextBoardName();
+        dialog.style.display = 'block';
+
+        const confirmBtn = document.getElementById('confirmBoardName');
+        const cancelBtn = document.getElementById('cancelBoardName');
+        const closeBtn = document.getElementById('closeBoardNameDialog');
+
+        const cleanup = () => {
+            confirmBtn.replaceWith(confirmBtn.cloneNode(true));
+            cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+            closeBtn.replaceWith(closeBtn.cloneNode(true));
+        };
+
+        document.getElementById('confirmBoardName').onclick = () => {
+            const boardName = input.value.trim();
+            if (!boardName) {
+                alert('Please enter a board name.');
+                return;
+            }
+            if (this.customComponents[boardName]) {
+                alert(`A component with name "${boardName}" already exists. Please choose a different name.`);
+                return;
+            }
+            if (this.savedBoards[boardName] && boardName !== this.currentBoardName) {
+                if (!confirm(`Board "${boardName}" already exists. Overwrite?`)) {
+                    return;
+                }
+            }
+            dialog.style.display = 'none';
+            cleanup();
+            onSave(boardName);
+        };
+
+        document.getElementById('cancelBoardName').onclick = () => {
+            dialog.style.display = 'none';
+            cleanup();
+        };
+
+        document.getElementById('closeBoardNameDialog').onclick = () => {
+            dialog.style.display = 'none';
+            cleanup();
+        };
+    }
+
+    setupBoardManagementListeners() {
+        // New Board button
+        document.getElementById('newBoard').addEventListener('click', () => {
+            if (this.hasUnsavedChanges()) {
+                this.showSaveOptionsDialog(() => {
+                    this.createNewBoard();
+                });
+            } else {
+                this.createNewBoard();
+            }
+        });
+
+        // Save Board button
+        document.getElementById('saveBoard').addEventListener('click', () => {
+            if (this.currentBoardName) {
+                // Update existing board
+                this.saveCurrentBoard(this.currentBoardName);
+                alert(`Board "${this.currentBoardName}" saved successfully!`);
+            } else {
+                // New board - prompt for name
+                this.promptForBoardName(null, (boardName) => {
+                    this.saveCurrentBoard(boardName);
+                    alert(`Board "${boardName}" saved successfully!`);
+                });
+            }
+        });
+
+        // Load Board dropdown
+        document.getElementById('savedBoardsDropdown').addEventListener('change', (e) => {
+            const boardName = e.target.value;
+            if (!boardName) return;
+
+            if (this.hasUnsavedChanges()) {
+                this.showSaveOptionsDialog(() => {
+                    this.loadBoard(boardName);
+                    e.target.value = ''; // Reset dropdown
+                });
+            } else {
+                this.loadBoard(boardName);
+                e.target.value = ''; // Reset dropdown
+            }
+        });
+
+        // Save Options Dialog buttons
+        document.getElementById('saveAsCurrentBoard').addEventListener('click', () => {
+            if (this.currentBoardName) {
+                this.saveCurrentBoard(this.currentBoardName);
+            }
+            this.hideSaveOptionsDialog();
+            if (this.pendingActionAfterSave) {
+                this.pendingActionAfterSave();
+                this.pendingActionAfterSave = null;
+            }
+        });
+
+        document.getElementById('saveAsNewBoard').addEventListener('click', () => {
+            this.hideSaveOptionsDialog();
+            this.promptForBoardName(null, (boardName) => {
+                this.saveCurrentBoard(boardName);
+                if (this.pendingActionAfterSave) {
+                    this.pendingActionAfterSave();
+                    this.pendingActionAfterSave = null;
+                }
+            });
+        });
+
+        document.getElementById('saveAsNewComponent').addEventListener('click', () => {
+            this.hideSaveOptionsDialog();
+            // Open the save component dialog
+            document.getElementById('saveComponentDialog').style.display = 'block';
+            // After saving component, execute pending action
+            const originalConfirm = document.getElementById('confirmSave').onclick;
+            document.getElementById('confirmSave').onclick = () => {
+                originalConfirm?.();
+                if (this.pendingActionAfterSave) {
+                    this.pendingActionAfterSave();
+                    this.pendingActionAfterSave = null;
+                }
+            };
+        });
+
+        document.getElementById('discardChanges').addEventListener('click', () => {
+            this.hideSaveOptionsDialog();
+            if (this.pendingActionAfterSave) {
+                this.pendingActionAfterSave();
+                this.pendingActionAfterSave = null;
+            }
+        });
+
+        document.getElementById('closeSaveOptions').addEventListener('click', () => {
+            this.hideSaveOptionsDialog();
+        });
     }
 }
 
