@@ -47,47 +47,69 @@ class CircuitSimulator {
     }
 
     setupEventListeners() {
-        // Tool selection
+        // Tool selection with toggle
         document.querySelectorAll('.tool-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                // Clear all tool selections
-                document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('selected'));
-                e.currentTarget.classList.add('selected');
+                const isAlreadySelected = e.currentTarget.classList.contains('selected');
 
-                // Clear action button selections
+                // Clear all selections
+                document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('selected'));
                 document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('active'));
 
-                this.selectedTool = e.currentTarget.dataset.type;
-                this.mode = 'place';
+                if (isAlreadySelected) {
+                    // Toggle off - return to neutral mode
+                    this.selectedTool = null;
+                    this.mode = 'neutral';
+                } else {
+                    // Select this tool
+                    e.currentTarget.classList.add('selected');
+                    this.selectedTool = e.currentTarget.dataset.type;
+                    this.mode = 'place';
+                }
                 this.updateModeIndicator();
             });
         });
 
-        // Action buttons
+        // Action buttons with toggle
         document.getElementById('connectMode').addEventListener('click', () => {
-            // Clear tool selections
+            const btn = document.getElementById('connectMode');
+            const isAlreadyActive = btn.classList.contains('active');
+
+            // Clear all selections
             document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('selected'));
+            document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('active'));
             this.selectedTool = null;
 
-            // Clear other action button selections
-            document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('active'));
-            document.getElementById('connectMode').classList.add('active');
-
-            this.mode = 'connect';
-            this.connectStart = null;
+            if (isAlreadyActive) {
+                // Toggle off - return to neutral mode
+                this.mode = 'neutral';
+                this.connectStart = null;
+            } else {
+                // Activate connect mode
+                btn.classList.add('active');
+                this.mode = 'connect';
+                this.connectStart = null;
+            }
             this.updateModeIndicator();
         });
 
         document.getElementById('deleteMode').addEventListener('click', () => {
-            // Clear tool selections
+            const btn = document.getElementById('deleteMode');
+            const isAlreadyActive = btn.classList.contains('active');
+
+            // Clear all selections
             document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('selected'));
+            document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('active'));
             this.selectedTool = null;
 
-            // Clear other action button selections
-            document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('active'));
-            document.getElementById('deleteMode').classList.add('active');
-
-            this.mode = 'delete';
+            if (isAlreadyActive) {
+                // Toggle off - return to neutral mode
+                this.mode = 'neutral';
+            } else {
+                // Activate delete mode
+                btn.classList.add('active');
+                this.mode = 'delete';
+            }
             this.updateModeIndicator();
         });
 
