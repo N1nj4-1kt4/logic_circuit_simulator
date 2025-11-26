@@ -401,22 +401,30 @@ class CircuitSimulator {
 
     handleConnect(x, y) {
         const port = this.findPort(x, y);
+        console.log('findPort result:', port);
 
-        if (!port) return;
+        if (!port) {
+            console.log('No port found at', x, y);
+            return;
+        }
 
         if (!this.connectStart) {
             // Start connection from output port only
             if (port.isOutput) {
+                console.log('Starting connection from output port');
                 this.connectStart = {
                     component: port.component,
                     portIndex: port.portIndex,
                     x: port.x,
                     y: port.y
                 };
+            } else {
+                console.log('Clicked port is not an output port');
             }
         } else {
             // End connection at input port only
             if (!port.isOutput) {
+                console.log('Completing connection to input port');
                 this.connections.push({
                     from: this.connectStart.component,
                     fromPort: this.connectStart.portIndex,
@@ -425,6 +433,8 @@ class CircuitSimulator {
                 });
                 this.connectStart = null;
                 this.redraw();
+            } else {
+                console.log('Clicked port is not an input port');
             }
         }
     }
@@ -432,13 +442,18 @@ class CircuitSimulator {
     handleDelete(x, y) {
         // Delete component
         const component = this.findComponent(x, y);
+        console.log('findComponent result:', component);
+
         if (component) {
+            console.log('Deleting component:', component.type, component.id);
             this.components = this.components.filter(c => c.id !== component.id);
             this.connections = this.connections.filter(
                 conn => conn.from !== component.id && conn.to !== component.id
             );
             this.redraw();
             return;
+        } else {
+            console.log('No component found at', x, y);
         }
 
         // Delete connection
