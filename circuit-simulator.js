@@ -1526,13 +1526,14 @@ class CircuitSimulator {
         // Restore Truth Table customization if saved
         if (!this.truthTableState) return;
 
-        const panel = document.getElementById('truthTablePanel');
-        if (!panel) return;
-
-        // Restore column order
+        // Restore column order (independent of panel existence)
         if (this.truthTableState.columnOrder) {
             this.truthTableColumnOrder = [...this.truthTableState.columnOrder];
         }
+
+        // Restore panel styles only if panel exists
+        const panel = document.getElementById('truthTablePanel');
+        if (!panel) return;
 
         // Restore panel size (will be applied when truth table is opened)
         if (this.truthTableState.width) {
