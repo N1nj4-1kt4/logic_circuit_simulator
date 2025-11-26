@@ -41,8 +41,8 @@ class CircuitSimulator {
         document.querySelectorAll('.tool-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('selected'));
-                e.target.classList.add('selected');
-                this.selectedTool = e.target.dataset.type;
+                e.currentTarget.classList.add('selected');
+                this.selectedTool = e.currentTarget.dataset.type;
                 this.mode = 'place';
                 this.updateModeIndicator();
             });
@@ -50,12 +50,16 @@ class CircuitSimulator {
 
         // Action buttons
         document.getElementById('connectMode').addEventListener('click', () => {
+            document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('selected'));
+            this.selectedTool = null;
             this.mode = 'connect';
             this.connectStart = null;
             this.updateModeIndicator();
         });
 
         document.getElementById('deleteMode').addEventListener('click', () => {
+            document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('selected'));
+            this.selectedTool = null;
             this.mode = 'delete';
             this.updateModeIndicator();
         });
