@@ -1313,6 +1313,9 @@ class CircuitSimulator {
             panel.style.height = 'auto'; // Let content determine initial height
         }
 
+        // Check if panel is already visible (to preserve position on redraw)
+        const wasVisible = panel.style.display !== 'none';
+
         panel.style.display = 'block';
 
         // Setup resize handles
@@ -1324,8 +1327,10 @@ class CircuitSimulator {
         // Highlight the row matching current circuit state
         this.updateTruthTableHighlight();
 
-        // Position panel to avoid overlapping with circuit components
-        this.positionPanelSmartly(panel);
+        // Only position panel on first open, not on redraw (e.g., after column reorder)
+        if (!wasVisible) {
+            this.positionPanelSmartly(panel);
+        }
     }
 
     setupTruthTableDragDrop(inputs, outputs, table) {
