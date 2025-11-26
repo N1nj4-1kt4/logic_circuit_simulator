@@ -1970,7 +1970,7 @@ class CircuitSimulator {
 
     hideSaveOptionsDialog() {
         document.getElementById('saveOptionsDialog').style.display = 'none';
-        this.pendingActionAfterSave = null;
+        // Don't clear pendingActionAfterSave here - let handlers execute it first
     }
 
     promptForBoardName(defaultName, onSave) {
@@ -2112,6 +2112,7 @@ class CircuitSimulator {
 
         document.getElementById('closeSaveOptions').addEventListener('click', () => {
             this.hideSaveOptionsDialog();
+            this.pendingActionAfterSave = null; // Cancel the pending action
         });
     }
 }
