@@ -104,6 +104,12 @@ header p {
     color: white;
 }
 
+.action-btn.active {
+    background: #764ba2;
+    color: white;
+    box-shadow: 0 0 0 3px rgba(118, 75, 162, 0.3);
+}
+
 /* Grid Layouts */
 .gate-grid {
     display: grid;
@@ -693,4 +699,10 @@ body.dark-mode .tool-btn svg {
 body.dark-mode .gate-btn.selected svg,
 body.dark-mode .tool-btn.selected svg {
     color: white;
+}
+
+body.dark-mode .action-btn.active {
+    background: #764ba2;
+    color: white;
+    box-shadow: 0 0 0 3px rgba(118, 75, 162, 0.5);
 }

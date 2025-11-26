@@ -40,8 +40,13 @@ class CircuitSimulator {
         // Tool selection
         document.querySelectorAll('.tool-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
+                // Clear all tool selections
                 document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('selected'));
                 e.currentTarget.classList.add('selected');
+
+                // Clear action button selections
+                document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('active'));
+
                 this.selectedTool = e.currentTarget.dataset.type;
                 this.mode = 'place';
                 this.updateModeIndicator();
@@ -50,16 +55,28 @@ class CircuitSimulator {
 
         // Action buttons
         document.getElementById('connectMode').addEventListener('click', () => {
+            // Clear tool selections
             document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('selected'));
             this.selectedTool = null;
+
+            // Clear other action button selections
+            document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('connectMode').classList.add('active');
+
             this.mode = 'connect';
             this.connectStart = null;
             this.updateModeIndicator();
         });
 
         document.getElementById('deleteMode').addEventListener('click', () => {
+            // Clear tool selections
             document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('selected'));
             this.selectedTool = null;
+
+            // Clear other action button selections
+            document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('deleteMode').classList.add('active');
+
             this.mode = 'delete';
             this.updateModeIndicator();
         });
