@@ -19,6 +19,8 @@ class CircuitSimulator {
         this.isDraggingComponent = false;
         this.draggedComponent = null;
         this.dragOffset = { x: 0, y: 0 };
+        this.dragStartPos = null;
+        this.hasMoved = false;
 
         this.init();
     }
@@ -175,16 +177,17 @@ class CircuitSimulator {
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
 
-            // Only allow dragging if not in connect or delete mode
-            if (this.mode !== 'connect' && this.mode !== 'delete' && !this.selectedTool) {
+            // Allow dragging if not in connect or delete mode
+            if (this.mode !== 'connect' && this.mode !== 'delete') {
                 const component = this.findComponent(x, y);
                 if (component) {
-                    this.isDraggingComponent = true;
+                    // If a component is clicked, prepare for potential drag
+                    this.isDraggingComponent = false; // Don't set true yet
                     this.draggedComponent = component;
+                    this.dragStartPos = { x, y };
                     this.dragOffset.x = x - component.x;
                     this.dragOffset.y = y - component.y;
-                    this.canvas.style.cursor = 'grabbing';
-                    e.preventDefault();
+                    this.hasMoved = false; // Track if mouse has moved
                 }
             }
         });
@@ -195,12 +198,24 @@ class CircuitSimulator {
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
 
+            // Check if we should start dragging (movement threshold)
+            if (this.draggedComponent && !this.isDraggingComponent && this.dragStartPos) {
+                const dx = Math.abs(x - this.dragStartPos.x);
+                const dy = Math.abs(y - this.dragStartPos.y);
+                if (dx > 3 || dy > 3) { // 3px movement threshold
+                    this.isDraggingComponent = true;
+                    this.hasMoved = true;
+                    this.canvas.style.cursor = 'grabbing';
+                }
+            }
+
             // Handle component dragging
             if (this.isDraggingComponent && this.draggedComponent) {
                 const newX = x - this.dragOffset.x;
                 const newY = y - this.dragOffset.y;
                 this.moveComponent(this.draggedComponent, newX, newY);
                 this.redraw();
+                e.preventDefault();
             }
             // Handle connection preview
             else if (this.mode === 'connect' && this.connectStart) {
@@ -223,15 +238,31 @@ class CircuitSimulator {
 
         // Canvas mouseup to stop dragging
         this.canvas.addEventListener('mouseup', () => {
+            // Reset drag state
+            this.isDraggingComponent = false;
+            this.draggedComponent = null;
+            this.dragStartPos = null;
+            this.canvas.style.cursor = 'crosshair';
+        });
+
+        // Also handle mouseup outside canvas
+        document.addEventListener('mouseup', () => {
             if (this.isDraggingComponent) {
                 this.isDraggingComponent = false;
                 this.draggedComponent = null;
+                this.dragStartPos = null;
                 this.canvas.style.cursor = 'crosshair';
             }
         });
     }
 
     handleCanvasClick(e) {
+        // Don't process click if it was actually a drag
+        if (this.hasMoved) {
+            this.hasMoved = false;
+            return;
+        }
+
         const rect = this.canvas.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
