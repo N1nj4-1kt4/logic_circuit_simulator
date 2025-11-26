@@ -440,9 +440,13 @@ class CircuitSimulator {
     }
 
     handleDelete(x, y) {
+        console.log('Total components on board:', this.components.length);
+        console.log('Components:', this.components.map(c => ({type: c.type, x: c.x, y: c.y, id: c.id})));
+
         // Delete component
         const component = this.findComponent(x, y);
         console.log('findComponent result:', component);
+        console.log('Clicked at:', x, y);
 
         if (component) {
             console.log('Deleting component:', component.type, component.id);
