@@ -1410,6 +1410,7 @@ class CircuitSimulator {
 
                     // Save the updated column order
                     this.saveTruthTableState();
+                    this.saveBoardState(); // Persist to localStorage
 
                     // Redraw table with new order
                     this.displayTruthTable(inputs, outputs, table);
@@ -1516,6 +1517,7 @@ class CircuitSimulator {
 
                     // Save the new size
                     this.saveTruthTableState();
+                    this.saveBoardState(); // Persist to localStorage
                 }
             };
 
@@ -2424,6 +2426,7 @@ class CircuitSimulator {
                 isDragging = false;
                 // Save the new position
                 this.saveTruthTableState();
+                this.saveBoardState(); // Persist to localStorage
             }
         });
     }
