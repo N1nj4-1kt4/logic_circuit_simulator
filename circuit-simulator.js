@@ -1250,6 +1250,173 @@ class CircuitSimulator {
 
         // Highlight the row matching current circuit state
         this.updateTruthTableHighlight();
+
+        // Position panel to avoid overlapping with circuit components
+        this.positionPanelSmartly(panel);
+    }
+
+    getComponentsBoundingBox() {
+        // Calculate the bounding box of all components on the canvas
+        if (this.components.length === 0) {
+            return null;
+        }
+
+        let minX = Infinity, minY = Infinity;
+        let maxX = -Infinity, maxY = -Infinity;
+
+        this.components.forEach(component => {
+            const { x, y, type } = component;
+
+            // Estimate component size based on type
+            let width = 50, height = 50;
+            if (type === 'INPUT' || type === 'OUTPUT') {
+                width = height = 40;
+            } else if (type === 'CUSTOM') {
+                width = height = 90;
+            } else if (type === 'NOT') {
+                width = 45;
+                height = 40;
+            } else {
+                // Logic gates
+                width = 50;
+                height = 40;
+            }
+
+            minX = Math.min(minX, x - width);
+            minY = Math.min(minY, y - height);
+            maxX = Math.max(maxX, x + width);
+            maxY = Math.max(maxY, y + height);
+        });
+
+        // Convert canvas coordinates to viewport coordinates
+        const canvasRect = this.canvas.getBoundingClientRect();
+
+        return {
+            left: canvasRect.left + (minX / this.canvas.width) * canvasRect.width,
+            top: canvasRect.top + (minY / this.canvas.height) * canvasRect.height,
+            right: canvasRect.left + (maxX / this.canvas.width) * canvasRect.width,
+            bottom: canvasRect.top + (maxY / this.canvas.height) * canvasRect.height,
+            width: ((maxX - minX) / this.canvas.width) * canvasRect.width,
+            height: ((maxY - minY) / this.canvas.height) * canvasRect.height
+        };
+    }
+
+    positionPanelSmartly(panel) {
+        // Reset to default centered position first to measure panel size
+        panel.style.transform = 'translate(-50%, -50%)';
+        panel.style.left = '50%';
+        panel.style.top = '50%';
+
+        // Force a reflow to get accurate measurements
+        panel.offsetHeight;
+
+        const panelRect = panel.getBoundingClientRect();
+        const panelWidth = panelRect.width;
+        const panelHeight = panelRect.height;
+
+        const componentBox = this.getComponentsBoundingBox();
+        const canvasRect = this.canvas.getBoundingClientRect();
+
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+
+        // Define candidate positions (with margins from edges)
+        const margin = 20;
+        const positions = [];
+
+        // If no components, just center it
+        if (!componentBox) {
+            return; // Keep centered position
+        }
+
+        // Try right side of canvas
+        if (canvasRect.right + margin + panelWidth < viewportWidth) {
+            positions.push({
+                left: canvasRect.right + margin,
+                top: Math.max(margin, Math.min(canvasRect.top, viewportHeight - panelHeight - margin)),
+                score: 100 // Prefer right side
+            });
+        }
+
+        // Try left side of canvas
+        if (canvasRect.left - margin - panelWidth > 0) {
+            positions.push({
+                left: canvasRect.left - panelWidth - margin,
+                top: Math.max(margin, Math.min(canvasRect.top, viewportHeight - panelHeight - margin)),
+                score: 90
+            });
+        }
+
+        // Try below canvas
+        if (canvasRect.bottom + margin + panelHeight < viewportHeight) {
+            positions.push({
+                left: Math.max(margin, Math.min(canvasRect.left, viewportWidth - panelWidth - margin)),
+                top: canvasRect.bottom + margin,
+                score: 80
+            });
+        }
+
+        // Try above canvas
+        if (canvasRect.top - margin - panelHeight > 0) {
+            positions.push({
+                left: Math.max(margin, Math.min(canvasRect.left, viewportWidth - panelWidth - margin)),
+                top: canvasRect.top - panelHeight - margin,
+                score: 70
+            });
+        }
+
+        // Try bottom-right corner (over canvas but avoiding components)
+        if (componentBox.right + margin + panelWidth < canvasRect.right) {
+            positions.push({
+                left: componentBox.right + margin,
+                top: Math.max(canvasRect.top + margin, Math.min(componentBox.top, canvasRect.bottom - panelHeight - margin)),
+                score: 60
+            });
+        }
+
+        // Try top-right corner
+        if (componentBox.right + margin + panelWidth < canvasRect.right) {
+            positions.push({
+                left: componentBox.right + margin,
+                top: canvasRect.top + margin,
+                score: 50
+            });
+        }
+
+        // Try bottom-left corner
+        if (componentBox.left - margin - panelWidth > canvasRect.left) {
+            positions.push({
+                left: componentBox.left - panelWidth - margin,
+                top: Math.max(canvasRect.top + margin, Math.min(componentBox.top, canvasRect.bottom - panelHeight - margin)),
+                score: 40
+            });
+        }
+
+        // If we have candidate positions, choose the best one
+        if (positions.length > 0) {
+            // Sort by score (higher is better)
+            positions.sort((a, b) => b.score - a.score);
+            const best = positions[0];
+
+            // Apply the position (remove transform and use absolute positioning)
+            panel.style.transform = 'none';
+            panel.style.left = best.left + 'px';
+            panel.style.top = best.top + 'px';
+        } else {
+            // Fallback: position to the right of component bounding box on canvas
+            const fallbackLeft = Math.min(
+                componentBox.right + margin,
+                canvasRect.right - panelWidth - margin
+            );
+            const fallbackTop = Math.max(
+                margin,
+                Math.min(componentBox.top, viewportHeight - panelHeight - margin)
+            );
+
+            panel.style.transform = 'none';
+            panel.style.left = fallbackLeft + 'px';
+            panel.style.top = fallbackTop + 'px';
+        }
     }
 
     getCurrentInputState() {
