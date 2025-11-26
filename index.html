@@ -150,11 +150,14 @@
             <!-- Breadboard Canvas -->
             <div class="canvas-container">
                 <div class="canvas-header">
-                    <span id="modeIndicator">Mode: Place Component</span>
-                    <span id="selectedComponent"></span>
+                    <span id="currentCircuitName" class="circuit-name">Unsaved Board</span>
                     <button class="theme-toggle" id="themeToggle" title="Toggle Dark Mode">🌙</button>
                 </div>
                 <canvas id="breadboard" width="1400" height="800"></canvas>
+                <div class="canvas-footer">
+                    <span id="modeIndicator">Mode: Neutral</span>
+                    <span id="selectedComponent"></span>
+                </div>
             </div>
 
             <!-- Truth Table Panel -->

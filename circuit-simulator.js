@@ -24,6 +24,7 @@ class CircuitSimulator {
 
         // Board management
         this.currentBoardName = null; // null means unsaved board
+        this.currentComponentName = null; // null means not a saved component
         this.savedBoards = {};
         this.lastSavedState = null; // To track if board has been modified
         this.pendingActionAfterSave = null; // Callback after save dialog
@@ -42,7 +43,7 @@ class CircuitSimulator {
         this.drawGrid();
         this.updateCustomComponentsList();
         this.updateBoardsList();
-        this.updateCurrentBoardDisplay();
+        this.updateCircuitNameDisplay();
         this.applyTheme();
     }
 
@@ -1347,9 +1348,20 @@ class CircuitSimulator {
             return;
         }
 
-        // Clear form
-        document.getElementById('componentName').value = '';
-        document.getElementById('componentDescription').value = '';
+        // Pre-fill with current component name if it exists
+        if (this.currentComponentName) {
+            document.getElementById('componentName').value = this.currentComponentName;
+            // Optionally load description from saved component
+            const savedComponent = this.customComponents[this.currentComponentName];
+            if (savedComponent && savedComponent.description) {
+                document.getElementById('componentDescription').value = savedComponent.description;
+            } else {
+                document.getElementById('componentDescription').value = '';
+            }
+        } else {
+            document.getElementById('componentName').value = '';
+            document.getElementById('componentDescription').value = '';
+        }
 
         // Show dialog
         document.getElementById('saveComponentDialog').style.display = 'block';
@@ -1391,6 +1403,12 @@ class CircuitSimulator {
         this.customComponents[name] = componentData;
         this.saveCustomComponentsToStorage();
         this.updateCustomComponentsList();
+
+        // Update current circuit name to reflect it's now a saved component
+        this.currentComponentName = name;
+        this.currentBoardName = null; // Clear board name when saving as component
+        this.lastSavedState = JSON.stringify(this.getCurrentState());
+        this.updateCircuitNameDisplay();
 
         document.getElementById('saveComponentDialog').style.display = 'none';
         alert(`Component "${name}" saved successfully!`);
@@ -1597,10 +1615,11 @@ class CircuitSimulator {
 
             // Track that this is loaded from a component (not a board)
             this.currentBoardName = null;
+            this.currentComponentName = name; // Set component name
             this.lastSavedState = null;
 
             this.redraw();
-            this.updateCurrentBoardDisplay();
+            this.updateCircuitNameDisplay();
             document.getElementById('manageComponentsDialog').style.display = 'none';
             alert(`Component "${name}" loaded for editing. Make your changes and save it again.`);
         };
@@ -1871,8 +1890,9 @@ class CircuitSimulator {
         };
         this.saveBoardsToStorage();
         this.currentBoardName = boardName;
+        this.currentComponentName = null; // Clear component name when saving as board
         this.lastSavedState = JSON.stringify(state);
-        this.updateCurrentBoardDisplay();
+        this.updateCircuitNameDisplay();
         this.updateBoardsList();
         console.log(`Board saved: ${boardName}`);
     }
@@ -1888,9 +1908,10 @@ class CircuitSimulator {
         this.connections = JSON.parse(JSON.stringify(board.connections || []));
         this.nextId = board.nextId || 1;
         this.currentBoardName = boardName;
+        this.currentComponentName = null; // Clear component name when loading board
         this.lastSavedState = JSON.stringify(this.getCurrentState());
         this.redraw();
-        this.updateCurrentBoardDisplay();
+        this.updateCircuitNameDisplay();
         console.log(`Board loaded: ${boardName}`);
     }
 
@@ -1899,9 +1920,10 @@ class CircuitSimulator {
         this.connections = [];
         this.nextId = 1;
         this.currentBoardName = null;
+        this.currentComponentName = null; // Clear both names
         this.lastSavedState = null;
         this.redraw();
-        this.updateCurrentBoardDisplay();
+        this.updateCircuitNameDisplay();
         console.log('New board created');
     }
 
@@ -1918,11 +1940,31 @@ class CircuitSimulator {
         }
     }
 
-    updateCurrentBoardDisplay() {
-        const displayElement = document.getElementById('currentBoardName');
-        if (displayElement) {
-            displayElement.textContent = this.currentBoardName || 'Unsaved Board';
+    updateCircuitNameDisplay() {
+        // Update sidebar current board indicator
+        const sidebarElement = document.getElementById('currentBoardName');
+        if (sidebarElement) {
+            sidebarElement.textContent = this.currentBoardName || 'Unsaved Board';
         }
+
+        // Update canvas header circuit name
+        const canvasHeaderElement = document.getElementById('currentCircuitName');
+        if (canvasHeaderElement) {
+            let displayName;
+            if (this.currentComponentName) {
+                displayName = `${this.currentComponentName} (Component)`;
+            } else if (this.currentBoardName) {
+                displayName = this.currentBoardName;
+            } else {
+                displayName = 'Unsaved Board';
+            }
+            canvasHeaderElement.textContent = displayName;
+        }
+    }
+
+    // Legacy method name for compatibility
+    updateCurrentBoardDisplay() {
+        this.updateCircuitNameDisplay();
     }
 
     updateBoardsList() {
@@ -1977,7 +2019,8 @@ class CircuitSimulator {
         const dialog = document.getElementById('boardNameDialog');
         const input = document.getElementById('boardNameInput');
 
-        input.value = defaultName || this.getNextBoardName();
+        // Pre-fill with: explicit default > current board name > next board name
+        input.value = defaultName || this.currentBoardName || this.getNextBoardName();
         dialog.style.display = 'block';
 
         const confirmBtn = document.getElementById('confirmBoardName');
