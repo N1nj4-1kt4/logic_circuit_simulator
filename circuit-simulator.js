@@ -425,16 +425,16 @@ class CircuitSimulator {
             // Input circle has radius 20, shift port 3px right from edge
             component.outputs.push({ x: x + 23, y: y });
         } else if (type === 'OUTPUT') {
-            // Output circle has radius 20, shift port 5px right from edge (more clearance)
-            component.inputs.push({ x: x - 15, y: y });
+            // Output circle has radius 20, port 2px inside edge
+            component.inputs.push({ x: x - 18, y: y });
         } else if (type === 'NOT') {
-            // NOT gate: shift input 5px right, output 3px right
-            component.inputs.push({ x: x - 15, y: y });
+            // NOT gate: input 2px inside, output 3px outside
+            component.inputs.push({ x: x - 18, y: y });
             component.outputs.push({ x: x + 28, y: y });
         } else if (type === 'NAND' || type === 'NOR' || type === 'XNOR') {
-            // Inverted gates: shift inputs 5px right, output 3px right
-            component.inputs.push({ x: x - 20, y: y - 15 });
-            component.inputs.push({ x: x - 20, y: y + 15 });
+            // Inverted gates: inputs 2px inside, output 3px outside
+            component.inputs.push({ x: x - 23, y: y - 15 });
+            component.inputs.push({ x: x - 23, y: y + 15 });
             component.outputs.push({ x: x + 33, y: y });
         } else if (type === 'CUSTOM') {
             // Custom component ports (90x90 size - 15% larger for better visibility)
@@ -446,21 +446,21 @@ class CircuitSimulator {
             const inputSpacing = Math.min(40, 90 / (numInputs + 1));
             const outputSpacing = Math.min(40, 90 / (numOutputs + 1));
 
-            // Create input ports on the left edge (rect is from x - 45 to x + 45)
+            // Create input ports 2px inside left edge (rect is from x - 45 to x + 45)
             for (let i = 0; i < numInputs; i++) {
                 const offsetY = (i - (numInputs - 1) / 2) * inputSpacing;
-                component.inputs.push({ x: x - 40, y: y + offsetY });
+                component.inputs.push({ x: x - 43, y: y + offsetY });
             }
 
-            // Create output ports on the right edge
+            // Create output ports 3px outside right edge
             for (let i = 0; i < numOutputs; i++) {
                 const offsetY = (i - (numOutputs - 1) / 2) * outputSpacing;
                 component.outputs.push({ x: x + 48, y: y + offsetY });
             }
         } else {
-            // AND, OR, XOR gates (non-inverted): shift inputs 5px right, output 3px right
-            component.inputs.push({ x: x - 20, y: y - 15 });
-            component.inputs.push({ x: x - 20, y: y + 15 });
+            // AND, OR, XOR gates (non-inverted): inputs 2px inside, output 3px outside
+            component.inputs.push({ x: x - 23, y: y - 15 });
+            component.inputs.push({ x: x - 23, y: y + 15 });
             component.outputs.push({ x: x + 23, y: y });
         }
     }
