@@ -1941,12 +1941,6 @@ class CircuitSimulator {
     }
 
     updateCircuitNameDisplay() {
-        // Update sidebar current board indicator
-        const sidebarElement = document.getElementById('currentBoardName');
-        if (sidebarElement) {
-            sidebarElement.textContent = this.currentBoardName || 'Unsaved Board';
-        }
-
         // Update canvas header circuit name
         const canvasHeaderElement = document.getElementById('currentCircuitName');
         if (canvasHeaderElement) {
@@ -2078,17 +2072,12 @@ class CircuitSimulator {
 
         // Save Board button
         document.getElementById('saveBoard').addEventListener('click', () => {
-            if (this.currentBoardName) {
-                // Update existing board
-                this.saveCurrentBoard(this.currentBoardName);
-                alert(`Board "${this.currentBoardName}" saved successfully!`);
-            } else {
-                // New board - prompt for name
-                this.promptForBoardName(null, (boardName) => {
-                    this.saveCurrentBoard(boardName);
-                    alert(`Board "${boardName}" saved successfully!`);
-                });
-            }
+            // Always prompt for name (pre-filled with current name if exists)
+            // This allows saving as a new board by changing the name
+            this.promptForBoardName(null, (boardName) => {
+                this.saveCurrentBoard(boardName);
+                alert(`Board "${boardName}" saved successfully!`);
+            });
         });
 
         // Load Board dropdown
