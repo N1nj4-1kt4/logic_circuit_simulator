@@ -30,6 +30,7 @@ class CircuitSimulator {
         this.pendingActionAfterSave = null; // Callback after save dialog
         this.truthTableData = null; // Store truth table data for highlighting
         this.truthTableColumnOrder = null; // Store column order for drag-and-drop
+        this.truthTableState = null; // Store truth table customization (size, column order)
 
         this.init();
     }
@@ -1299,9 +1300,19 @@ class CircuitSimulator {
         const padding = 40; // panel padding
         const minWidth = Math.max(250, (numColumns * minColumnWidth) + padding + (numColumns * 2)); // +2 for borders
 
-        // Set panel width to minimum (don't make it unnecessarily large)
-        panel.style.width = minWidth + 'px';
-        panel.style.height = 'auto'; // Let content determine initial height
+        // Apply saved size if available, otherwise use minimum width
+        if (this.truthTableState && this.truthTableState.width) {
+            panel.style.width = this.truthTableState.width;
+        } else {
+            panel.style.width = minWidth + 'px';
+        }
+
+        if (this.truthTableState && this.truthTableState.height) {
+            panel.style.height = this.truthTableState.height;
+        } else {
+            panel.style.height = 'auto'; // Let content determine initial height
+        }
+
         panel.style.display = 'block';
 
         // Setup resize handles
@@ -1321,40 +1332,54 @@ class CircuitSimulator {
         const headers = document.querySelectorAll('#truthTableContent .draggable-header');
         let draggedElement = null;
         let draggedIndex = null;
+        let draggedType = null;
 
         headers.forEach(header => {
             header.addEventListener('dragstart', (e) => {
                 draggedElement = header;
                 draggedIndex = parseInt(header.dataset.displayIndex);
+                draggedType = header.dataset.colType; // 'input' or 'output'
                 header.classList.add('dragging');
                 e.dataTransfer.effectAllowed = 'move';
             });
 
             header.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-
+                const targetType = header.dataset.colType;
                 const targetIndex = parseInt(header.dataset.displayIndex);
-                if (draggedIndex !== targetIndex) {
+
+                // Only allow drop if same type (input->input, output->output)
+                if (draggedType === targetType && draggedIndex !== targetIndex) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
                     header.classList.add('drag-over');
+                } else if (draggedType !== targetType) {
+                    e.dataTransfer.dropEffect = 'none';
+                    header.classList.add('drag-forbidden');
                 }
             });
 
             header.addEventListener('dragleave', (e) => {
                 header.classList.remove('drag-over');
+                header.classList.remove('drag-forbidden');
             });
 
             header.addEventListener('drop', (e) => {
                 e.preventDefault();
                 header.classList.remove('drag-over');
+                header.classList.remove('drag-forbidden');
 
                 const targetIndex = parseInt(header.dataset.displayIndex);
+                const targetType = header.dataset.colType;
 
-                if (draggedIndex !== null && draggedIndex !== targetIndex) {
+                // Only reorder if same type and different index
+                if (draggedIndex !== null && draggedIndex !== targetIndex && draggedType === targetType) {
                     // Reorder columns
                     const movedColumn = this.truthTableColumnOrder[draggedIndex];
                     this.truthTableColumnOrder.splice(draggedIndex, 1);
                     this.truthTableColumnOrder.splice(targetIndex, 0, movedColumn);
+
+                    // Save the updated column order
+                    this.saveTruthTableState();
 
                     // Redraw table with new order
                     this.displayTruthTable(inputs, outputs, table);
@@ -1363,9 +1388,13 @@ class CircuitSimulator {
 
             header.addEventListener('dragend', (e) => {
                 header.classList.remove('dragging');
-                headers.forEach(h => h.classList.remove('drag-over'));
+                headers.forEach(h => {
+                    h.classList.remove('drag-over');
+                    h.classList.remove('drag-forbidden');
+                });
                 draggedElement = null;
                 draggedIndex = null;
+                draggedType = null;
             });
         });
     }
@@ -1454,12 +1483,48 @@ class CircuitSimulator {
                     document.body.style.cursor = '';
                     document.removeEventListener('mousemove', handleMouseMove);
                     document.removeEventListener('mouseup', handleMouseUp);
+
+                    // Save the new size
+                    this.saveTruthTableState();
                 }
             };
 
             document.addEventListener('mousemove', handleMouseMove);
             document.addEventListener('mouseup', handleMouseUp);
         });
+    }
+
+    saveTruthTableState() {
+        // Save Truth Table customization (column order and panel size)
+        const panel = document.getElementById('truthTablePanel');
+
+        if (panel && panel.style.display !== 'none') {
+            this.truthTableState = {
+                columnOrder: this.truthTableColumnOrder ? [...this.truthTableColumnOrder] : null,
+                width: panel.style.width || null,
+                height: panel.style.height || null
+            };
+        }
+    }
+
+    restoreTruthTableState() {
+        // Restore Truth Table customization if saved
+        if (!this.truthTableState) return;
+
+        const panel = document.getElementById('truthTablePanel');
+
+        // Restore column order
+        if (this.truthTableState.columnOrder) {
+            this.truthTableColumnOrder = [...this.truthTableState.columnOrder];
+        }
+
+        // Restore panel size (will be applied when truth table is opened)
+        if (this.truthTableState.width && panel) {
+            panel.style.width = this.truthTableState.width;
+        }
+        if (this.truthTableState.height && panel) {
+            panel.style.height = this.truthTableState.height;
+        }
     }
 
     getComponentsBoundingBox() {
@@ -2122,6 +2187,10 @@ class CircuitSimulator {
             this.currentComponentName = name; // Set component name
             this.lastSavedState = null;
 
+            // Restore Truth Table state if saved
+            this.truthTableState = componentData.truthTableState ? JSON.parse(JSON.stringify(componentData.truthTableState)) : null;
+            this.restoreTruthTableState();
+
             // Recalculate port positions for all components (migrate old components to new port positions)
             this.migrateComponentPorts();
 
@@ -2385,7 +2454,8 @@ class CircuitSimulator {
         return {
             components: JSON.parse(JSON.stringify(this.components)),
             connections: JSON.parse(JSON.stringify(this.connections)),
-            nextId: this.nextId
+            nextId: this.nextId,
+            truthTableState: this.truthTableState ? JSON.parse(JSON.stringify(this.truthTableState)) : null
         };
     }
 
@@ -2427,6 +2497,10 @@ class CircuitSimulator {
         this.nextId = board.nextId || 1;
         this.currentBoardName = boardName;
         this.currentComponentName = null; // Clear component name when loading board
+
+        // Restore Truth Table state if saved
+        this.truthTableState = board.truthTableState ? JSON.parse(JSON.stringify(board.truthTableState)) : null;
+        this.restoreTruthTableState();
 
         // Recalculate port positions for all components (migrate old boards to new port positions)
         this.migrateComponentPorts();
