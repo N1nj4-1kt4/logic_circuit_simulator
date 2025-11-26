@@ -171,6 +171,7 @@ class CircuitSimulator {
 
         document.getElementById('closeTruthTable').addEventListener('click', () => {
             document.getElementById('truthTablePanel').style.display = 'none';
+            this.saveBoardState(); // Save state when truth table is hidden
         });
 
         // Save Component
@@ -1351,6 +1352,9 @@ class CircuitSimulator {
                 // No saved position, use smart positioning
                 this.positionPanelSmartly(panel);
             }
+
+            // Save board state when truth table is first shown
+            this.saveBoardState();
         }
     }
 
