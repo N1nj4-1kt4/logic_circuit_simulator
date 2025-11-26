@@ -1665,43 +1665,74 @@ class CircuitSimulator {
         const canvasRight = canvasRect.right;
         const canvasBottom = canvasRect.bottom;
 
-        // Try top-right corner of canvas (avoiding components)
-        if (canvasRight - panelWidth - margin > componentBox.right + margin) {
-            positions.push({
-                left: canvasRight - panelWidth - margin,
-                top: canvasTop + margin,
-                score: 100 // Highest preference
-            });
-        }
+        // Helper function to calculate overlap area between panel and component box
+        const calculateOverlap = (panelLeft, panelTop, panelWidth, panelHeight, compBox) => {
+            const panelRight = panelLeft + panelWidth;
+            const panelBottom = panelTop + panelHeight;
 
-        // Try bottom-right corner of canvas
-        if (canvasRight - panelWidth - margin > componentBox.right + margin &&
-            canvasBottom - panelHeight - margin > canvasTop + margin) {
-            positions.push({
+            // Calculate intersection rectangle
+            const overlapLeft = Math.max(panelLeft, compBox.left);
+            const overlapTop = Math.max(panelTop, compBox.top);
+            const overlapRight = Math.min(panelRight, compBox.right);
+            const overlapBottom = Math.min(panelBottom, compBox.bottom);
+
+            // If no overlap, return 0
+            if (overlapLeft >= overlapRight || overlapTop >= overlapBottom) {
+                return 0;
+            }
+
+            // Calculate overlap area
+            const overlapArea = (overlapRight - overlapLeft) * (overlapBottom - overlapTop);
+            const panelArea = panelWidth * panelHeight;
+
+            // Return overlap percentage (0-100)
+            return (overlapArea / panelArea) * 100;
+        };
+
+        // Always try all 4 corners and score based on overlap
+        const cornerPositions = [
+            {
+                name: 'bottom-right',
                 left: canvasRight - panelWidth - margin,
                 top: canvasBottom - panelHeight - margin,
-                score: 95
-            });
-        }
-
-        // Try top-left corner of canvas (avoiding components)
-        if (canvasLeft + panelWidth + margin < componentBox.left - margin) {
-            positions.push({
-                left: canvasLeft + margin,
+                basePriority: 100
+            },
+            {
+                name: 'top-right',
+                left: canvasRight - panelWidth - margin,
                 top: canvasTop + margin,
-                score: 90
-            });
-        }
-
-        // Try bottom-left corner of canvas
-        if (canvasLeft + panelWidth + margin < componentBox.left - margin &&
-            canvasBottom - panelHeight - margin > canvasTop + margin) {
-            positions.push({
+                basePriority: 95
+            },
+            {
+                name: 'bottom-left',
                 left: canvasLeft + margin,
                 top: canvasBottom - panelHeight - margin,
-                score: 85
+                basePriority: 90
+            },
+            {
+                name: 'top-left',
+                left: canvasLeft + margin,
+                top: canvasTop + margin,
+                basePriority: 85
+            }
+        ];
+
+        // Score each corner based on overlap with components
+        cornerPositions.forEach(corner => {
+            const overlap = calculateOverlap(corner.left, corner.top, panelWidth, panelHeight, componentBox);
+            // Score: base priority - overlap percentage
+            // No overlap = full priority, 100% overlap = priority - 100
+            const score = corner.basePriority - overlap;
+
+            console.log(`Corner ${corner.name}: overlap=${overlap.toFixed(1)}%, score=${score.toFixed(1)}`);
+
+            positions.push({
+                left: corner.left,
+                top: corner.top,
+                score: score,
+                overlap: overlap
             });
-        }
+        });
 
         // Try right of components (within canvas)
         if (componentBox.right + margin + panelWidth < canvasRight - margin) {
@@ -1749,49 +1780,6 @@ class CircuitSimulator {
                     score: 65
                 });
             }
-        }
-
-        // Fallback corner positions (lower priority, may overlap components)
-        // These ensure we always have at least some options
-        // Only add if not already added above (check if score 100 positions exist)
-        const hasTopRight = positions.some(p => p.score === 100);
-        const hasBottomRight = positions.some(p => p.score === 95);
-        const hasTopLeft = positions.some(p => p.score === 90);
-        const hasBottomLeft = positions.some(p => p.score === 85);
-
-        // Add corner fallbacks if they fit within canvas and weren't added yet
-        if (!hasBottomRight && canvasRight - panelWidth - margin > canvasLeft &&
-            canvasBottom - panelHeight - margin > canvasTop) {
-            positions.push({
-                left: canvasRight - panelWidth - margin,
-                top: canvasBottom - panelHeight - margin,
-                score: 50 // Lower priority - may overlap components
-            });
-        }
-
-        if (!hasTopRight && canvasRight - panelWidth - margin > canvasLeft) {
-            positions.push({
-                left: canvasRight - panelWidth - margin,
-                top: canvasTop + margin,
-                score: 45 // Lower priority - may overlap components
-            });
-        }
-
-        if (!hasBottomLeft && canvasLeft + panelWidth + margin < canvasRight &&
-            canvasBottom - panelHeight - margin > canvasTop) {
-            positions.push({
-                left: canvasLeft + margin,
-                top: canvasBottom - panelHeight - margin,
-                score: 40 // Lower priority - may overlap components
-            });
-        }
-
-        if (!hasTopLeft && canvasLeft + panelWidth + margin < canvasRight) {
-            positions.push({
-                left: canvasLeft + margin,
-                top: canvasTop + margin,
-                score: 35 // Lower priority - may overlap components
-            });
         }
 
         console.log('Candidate positions found:', positions.length);
