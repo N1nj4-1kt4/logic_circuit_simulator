@@ -1587,25 +1587,21 @@ class CircuitSimulator {
         this.components.forEach(component => {
             const { x, y, type } = component;
 
-            // Estimate component size based on type
-            let width = 50, height = 50;
+            // Use half-widths and half-heights (radii/semi-dimensions)
+            let halfWidth = 25, halfHeight = 20; // Default for logic gates
             if (type === 'INPUT' || type === 'OUTPUT') {
-                width = height = 40;
+                halfWidth = halfHeight = 20; // Circle radius
             } else if (type === 'CUSTOM') {
-                width = height = 90;
+                halfWidth = halfHeight = 45; // 90x90 total size
             } else if (type === 'NOT') {
-                width = 45;
-                height = 40;
-            } else {
-                // Logic gates
-                width = 50;
-                height = 40;
+                halfWidth = 22.5; // ~45 total width
+                halfHeight = 20;  // 40 total height
             }
 
-            minX = Math.min(minX, x - width);
-            minY = Math.min(minY, y - height);
-            maxX = Math.max(maxX, x + width);
-            maxY = Math.max(maxY, y + height);
+            minX = Math.min(minX, x - halfWidth);
+            minY = Math.min(minY, y - halfHeight);
+            maxX = Math.max(maxX, x + halfWidth);
+            maxY = Math.max(maxY, y + halfHeight);
         });
 
         // Convert canvas coordinates to viewport coordinates
