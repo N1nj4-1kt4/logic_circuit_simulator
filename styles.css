@@ -104,6 +104,66 @@ header p {
     color: white;
 }
 
+/* Grid Layouts */
+.gate-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 0;
+}
+
+.gate-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 4px;
+    min-height: 70px;
+}
+
+.gate-btn svg {
+    flex-shrink: 0;
+}
+
+.gate-btn span {
+    font-size: 0.85em;
+}
+
+.io-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 0;
+}
+
+.io-grid .tool-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 10px 4px;
+}
+
+/* Custom Components Dropdown */
+.custom-dropdown {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 8px;
+    border: 2px solid #667eea;
+    background: white;
+    color: #667eea;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.95em;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.custom-dropdown:hover {
+    border-color: #764ba2;
+    box-shadow: 0 2px 5px rgba(102, 126, 234, 0.2);
+}
+
 .action-btn#simulate {
     background: #4caf50;
     color: white;
@@ -207,6 +267,8 @@ header p {
     border: 2px solid #ddd;
     border-radius: 5px;
     cursor: crosshair;
+    max-width: 100%;
+    display: block;
     background:
         repeating-linear-gradient(
             0deg,
@@ -248,6 +310,8 @@ header p {
     margin-bottom: 20px;
     border-bottom: 2px solid #667eea;
     padding-bottom: 10px;
+    cursor: move;
+    user-select: none;
 }
 
 .panel-header h3 {
@@ -608,4 +672,25 @@ body.dark-mode .dialog-content p {
 
 body.dark-mode .form-group label {
     color: #b3b3b3;
+}
+
+body.dark-mode .custom-dropdown {
+    background: #1a1a2e;
+    border-color: #53a8f4;
+    color: #e9e9e9;
+}
+
+body.dark-mode .custom-dropdown option {
+    background: #1a1a2e;
+    color: #e9e9e9;
+}
+
+body.dark-mode .gate-btn svg,
+body.dark-mode .tool-btn svg {
+    color: #53a8f4;
+}
+
+body.dark-mode .gate-btn.selected svg,
+body.dark-mode .tool-btn.selected svg {
+    color: white;
 }

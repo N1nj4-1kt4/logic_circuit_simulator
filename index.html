@@ -20,24 +20,77 @@
 
                 <div class="tool-section">
                     <h4>Logic Gates</h4>
-                    <button class="tool-btn" data-type="AND">AND Gate</button>
-                    <button class="tool-btn" data-type="OR">OR Gate</button>
-                    <button class="tool-btn" data-type="NOT">NOT Gate</button>
-                    <button class="tool-btn" data-type="XOR">XOR Gate</button>
-                    <button class="tool-btn" data-type="NAND">NAND Gate</button>
-                    <button class="tool-btn" data-type="NOR">NOR Gate</button>
-                    <button class="tool-btn" data-type="XNOR">XNOR Gate</button>
+                    <div class="gate-grid">
+                        <button class="tool-btn gate-btn" data-type="AND">
+                            <svg width="40" height="30" viewBox="0 0 50 40">
+                                <path d="M 10 10 L 25 10 A 15 15 0 0 1 25 30 L 10 30 Z" fill="currentColor"/>
+                            </svg>
+                            <span>AND</span>
+                        </button>
+                        <button class="tool-btn gate-btn" data-type="OR">
+                            <svg width="40" height="30" viewBox="0 0 50 40">
+                                <path d="M 10 10 Q 20 20 10 30 Q 25 25 40 20 Q 25 15 10 10" fill="currentColor"/>
+                            </svg>
+                            <span>OR</span>
+                        </button>
+                        <button class="tool-btn gate-btn" data-type="NOT">
+                            <svg width="40" height="30" viewBox="0 0 50 40">
+                                <path d="M 10 12 L 10 28 L 35 20 Z" fill="currentColor"/>
+                                <circle cx="38" cy="20" r="3" fill="currentColor"/>
+                            </svg>
+                            <span>NOT</span>
+                        </button>
+                        <button class="tool-btn gate-btn" data-type="XOR">
+                            <svg width="40" height="30" viewBox="0 0 50 40">
+                                <path d="M 10 10 Q 20 20 10 30 Q 25 25 40 20 Q 25 15 10 10" fill="currentColor"/>
+                                <path d="M 5 10 Q 15 20 5 30" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>XOR</span>
+                        </button>
+                        <button class="tool-btn gate-btn" data-type="NAND">
+                            <svg width="40" height="30" viewBox="0 0 50 40">
+                                <path d="M 10 10 L 25 10 A 15 15 0 0 1 25 30 L 10 30 Z" fill="currentColor"/>
+                                <circle cx="43" cy="20" r="3" fill="currentColor"/>
+                            </svg>
+                            <span>NAND</span>
+                        </button>
+                        <button class="tool-btn gate-btn" data-type="NOR">
+                            <svg width="40" height="30" viewBox="0 0 50 40">
+                                <path d="M 10 10 Q 20 20 10 30 Q 25 25 37 20 Q 25 15 10 10" fill="currentColor"/>
+                                <circle cx="43" cy="20" r="3" fill="currentColor"/>
+                            </svg>
+                            <span>NOR</span>
+                        </button>
+                        <button class="tool-btn gate-btn" data-type="XNOR">
+                            <svg width="40" height="30" viewBox="0 0 50 40">
+                                <path d="M 10 10 Q 20 20 10 30 Q 25 25 37 20 Q 25 15 10 10" fill="currentColor"/>
+                                <path d="M 5 10 Q 15 20 5 30" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <circle cx="43" cy="20" r="3" fill="currentColor"/>
+                            </svg>
+                            <span>XNOR</span>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="tool-section">
                     <h4>I/O Components</h4>
-                    <button class="tool-btn" data-type="INPUT">Input</button>
-                    <button class="tool-btn" data-type="OUTPUT">Output</button>
+                    <div class="io-grid">
+                        <button class="tool-btn" data-type="INPUT">
+                            <span style="font-size: 20px;">○</span>
+                            <span>Input</span>
+                        </button>
+                        <button class="tool-btn" data-type="OUTPUT">
+                            <span style="font-size: 20px;">◉</span>
+                            <span>Output</span>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="tool-section" id="customComponentsSection" style="display: none;">
                     <h4>Custom Components</h4>
-                    <div id="customComponentsList"></div>
+                    <select id="customComponentsDropdown" class="custom-dropdown">
+                        <option value="">Select a component...</option>
+                    </select>
                 </div>
 
                 <div class="tool-section">
@@ -45,12 +98,12 @@
                     <button class="action-btn" id="connectMode">Connect Mode</button>
                     <button class="action-btn" id="deleteMode">Delete Mode</button>
                     <button class="action-btn" id="clearBoard">Clear Board</button>
-                    <button class="action-btn" id="simulate">Simulate</button>
-                    <button class="action-btn" id="truthTable">Truth Table</button>
                 </div>
 
                 <div class="tool-section">
                     <h4>Simulation Controls</h4>
+                    <button class="action-btn" id="simulate">▶ Simulate</button>
+                    <button class="action-btn" id="truthTable">📊 Truth Table</button>
                     <button class="action-btn" id="prevStep">◀ Previous</button>
                     <button class="action-btn" id="nextStep">Next ▶</button>
                     <button class="action-btn" id="resetSim">Reset</button>
@@ -84,7 +137,7 @@
                     <span id="selectedComponent"></span>
                     <button class="theme-toggle" id="themeToggle" title="Toggle Dark Mode">🌙</button>
                 </div>
-                <canvas id="breadboard" width="1000" height="700"></canvas>
+                <canvas id="breadboard" width="1400" height="800"></canvas>
             </div>
 
             <!-- Truth Table Panel -->

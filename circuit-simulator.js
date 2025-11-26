@@ -14,7 +14,11 @@ class CircuitSimulator {
         this.currentCycleIndex = 0;
         this.customComponents = {};
         this.renameTarget = null;
-        this.darkMode = localStorage.getItem('darkMode') === 'true';
+        // Default to dark mode if no preference is saved
+        this.darkMode = localStorage.getItem('darkMode') !== 'false';
+        this.isDraggingComponent = false;
+        this.draggedComponent = null;
+        this.dragOffset = { x: 0, y: 0 };
 
         this.init();
     }
@@ -22,6 +26,9 @@ class CircuitSimulator {
     init() {
         this.loadCustomComponents();
         this.setupEventListeners();
+        this.setupDraggableTruthTable();
+        this.setupAutoSave();
+        this.loadBoardState();
         this.drawGrid();
         this.updateCustomComponentsList();
         this.applyTheme();
@@ -52,10 +59,16 @@ class CircuitSimulator {
         });
 
         document.getElementById('clearBoard').addEventListener('click', () => {
-            if (confirm('Clear entire board?')) {
+            const hasComponents = this.components.length > 0;
+            const message = hasComponents
+                ? 'Clear entire board? This will delete the auto-saved board state.'
+                : 'Clear entire board?';
+
+            if (confirm(message)) {
                 this.stopAutoCycle();
                 this.components = [];
                 this.connections = [];
+                this.clearBoardState();
                 this.redraw();
             }
         });
@@ -156,14 +169,42 @@ class CircuitSimulator {
             this.handleCanvasDoubleClick(e);
         });
 
-        // Canvas hover for connection preview
-        this.canvas.addEventListener('mousemove', (e) => {
-            if (this.mode === 'connect' && this.connectStart) {
-                this.redraw();
-                const rect = this.canvas.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
+        // Canvas mousedown for dragging
+        this.canvas.addEventListener('mousedown', (e) => {
+            const rect = this.canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
 
+            // Only allow dragging if not in connect or delete mode
+            if (this.mode !== 'connect' && this.mode !== 'delete' && !this.selectedTool) {
+                const component = this.findComponent(x, y);
+                if (component) {
+                    this.isDraggingComponent = true;
+                    this.draggedComponent = component;
+                    this.dragOffset.x = x - component.x;
+                    this.dragOffset.y = y - component.y;
+                    this.canvas.style.cursor = 'grabbing';
+                    e.preventDefault();
+                }
+            }
+        });
+
+        // Canvas mousemove for dragging and connection preview
+        this.canvas.addEventListener('mousemove', (e) => {
+            const rect = this.canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            // Handle component dragging
+            if (this.isDraggingComponent && this.draggedComponent) {
+                const newX = x - this.dragOffset.x;
+                const newY = y - this.dragOffset.y;
+                this.moveComponent(this.draggedComponent, newX, newY);
+                this.redraw();
+            }
+            // Handle connection preview
+            else if (this.mode === 'connect' && this.connectStart) {
+                this.redraw();
                 this.ctx.strokeStyle = 'rgba(102, 126, 234, 0.5)';
                 this.ctx.lineWidth = 2;
                 this.ctx.setLineDash([5, 5]);
@@ -172,6 +213,20 @@ class CircuitSimulator {
                 this.ctx.lineTo(x, y);
                 this.ctx.stroke();
                 this.ctx.setLineDash([]);
+            }
+            // Update cursor based on hover
+            else if (this.mode !== 'connect' && this.mode !== 'delete' && !this.selectedTool) {
+                const component = this.findComponent(x, y);
+                this.canvas.style.cursor = component ? 'grab' : 'crosshair';
+            }
+        });
+
+        // Canvas mouseup to stop dragging
+        this.canvas.addEventListener('mouseup', () => {
+            if (this.isDraggingComponent) {
+                this.isDraggingComponent = false;
+                this.draggedComponent = null;
+                this.canvas.style.cursor = 'crosshair';
             }
         });
     }
@@ -267,6 +322,17 @@ class CircuitSimulator {
             component.inputs.push({ x: x - 10, y: y + 15 });
             component.outputs.push({ x: x + 50, y: y });
         }
+    }
+
+    moveComponent(component, newX, newY) {
+        // Update component position (snap to grid)
+        component.x = Math.round(newX / 50) * 50;
+        component.y = Math.round(newY / 50) * 50;
+
+        // Clear and recalculate ports
+        component.inputs = [];
+        component.outputs = [];
+        this.defineComponentPorts(component);
     }
 
     handleConnect(x, y) {
@@ -1175,37 +1241,38 @@ class CircuitSimulator {
     }
 
     updateCustomComponentsList() {
-        const list = document.getElementById('customComponentsList');
+        const dropdown = document.getElementById('customComponentsDropdown');
         const section = document.getElementById('customComponentsSection');
 
         const componentNames = Object.keys(this.customComponents);
 
         if (componentNames.length === 0) {
             section.style.display = 'none';
-            list.innerHTML = '';
             return;
         }
 
         section.style.display = 'block';
-        list.innerHTML = '';
 
+        // Clear existing options except the first one
+        dropdown.innerHTML = '<option value="">Select a component...</option>';
+
+        // Add custom components as options
         componentNames.sort().forEach(name => {
-            const btn = document.createElement('button');
-            btn.className = 'tool-btn';
-            btn.dataset.type = 'CUSTOM';
-            btn.dataset.customName = name;
-            btn.innerHTML = `${name}<span class="custom-component-badge">Custom</span>`;
+            const option = document.createElement('option');
+            option.value = 'CUSTOM:' + name;
+            option.textContent = name;
+            dropdown.appendChild(option);
+        });
 
-            btn.addEventListener('click', (e) => {
+        // Add event listener for dropdown change
+        dropdown.onchange = (e) => {
+            if (e.target.value) {
                 document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('selected'));
-                btn.classList.add('selected');
-                this.selectedTool = 'CUSTOM:' + name;
+                this.selectedTool = e.target.value;
                 this.mode = 'place';
                 this.updateModeIndicator();
-            });
-
-            list.appendChild(btn);
-        });
+            }
+        };
     }
 
     showManageComponentsDialog() {
@@ -1506,6 +1573,88 @@ class CircuitSimulator {
         this.darkMode = !this.darkMode;
         localStorage.setItem('darkMode', this.darkMode);
         this.applyTheme();
+    }
+
+    // Draggable Truth Table
+    setupDraggableTruthTable() {
+        const panel = document.getElementById('truthTablePanel');
+        const header = panel.querySelector('.panel-header');
+        let isDragging = false;
+        let currentX, currentY, initialX, initialY;
+
+        header.addEventListener('mousedown', (e) => {
+            if (e.target.id === 'closeTruthTable') return; // Don't drag when clicking close button
+
+            isDragging = true;
+            initialX = e.clientX - (panel.offsetLeft || 0);
+            initialY = e.clientY - (panel.offsetTop || 0);
+
+            // Remove transform to use absolute positioning
+            panel.style.transform = 'none';
+            panel.style.left = panel.offsetLeft + 'px';
+            panel.style.top = panel.offsetTop + 'px';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+
+            e.preventDefault();
+            currentX = e.clientX - initialX;
+            currentY = e.clientY - initialY;
+
+            panel.style.left = currentX + 'px';
+            panel.style.top = currentY + 'px';
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+    }
+
+    // Auto-Save Functionality
+    setupAutoSave() {
+        // Auto-save on every change
+        const originalRedraw = this.redraw.bind(this);
+        this.redraw = () => {
+            originalRedraw();
+            this.saveBoardState();
+        };
+
+        // Warn before leaving page if there are unsaved changes
+        window.addEventListener('beforeunload', (e) => {
+            if (this.components.length > 0) {
+                e.preventDefault();
+                e.returnValue = 'You have unsaved work. Are you sure you want to leave?';
+                return e.returnValue;
+            }
+        });
+    }
+
+    saveBoardState() {
+        const state = {
+            components: this.components,
+            connections: this.connections,
+            nextId: this.nextId
+        };
+        localStorage.setItem('circuitBoardState', JSON.stringify(state));
+    }
+
+    loadBoardState() {
+        const saved = localStorage.getItem('circuitBoardState');
+        if (saved) {
+            try {
+                const state = JSON.parse(saved);
+                this.components = state.components || [];
+                this.connections = state.connections || [];
+                this.nextId = state.nextId || 1;
+            } catch (e) {
+                console.error('Failed to load board state:', e);
+            }
+        }
+    }
+
+    clearBoardState() {
+        localStorage.removeItem('circuitBoardState');
     }
 }
 
