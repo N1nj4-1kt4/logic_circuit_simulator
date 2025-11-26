@@ -325,9 +325,19 @@ header p {
     padding: 20px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
     max-width: 90%;
-    max-height: 90%;
-    overflow: auto;
+    max-height: 90vh;
+    overflow: hidden;
     z-index: 1000;
+    min-width: 200px;
+    min-height: 150px;
+    display: flex;
+    flex-direction: column;
+}
+
+#truthTableContent {
+    flex: 1;
+    overflow: auto;
+    min-height: 0;
 }
 
 .panel-header {
@@ -339,10 +349,51 @@ header p {
     padding-bottom: 10px;
     cursor: move;
     user-select: none;
+    flex-shrink: 0;
 }
 
 .panel-header h3 {
     color: #667eea;
+}
+
+/* Resize handles at corners */
+.resize-handle {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    z-index: 10;
+}
+
+.resize-handle.top-left {
+    top: 0;
+    left: 0;
+    cursor: nw-resize;
+    border-top-left-radius: 10px;
+}
+
+.resize-handle.top-right {
+    top: 0;
+    right: 0;
+    cursor: ne-resize;
+    border-top-right-radius: 10px;
+}
+
+.resize-handle.bottom-left {
+    bottom: 0;
+    left: 0;
+    cursor: sw-resize;
+    border-bottom-left-radius: 10px;
+}
+
+.resize-handle.bottom-right {
+    bottom: 0;
+    right: 0;
+    cursor: se-resize;
+    border-bottom-right-radius: 10px;
+}
+
+.resize-handle:hover {
+    background: rgba(102, 126, 234, 0.2);
 }
 
 #closeTruthTable {
@@ -369,17 +420,23 @@ header p {
 #truthTableContent th,
 #truthTableContent td {
     border: 1px solid #ddd;
-    padding: 12px 8px;
+    padding: 8px 6px;
     text-align: center;
+    min-width: 60px; /* Minimum column width */
     width: auto; /* Equal distribution */
     word-wrap: break-word;
     overflow-wrap: break-word;
+    height: 36px; /* Fixed row height */
+    max-height: 36px;
+    line-height: 1.3;
 }
 
 #truthTableContent th {
     background: #667eea;
     color: white;
     font-weight: 600;
+    height: 40px;
+    max-height: 40px;
 }
 
 /* Group header row (Inputs/Outputs) */

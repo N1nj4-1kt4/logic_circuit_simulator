@@ -1282,7 +1282,30 @@ class CircuitSimulator {
 
         html += '</tbody></table>';
         content.innerHTML = html;
+
+        // Add resize handles if not already present
+        if (!panel.querySelector('.resize-handle')) {
+            const corners = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
+            corners.forEach(corner => {
+                const handle = document.createElement('div');
+                handle.className = `resize-handle ${corner}`;
+                panel.appendChild(handle);
+            });
+        }
+
+        // Calculate minimum width based on columns (60px per column + padding/borders)
+        const numColumns = inputs.length + outputs.length;
+        const minColumnWidth = 60; // matches CSS min-width
+        const padding = 40; // panel padding
+        const minWidth = Math.max(250, (numColumns * minColumnWidth) + padding + (numColumns * 2)); // +2 for borders
+
+        // Set panel width to minimum (don't make it unnecessarily large)
+        panel.style.width = minWidth + 'px';
+        panel.style.height = 'auto'; // Let content determine initial height
         panel.style.display = 'block';
+
+        // Setup resize handles
+        this.setupTruthTableResize(panel);
 
         // Setup drag and drop for column reordering
         this.setupTruthTableDragDrop(inputs, outputs, table);
@@ -1344,6 +1367,98 @@ class CircuitSimulator {
                 draggedElement = null;
                 draggedIndex = null;
             });
+        });
+    }
+
+    setupTruthTableResize(panel) {
+        const handles = panel.querySelectorAll('.resize-handle');
+
+        handles.forEach(handle => {
+            let isResizing = false;
+            let startX, startY, startWidth, startHeight, startLeft, startTop;
+
+            handle.addEventListener('mousedown', (e) => {
+                e.stopPropagation(); // Prevent dragging when resizing
+                isResizing = true;
+                startX = e.clientX;
+                startY = e.clientY;
+
+                const rect = panel.getBoundingClientRect();
+                startWidth = rect.width;
+                startHeight = rect.height;
+                startLeft = rect.left;
+                startTop = rect.top;
+
+                // Remove transform for easier calculations
+                if (panel.style.transform && panel.style.transform !== 'none') {
+                    panel.style.transform = 'none';
+                    panel.style.left = startLeft + 'px';
+                    panel.style.top = startTop + 'px';
+                }
+
+                document.body.style.cursor = handle.style.cursor;
+                e.preventDefault();
+            });
+
+            const handleMouseMove = (e) => {
+                if (!isResizing) return;
+
+                const deltaX = e.clientX - startX;
+                const deltaY = e.clientY - startY;
+
+                let newWidth = startWidth;
+                let newHeight = startHeight;
+                let newLeft = startLeft;
+                let newTop = startTop;
+
+                if (handle.classList.contains('top-left')) {
+                    newWidth = startWidth - deltaX;
+                    newHeight = startHeight - deltaY;
+                    newLeft = startLeft + deltaX;
+                    newTop = startTop + deltaY;
+                } else if (handle.classList.contains('top-right')) {
+                    newWidth = startWidth + deltaX;
+                    newHeight = startHeight - deltaY;
+                    newTop = startTop + deltaY;
+                } else if (handle.classList.contains('bottom-left')) {
+                    newWidth = startWidth - deltaX;
+                    newHeight = startHeight + deltaY;
+                    newLeft = startLeft + deltaX;
+                } else if (handle.classList.contains('bottom-right')) {
+                    newWidth = startWidth + deltaX;
+                    newHeight = startHeight + deltaY;
+                }
+
+                // Apply minimum constraints
+                const minWidth = 200;
+                const minHeight = 150;
+
+                if (newWidth >= minWidth) {
+                    panel.style.width = newWidth + 'px';
+                    if (handle.classList.contains('top-left') || handle.classList.contains('bottom-left')) {
+                        panel.style.left = newLeft + 'px';
+                    }
+                }
+
+                if (newHeight >= minHeight) {
+                    panel.style.height = newHeight + 'px';
+                    if (handle.classList.contains('top-left') || handle.classList.contains('top-right')) {
+                        panel.style.top = newTop + 'px';
+                    }
+                }
+            };
+
+            const handleMouseUp = () => {
+                if (isResizing) {
+                    isResizing = false;
+                    document.body.style.cursor = '';
+                    document.removeEventListener('mousemove', handleMouseMove);
+                    document.removeEventListener('mouseup', handleMouseUp);
+                }
+            };
+
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
         });
     }
 
