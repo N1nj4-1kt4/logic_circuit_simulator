@@ -177,8 +177,9 @@ class CircuitSimulator {
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
 
-            // Allow dragging if not in connect or delete mode
-            if (this.mode !== 'connect' && this.mode !== 'delete') {
+            // Only allow dragging if not in special modes and no tool selected for placement
+            const isPlacementMode = this.mode === 'place' && this.selectedTool;
+            if (this.mode !== 'connect' && this.mode !== 'delete' && !isPlacementMode) {
                 const component = this.findComponent(x, y);
                 if (component) {
                     // If a component is clicked, prepare for potential drag
@@ -426,11 +427,16 @@ class CircuitSimulator {
 
     findComponent(x, y) {
         return this.components.find(c => {
-            let size = 40;
+            let size = 50; // Increased default size for better detection
             if (c.type === 'INPUT' || c.type === 'OUTPUT') {
-                size = 30;
+                size = 40; // Increased from 30 to cover full circle
             } else if (c.type === 'CUSTOM') {
-                size = 60;
+                size = 70; // Increased from 60 for easier selection
+            } else if (c.type === 'NOT') {
+                size = 50; // NOT gates are smaller
+            } else {
+                // Logic gates (AND, OR, XOR, NAND, NOR, XNOR)
+                size = 60; // Increased to cover full gate shape
             }
             return x >= c.x - size/2 && x <= c.x + size/2 &&
                    y >= c.y - size/2 && y <= c.y + size/2;
@@ -1458,9 +1464,14 @@ class CircuitSimulator {
         }
 
         if (this.components.length > 0) {
-            if (!confirm('This will clear the current board. Continue?')) {
+            const message = 'Loading this component will replace your current board.\n\n' +
+                          'Your current work is auto-saved and will be restored when you reload the page.\n\n' +
+                          'Continue loading this component for editing?';
+            if (!confirm(message)) {
                 return;
             }
+            // Save current state before clearing
+            this.saveBoardState();
         }
 
         this.stopAutoCycle();
