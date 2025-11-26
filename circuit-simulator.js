@@ -2177,6 +2177,12 @@ class CircuitSimulator {
         const doLoad = () => {
             this.stopAutoCycle();
 
+            // Hide Truth Table when loading a different component
+            const truthTablePanel = document.getElementById('truthTablePanel');
+            if (truthTablePanel) {
+                truthTablePanel.style.display = 'none';
+            }
+
             const componentData = this.customComponents[name];
 
             // Deep clone the component data
@@ -2496,6 +2502,12 @@ class CircuitSimulator {
             return;
         }
 
+        // Hide Truth Table when loading a different board
+        const truthTablePanel = document.getElementById('truthTablePanel');
+        if (truthTablePanel) {
+            truthTablePanel.style.display = 'none';
+        }
+
         const board = this.savedBoards[boardName];
         this.components = JSON.parse(JSON.stringify(board.components || []));
         this.connections = JSON.parse(JSON.stringify(board.connections || []));
@@ -2518,6 +2530,12 @@ class CircuitSimulator {
     }
 
     createNewBoard() {
+        // Hide Truth Table when creating a new board
+        const truthTablePanel = document.getElementById('truthTablePanel');
+        if (truthTablePanel) {
+            truthTablePanel.style.display = 'none';
+        }
+
         this.components = [];
         this.connections = [];
         this.nextId = 1;
