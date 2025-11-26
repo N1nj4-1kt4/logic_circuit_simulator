@@ -230,6 +230,9 @@ class CircuitSimulator {
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 this.exitToNeutralMode();
+            } else if (e.key === '?' && !e.target.matches('input, textarea')) {
+                // Open help dialog with '?' key (if not typing in an input field)
+                document.getElementById('helpDialog').style.display = 'block';
             }
         });
 
@@ -240,6 +243,11 @@ class CircuitSimulator {
             console.log('Right-click detected - exiting to neutral mode');
             this.exitToNeutralMode();
             return false;
+        });
+
+        // Help Dialog
+        document.getElementById('closeHelp').addEventListener('click', () => {
+            document.getElementById('helpDialog').style.display = 'none';
         });
 
         // Rename Dialog
