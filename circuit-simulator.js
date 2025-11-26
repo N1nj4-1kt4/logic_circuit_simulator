@@ -1184,8 +1184,10 @@ class CircuitSimulator {
         const numCombinations = Math.pow(2, inputs.length);
         const table = [];
 
-        // Reset column order for new truth table
-        this.truthTableColumnOrder = null;
+        // Only reset column order if no saved state exists
+        if (!this.truthTableState || !this.truthTableState.columnOrder) {
+            this.truthTableColumnOrder = null;
+        }
 
         // Generate all input combinations
         for (let i = 0; i < numCombinations; i++) {
