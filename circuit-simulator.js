@@ -425,42 +425,42 @@ class CircuitSimulator {
             // Input circle has radius 20, shift port 3px right from edge
             component.outputs.push({ x: x + 23, y: y });
         } else if (type === 'OUTPUT') {
-            // Output circle has radius 20, shift port 2px right from edge
-            component.inputs.push({ x: x - 18, y: y });
+            // Output circle has radius 20, shift port 5px right from edge (more clearance)
+            component.inputs.push({ x: x - 15, y: y });
         } else if (type === 'NOT') {
-            // NOT gate: shift input 2px right, output 3px right
-            component.inputs.push({ x: x - 18, y: y });
+            // NOT gate: shift input 5px right, output 3px right
+            component.inputs.push({ x: x - 15, y: y });
             component.outputs.push({ x: x + 28, y: y });
         } else if (type === 'NAND' || type === 'NOR' || type === 'XNOR') {
-            // Inverted gates: shift inputs 2px right, output 3px right
-            component.inputs.push({ x: x - 23, y: y - 15 });
-            component.inputs.push({ x: x - 23, y: y + 15 });
+            // Inverted gates: shift inputs 5px right, output 3px right
+            component.inputs.push({ x: x - 20, y: y - 15 });
+            component.inputs.push({ x: x - 20, y: y + 15 });
             component.outputs.push({ x: x + 33, y: y });
         } else if (type === 'CUSTOM') {
-            // Custom component ports (larger component for better label visibility)
+            // Custom component ports (90x90 size - 15% larger for better visibility)
             const def = component.customDefinition;
             const numInputs = def.inputPorts.length;
             const numOutputs = def.outputPorts.length;
 
-            // Calculate spacing for ports (based on 80x80 size)
-            const inputSpacing = Math.min(35, 80 / (numInputs + 1));
-            const outputSpacing = Math.min(35, 80 / (numOutputs + 1));
+            // Calculate spacing for ports (based on 90x90 size)
+            const inputSpacing = Math.min(40, 90 / (numInputs + 1));
+            const outputSpacing = Math.min(40, 90 / (numOutputs + 1));
 
-            // Create input ports on the left edge (rect is from x - 40 to x + 40)
+            // Create input ports on the left edge (rect is from x - 45 to x + 45)
             for (let i = 0; i < numInputs; i++) {
                 const offsetY = (i - (numInputs - 1) / 2) * inputSpacing;
-                component.inputs.push({ x: x - 38, y: y + offsetY });
+                component.inputs.push({ x: x - 40, y: y + offsetY });
             }
 
             // Create output ports on the right edge
             for (let i = 0; i < numOutputs; i++) {
                 const offsetY = (i - (numOutputs - 1) / 2) * outputSpacing;
-                component.outputs.push({ x: x + 42, y: y + offsetY });
+                component.outputs.push({ x: x + 48, y: y + offsetY });
             }
         } else {
-            // AND, OR, XOR gates (non-inverted): shift inputs 2px right, output 3px right
-            component.inputs.push({ x: x - 23, y: y - 15 });
-            component.inputs.push({ x: x - 23, y: y + 15 });
+            // AND, OR, XOR gates (non-inverted): shift inputs 5px right, output 3px right
+            component.inputs.push({ x: x - 20, y: y - 15 });
+            component.inputs.push({ x: x - 20, y: y + 15 });
             component.outputs.push({ x: x + 23, y: y });
         }
     }
@@ -559,7 +559,7 @@ class CircuitSimulator {
             if (c.type === 'INPUT' || c.type === 'OUTPUT') {
                 size = 40; // Increased from 30 to cover full circle
             } else if (c.type === 'CUSTOM') {
-                size = 90; // Updated for new 80x80 component size
+                size = 100; // Updated for new 90x90 component size
             } else if (c.type === 'NOT') {
                 size = 50; // NOT gates are smaller
             } else {
@@ -568,6 +568,23 @@ class CircuitSimulator {
             }
             return x >= c.x - size/2 && x <= c.x + size/2 &&
                    y >= c.y - size/2 && y <= c.y + size/2;
+        });
+    }
+
+    // Recalculate port positions for a component (for migrating old saved boards)
+    recalculateComponentPorts(component) {
+        // Clear existing ports
+        component.inputs = [];
+        component.outputs = [];
+
+        // Recalculate using current logic
+        this.defineComponentPorts(component);
+    }
+
+    // Migrate all components in a board to use current port positions
+    migrateComponentPorts() {
+        this.components.forEach(component => {
+            this.recalculateComponentPorts(component);
         });
     }
 
@@ -770,36 +787,36 @@ class CircuitSimulator {
     drawCustomComponent(component) {
         const { x, y, label, customDefinition } = component;
 
-        // Draw component body with theme colors (larger size: 80x80)
+        // Draw component body with theme colors (90x90 size - 15% larger)
         this.ctx.fillStyle = this.darkMode ? '#1a1a2e' : '#fff3e0';
         this.ctx.strokeStyle = this.darkMode ? '#f39c12' : '#ff9800';
         this.ctx.lineWidth = 3;
-        this.ctx.fillRect(x - 40, y - 40, 80, 80);
-        this.ctx.strokeRect(x - 40, y - 40, 80, 80);
+        this.ctx.fillRect(x - 45, y - 45, 90, 90);
+        this.ctx.strokeRect(x - 45, y - 45, 90, 90);
 
         // Draw label (larger font for better readability)
         this.ctx.fillStyle = this.darkMode ? '#f39c12' : '#ff9800';
-        this.ctx.font = 'bold 12px Arial';
+        this.ctx.font = 'bold 14px Arial';
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
 
         // Wrap text if too long
-        const maxWidth = 70;
+        const maxWidth = 80;
         if (this.ctx.measureText(label).width > maxWidth) {
             const words = label.split(/(?=[A-Z])/); // Split on capital letters
             if (words.length > 1) {
-                this.ctx.fillText(words[0], x, y - 6);
-                this.ctx.fillText(words.slice(1).join(''), x, y + 6);
+                this.ctx.fillText(words[0], x, y - 7);
+                this.ctx.fillText(words.slice(1).join(''), x, y + 7);
             } else {
-                this.ctx.fillText(label.substring(0, 10), x, y - 6);
-                this.ctx.fillText(label.substring(10), x, y + 6);
+                this.ctx.fillText(label.substring(0, 10), x, y - 7);
+                this.ctx.fillText(label.substring(10), x, y + 7);
             }
         } else {
             this.ctx.fillText(label, x, y);
         }
 
         // Draw ports with labels (larger font)
-        this.ctx.font = 'bold 10px Arial';
+        this.ctx.font = 'bold 11px Arial';
         this.ctx.fillStyle = this.darkMode ? '#b3b3b3' : '#666';
 
         // Draw input ports with labels
@@ -1626,6 +1643,9 @@ class CircuitSimulator {
             this.currentComponentName = name; // Set component name
             this.lastSavedState = null;
 
+            // Recalculate port positions for all components (migrate old components to new port positions)
+            this.migrateComponentPorts();
+
             this.redraw();
             this.updateCircuitNameDisplay();
             document.getElementById('manageComponentsDialog').style.display = 'none';
@@ -1833,6 +1853,11 @@ class CircuitSimulator {
                 this.components = state.components || [];
                 this.connections = state.connections || [];
                 this.nextId = state.nextId || 1;
+
+                // Recalculate port positions for auto-saved state (migrate to new positions)
+                if (this.components.length > 0) {
+                    this.migrateComponentPorts();
+                }
             } catch (e) {
                 console.error('Failed to load board state:', e);
             }
@@ -1917,6 +1942,10 @@ class CircuitSimulator {
         this.nextId = board.nextId || 1;
         this.currentBoardName = boardName;
         this.currentComponentName = null; // Clear component name when loading board
+
+        // Recalculate port positions for all components (migrate old boards to new port positions)
+        this.migrateComponentPorts();
+
         this.lastSavedState = JSON.stringify(this.getCurrentState());
         this.redraw();
         this.updateCircuitNameDisplay();
