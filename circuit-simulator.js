@@ -58,6 +58,7 @@ class CircuitSimulator {
 
         // Update UI
         this.updateModeIndicator();
+        this.redraw(); // Clear any visual artifacts (like incomplete connector lines)
 
         // Visual feedback
         console.log('Exited to neutral mode');
@@ -223,7 +224,10 @@ class CircuitSimulator {
         // Right-click on canvas to exit mode
         this.canvas.addEventListener('contextmenu', (e) => {
             e.preventDefault(); // Prevent context menu
+            e.stopPropagation();
+            console.log('Right-click detected - exiting to neutral mode');
             this.exitToNeutralMode();
+            return false;
         });
 
         // Rename Dialog
