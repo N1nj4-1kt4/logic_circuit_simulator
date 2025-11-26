@@ -386,6 +386,16 @@ header p {
     background: #f0f0f0;
 }
 
+#truthTableContent tr.truth-table-active {
+    background: #4caf50 !important;
+    color: white;
+    font-weight: bold;
+}
+
+#truthTableContent tr.truth-table-active td {
+    border-color: #388e3c;
+}
+
 /* Dialog Panels */
 .dialog-panel {
     position: fixed;
@@ -682,6 +692,15 @@ body.dark-mode #truthTableContent tr:nth-child(even) {
 
 body.dark-mode #truthTableContent tr:hover {
     background: #16213e;
+}
+
+body.dark-mode #truthTableContent tr.truth-table-active {
+    background: #2e7d32 !important;
+    color: white;
+}
+
+body.dark-mode #truthTableContent tr.truth-table-active td {
+    border-color: #1b5e20;
 }
 
 body.dark-mode .form-group input[type="text"],

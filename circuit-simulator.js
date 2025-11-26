@@ -28,6 +28,7 @@ class CircuitSimulator {
         this.savedBoards = {};
         this.lastSavedState = null; // To track if board has been modified
         this.pendingActionAfterSave = null; // Callback after save dialog
+        this.truthTableData = null; // Store truth table data for highlighting
 
         this.init();
     }
@@ -549,7 +550,9 @@ class CircuitSimulator {
         const component = this.findComponent(x, y);
         if (component && component.type === 'INPUT') {
             component.value = component.value === 0 ? 1 : 0;
+            this.simulate(); // Simulate to update output values
             this.redraw();
+            this.updateTruthTableHighlight(); // Update truth table highlighting
         }
     }
 
@@ -1201,6 +1204,13 @@ class CircuitSimulator {
             table.push(row);
         }
 
+        // Store truth table data for highlighting
+        this.truthTableData = {
+            inputs: inputs,
+            outputs: outputs,
+            table: table
+        };
+
         this.displayTruthTable(inputs, outputs, table);
     }
 
@@ -1223,8 +1233,8 @@ class CircuitSimulator {
         html += '</tr></thead><tbody>';
 
         // Data rows
-        table.forEach(row => {
-            html += '<tr>';
+        table.forEach((row, index) => {
+            html += `<tr data-row-index="${index}">`;
             row.inputs.forEach(val => {
                 html += `<td>${val}</td>`;
             });
@@ -1237,6 +1247,62 @@ class CircuitSimulator {
         html += '</tbody></table>';
         content.innerHTML = html;
         panel.style.display = 'block';
+
+        // Highlight the row matching current circuit state
+        this.updateTruthTableHighlight();
+    }
+
+    getCurrentInputState() {
+        // Get current input values sorted by label (same order as truth table)
+        const inputs = this.components
+            .filter(c => c.type === 'INPUT')
+            .sort((a, b) => a.label.localeCompare(b.label));
+
+        return inputs.map(input => input.value);
+    }
+
+    findMatchingTruthTableRow() {
+        if (!this.truthTableData) {
+            return -1; // No truth table generated yet
+        }
+
+        const currentState = this.getCurrentInputState();
+
+        // Check if circuit is in active state (all inputs have valid values)
+        if (currentState.some(val => val === null || val === undefined)) {
+            return -1; // Circuit not in active state
+        }
+
+        // Find the row that matches current input state
+        return this.truthTableData.table.findIndex(row => {
+            return row.inputs.every((val, index) => val === currentState[index]);
+        });
+    }
+
+    updateTruthTableHighlight() {
+        const panel = document.getElementById('truthTablePanel');
+
+        // Only update if truth table is visible
+        if (!panel || panel.style.display === 'none') {
+            return;
+        }
+
+        if (!this.truthTableData) {
+            return; // No truth table data available
+        }
+
+        // Remove existing highlighting
+        const allRows = panel.querySelectorAll('tbody tr');
+        allRows.forEach(row => row.classList.remove('truth-table-active'));
+
+        // Find and highlight matching row
+        const matchingRowIndex = this.findMatchingTruthTableRow();
+        if (matchingRowIndex >= 0) {
+            const matchingRow = panel.querySelector(`tbody tr[data-row-index="${matchingRowIndex}"]`);
+            if (matchingRow) {
+                matchingRow.classList.add('truth-table-active');
+            }
+        }
     }
 
     updateModeIndicator() {
@@ -1327,6 +1393,9 @@ class CircuitSimulator {
         // Update display
         document.getElementById('selectedComponent').textContent =
             `Combination ${this.currentCycleIndex + 1} / ${this.totalCombinations}`;
+
+        // Update truth table highlighting
+        this.updateTruthTableHighlight();
 
         // Move to next combination
         this.currentCycleIndex++;
@@ -1698,6 +1767,9 @@ class CircuitSimulator {
         // Update display
         document.getElementById('selectedComponent').textContent =
             `Combination ${this.currentCycleIndex + 1} / ${totalCombinations}`;
+
+        // Update truth table highlighting
+        this.updateTruthTableHighlight();
     }
 
     resetSimulation() {
@@ -1721,6 +1793,9 @@ class CircuitSimulator {
         const totalCombinations = Math.pow(2, inputs.length);
         document.getElementById('selectedComponent').textContent =
             `Combination 1 / ${totalCombinations}`;
+
+        // Update truth table highlighting
+        this.updateTruthTableHighlight();
     }
 
     // Rename Methods
