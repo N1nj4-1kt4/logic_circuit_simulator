@@ -1345,16 +1345,23 @@ class CircuitSimulator {
 
         // Position panel: only use smart positioning on first open if no saved position
         if (!wasVisible) {
+            console.log('displayTruthTable: !wasVisible = true, truthTableState =', this.truthTableState);
             const hasSavedPosition = this.truthTableState &&
                                    (this.truthTableState.left || this.truthTableState.transform);
+            console.log('displayTruthTable: hasSavedPosition =', hasSavedPosition);
 
             if (!hasSavedPosition) {
                 // No saved position, use smart positioning
+                console.log('displayTruthTable: Calling positionPanelSmartly()');
                 this.positionPanelSmartly(panel);
+            } else {
+                console.log('displayTruthTable: Using saved position, skipping smart positioning');
             }
 
             // Save board state when truth table is first shown
             this.saveBoardState();
+        } else {
+            console.log('displayTruthTable: wasVisible = true, skipping positioning');
         }
     }
 
@@ -1618,6 +1625,8 @@ class CircuitSimulator {
     }
 
     positionPanelSmartly(panel) {
+        console.log('=== positionPanelSmartly() called ===');
+
         // Reset to default centered position first to measure panel size
         panel.style.transform = 'translate(-50%, -50%)';
         panel.style.left = '50%';
@@ -1629,9 +1638,13 @@ class CircuitSimulator {
         const panelRect = panel.getBoundingClientRect();
         const panelWidth = panelRect.width;
         const panelHeight = panelRect.height;
+        console.log('Panel size:', panelWidth, 'x', panelHeight);
 
         const componentBox = this.getComponentsBoundingBox();
+        console.log('Component box:', componentBox);
+
         const canvasRect = this.canvas.getBoundingClientRect();
+        console.log('Canvas rect:', canvasRect);
 
         // Define margin from canvas edges and between components
         const margin = 20;
@@ -1639,6 +1652,7 @@ class CircuitSimulator {
 
         // If no components, position in top-right corner of canvas
         if (!componentBox) {
+            console.log('No components - positioning in top-right corner');
             panel.style.transform = 'none';
             panel.style.left = (canvasRect.right - panelWidth - margin) + 'px';
             panel.style.top = (canvasRect.top + margin) + 'px';
@@ -1737,17 +1751,22 @@ class CircuitSimulator {
             }
         }
 
+        console.log('Candidate positions found:', positions.length);
+
         // If we have candidate positions, choose the best one
         if (positions.length > 0) {
+            console.log('All positions:', positions);
             // Sort by score (higher is better)
             positions.sort((a, b) => b.score - a.score);
             const best = positions[0];
+            console.log('Chose best position:', best);
 
             // Apply the position (remove transform and use absolute positioning)
             panel.style.transform = 'none';
             panel.style.left = best.left + 'px';
             panel.style.top = best.top + 'px';
         } else {
+            console.log('No valid positions found, using fallback (centered in canvas)');
             // Fallback: center within canvas, even if it overlaps components
             // This handles cases where panel is larger than available space
             const fallbackLeft = Math.max(
@@ -1764,6 +1783,7 @@ class CircuitSimulator {
                     canvasBottom - panelHeight - margin
                 )
             );
+            console.log('Fallback position:', fallbackLeft, fallbackTop);
 
             panel.style.transform = 'none';
             panel.style.left = fallbackLeft + 'px';
