@@ -1327,9 +1327,16 @@ class CircuitSimulator {
         // Highlight the row matching current circuit state
         this.updateTruthTableHighlight();
 
-        // Only position panel on first open, not on redraw (e.g., after column reorder)
+        // Position panel: use saved position if available, otherwise smart position on first open
         if (!wasVisible) {
-            this.positionPanelSmartly(panel);
+            const hasSavedPosition = this.truthTableState &&
+                                   (this.truthTableState.left || this.truthTableState.transform);
+
+            if (!hasSavedPosition) {
+                // No saved position, use smart positioning
+                this.positionPanelSmartly(panel);
+            }
+            // If we have saved position, it was already applied by restoreTruthTableState()
         }
     }
 
@@ -1500,14 +1507,17 @@ class CircuitSimulator {
     }
 
     saveTruthTableState() {
-        // Save Truth Table customization (column order and panel size)
+        // Save Truth Table customization (column order, panel size, and position)
         const panel = document.getElementById('truthTablePanel');
 
         if (panel && panel.style.display !== 'none') {
             this.truthTableState = {
                 columnOrder: this.truthTableColumnOrder ? [...this.truthTableColumnOrder] : null,
                 width: panel.style.width || null,
-                height: panel.style.height || null
+                height: panel.style.height || null,
+                left: panel.style.left || null,
+                top: panel.style.top || null,
+                transform: panel.style.transform || null
             };
         }
     }
@@ -1517,6 +1527,7 @@ class CircuitSimulator {
         if (!this.truthTableState) return;
 
         const panel = document.getElementById('truthTablePanel');
+        if (!panel) return;
 
         // Restore column order
         if (this.truthTableState.columnOrder) {
@@ -1524,11 +1535,22 @@ class CircuitSimulator {
         }
 
         // Restore panel size (will be applied when truth table is opened)
-        if (this.truthTableState.width && panel) {
+        if (this.truthTableState.width) {
             panel.style.width = this.truthTableState.width;
         }
-        if (this.truthTableState.height && panel) {
+        if (this.truthTableState.height) {
             panel.style.height = this.truthTableState.height;
+        }
+
+        // Restore panel position
+        if (this.truthTableState.left) {
+            panel.style.left = this.truthTableState.left;
+        }
+        if (this.truthTableState.top) {
+            panel.style.top = this.truthTableState.top;
+        }
+        if (this.truthTableState.transform) {
+            panel.style.transform = this.truthTableState.transform;
         }
     }
 
@@ -2378,7 +2400,11 @@ class CircuitSimulator {
         });
 
         document.addEventListener('mouseup', () => {
-            isDragging = false;
+            if (isDragging) {
+                isDragging = false;
+                // Save the new position
+                this.saveTruthTableState();
+            }
         });
     }
 
