@@ -422,46 +422,46 @@ class CircuitSimulator {
         const { type, x, y } = component;
 
         if (type === 'INPUT') {
-            // Input circle has radius 20, so right edge is at x + 20
-            component.outputs.push({ x: x + 20, y: y });
+            // Input circle has radius 20, shift port 3px right from edge
+            component.outputs.push({ x: x + 23, y: y });
         } else if (type === 'OUTPUT') {
-            // Output circle has radius 20, so left edge is at x - 20
-            component.inputs.push({ x: x - 20, y: y });
+            // Output circle has radius 20, shift port 2px right from edge
+            component.inputs.push({ x: x - 18, y: y });
         } else if (type === 'NOT') {
-            // NOT gate: left edge at x - 20, right edge (with bubble) at x + 25
-            component.inputs.push({ x: x - 20, y: y });
-            component.outputs.push({ x: x + 25, y: y });
+            // NOT gate: shift input 2px right, output 3px right
+            component.inputs.push({ x: x - 18, y: y });
+            component.outputs.push({ x: x + 28, y: y });
         } else if (type === 'NAND' || type === 'NOR' || type === 'XNOR') {
-            // Inverted gates: left edge at x - 25, right edge (with bubble) at x + 30
-            component.inputs.push({ x: x - 25, y: y - 15 });
-            component.inputs.push({ x: x - 25, y: y + 15 });
-            component.outputs.push({ x: x + 30, y: y });
+            // Inverted gates: shift inputs 2px right, output 3px right
+            component.inputs.push({ x: x - 23, y: y - 15 });
+            component.inputs.push({ x: x - 23, y: y + 15 });
+            component.outputs.push({ x: x + 33, y: y });
         } else if (type === 'CUSTOM') {
-            // Custom component ports based on saved definition
+            // Custom component ports (larger component for better label visibility)
             const def = component.customDefinition;
             const numInputs = def.inputPorts.length;
             const numOutputs = def.outputPorts.length;
 
-            // Calculate spacing for ports
-            const inputSpacing = Math.min(30, 60 / (numInputs + 1));
-            const outputSpacing = Math.min(30, 60 / (numOutputs + 1));
+            // Calculate spacing for ports (based on 80x80 size)
+            const inputSpacing = Math.min(35, 80 / (numInputs + 1));
+            const outputSpacing = Math.min(35, 80 / (numOutputs + 1));
 
-            // Create input ports on the left edge (rect is from x - 30 to x + 30)
+            // Create input ports on the left edge (rect is from x - 40 to x + 40)
             for (let i = 0; i < numInputs; i++) {
                 const offsetY = (i - (numInputs - 1) / 2) * inputSpacing;
-                component.inputs.push({ x: x - 30, y: y + offsetY });
+                component.inputs.push({ x: x - 38, y: y + offsetY });
             }
 
             // Create output ports on the right edge
             for (let i = 0; i < numOutputs; i++) {
                 const offsetY = (i - (numOutputs - 1) / 2) * outputSpacing;
-                component.outputs.push({ x: x + 30, y: y + offsetY });
+                component.outputs.push({ x: x + 42, y: y + offsetY });
             }
         } else {
-            // AND, OR, XOR gates (non-inverted): left edge at x - 25, right edge at x + 20
-            component.inputs.push({ x: x - 25, y: y - 15 });
-            component.inputs.push({ x: x - 25, y: y + 15 });
-            component.outputs.push({ x: x + 20, y: y });
+            // AND, OR, XOR gates (non-inverted): shift inputs 2px right, output 3px right
+            component.inputs.push({ x: x - 23, y: y - 15 });
+            component.inputs.push({ x: x - 23, y: y + 15 });
+            component.outputs.push({ x: x + 23, y: y });
         }
     }
 
@@ -559,7 +559,7 @@ class CircuitSimulator {
             if (c.type === 'INPUT' || c.type === 'OUTPUT') {
                 size = 40; // Increased from 30 to cover full circle
             } else if (c.type === 'CUSTOM') {
-                size = 70; // Increased from 60 for easier selection
+                size = 90; // Updated for new 80x80 component size
             } else if (c.type === 'NOT') {
                 size = 50; // NOT gates are smaller
             } else {
@@ -770,36 +770,36 @@ class CircuitSimulator {
     drawCustomComponent(component) {
         const { x, y, label, customDefinition } = component;
 
-        // Draw component body with theme colors
+        // Draw component body with theme colors (larger size: 80x80)
         this.ctx.fillStyle = this.darkMode ? '#1a1a2e' : '#fff3e0';
         this.ctx.strokeStyle = this.darkMode ? '#f39c12' : '#ff9800';
         this.ctx.lineWidth = 3;
-        this.ctx.fillRect(x - 30, y - 30, 60, 60);
-        this.ctx.strokeRect(x - 30, y - 30, 60, 60);
+        this.ctx.fillRect(x - 40, y - 40, 80, 80);
+        this.ctx.strokeRect(x - 40, y - 40, 80, 80);
 
-        // Draw label
+        // Draw label (larger font for better readability)
         this.ctx.fillStyle = this.darkMode ? '#f39c12' : '#ff9800';
-        this.ctx.font = 'bold 10px Arial';
+        this.ctx.font = 'bold 12px Arial';
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
 
         // Wrap text if too long
-        const maxWidth = 50;
+        const maxWidth = 70;
         if (this.ctx.measureText(label).width > maxWidth) {
             const words = label.split(/(?=[A-Z])/); // Split on capital letters
             if (words.length > 1) {
-                this.ctx.fillText(words[0], x, y - 5);
-                this.ctx.fillText(words.slice(1).join(''), x, y + 5);
+                this.ctx.fillText(words[0], x, y - 6);
+                this.ctx.fillText(words.slice(1).join(''), x, y + 6);
             } else {
-                this.ctx.fillText(label.substring(0, 8), x, y - 5);
-                this.ctx.fillText(label.substring(8), x, y + 5);
+                this.ctx.fillText(label.substring(0, 10), x, y - 6);
+                this.ctx.fillText(label.substring(10), x, y + 6);
             }
         } else {
             this.ctx.fillText(label, x, y);
         }
 
-        // Draw ports with labels
-        this.ctx.font = 'bold 8px Arial';
+        // Draw ports with labels (larger font)
+        this.ctx.font = 'bold 10px Arial';
         this.ctx.fillStyle = this.darkMode ? '#b3b3b3' : '#666';
 
         // Draw input ports with labels
