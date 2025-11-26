@@ -1317,79 +1317,108 @@ class CircuitSimulator {
         const componentBox = this.getComponentsBoundingBox();
         const canvasRect = this.canvas.getBoundingClientRect();
 
-        const viewportWidth = window.innerWidth;
-        const viewportHeight = window.innerHeight;
-
-        // Define candidate positions (with margins from edges)
+        // Define margin from canvas edges and between components
         const margin = 20;
         const positions = [];
 
-        // If no components, just center it
+        // If no components, position in top-right corner of canvas
         if (!componentBox) {
-            return; // Keep centered position
+            panel.style.transform = 'none';
+            panel.style.left = (canvasRect.right - panelWidth - margin) + 'px';
+            panel.style.top = (canvasRect.top + margin) + 'px';
+            return;
         }
 
-        // Try right side of canvas
-        if (canvasRect.right + margin + panelWidth < viewportWidth) {
+        // All positions must be within canvas bounds
+        const canvasLeft = canvasRect.left;
+        const canvasTop = canvasRect.top;
+        const canvasRight = canvasRect.right;
+        const canvasBottom = canvasRect.bottom;
+
+        // Try top-right corner of canvas (avoiding components)
+        if (canvasRight - panelWidth - margin > componentBox.right + margin) {
             positions.push({
-                left: canvasRect.right + margin,
-                top: Math.max(margin, Math.min(canvasRect.top, viewportHeight - panelHeight - margin)),
-                score: 100 // Prefer right side
+                left: canvasRight - panelWidth - margin,
+                top: canvasTop + margin,
+                score: 100 // Highest preference
             });
         }
 
-        // Try left side of canvas
-        if (canvasRect.left - margin - panelWidth > 0) {
+        // Try bottom-right corner of canvas
+        if (canvasRight - panelWidth - margin > componentBox.right + margin &&
+            canvasBottom - panelHeight - margin > canvasTop + margin) {
             positions.push({
-                left: canvasRect.left - panelWidth - margin,
-                top: Math.max(margin, Math.min(canvasRect.top, viewportHeight - panelHeight - margin)),
+                left: canvasRight - panelWidth - margin,
+                top: canvasBottom - panelHeight - margin,
+                score: 95
+            });
+        }
+
+        // Try top-left corner of canvas (avoiding components)
+        if (canvasLeft + panelWidth + margin < componentBox.left - margin) {
+            positions.push({
+                left: canvasLeft + margin,
+                top: canvasTop + margin,
                 score: 90
             });
         }
 
-        // Try below canvas
-        if (canvasRect.bottom + margin + panelHeight < viewportHeight) {
+        // Try bottom-left corner of canvas
+        if (canvasLeft + panelWidth + margin < componentBox.left - margin &&
+            canvasBottom - panelHeight - margin > canvasTop + margin) {
             positions.push({
-                left: Math.max(margin, Math.min(canvasRect.left, viewportWidth - panelWidth - margin)),
-                top: canvasRect.bottom + margin,
-                score: 80
+                left: canvasLeft + margin,
+                top: canvasBottom - panelHeight - margin,
+                score: 85
             });
         }
 
-        // Try above canvas
-        if (canvasRect.top - margin - panelHeight > 0) {
-            positions.push({
-                left: Math.max(margin, Math.min(canvasRect.left, viewportWidth - panelWidth - margin)),
-                top: canvasRect.top - panelHeight - margin,
-                score: 70
-            });
+        // Try right of components (within canvas)
+        if (componentBox.right + margin + panelWidth < canvasRight - margin) {
+            const topPos = Math.max(canvasTop + margin, Math.min(componentBox.top, canvasBottom - panelHeight - margin));
+            if (topPos + panelHeight <= canvasBottom - margin) {
+                positions.push({
+                    left: componentBox.right + margin,
+                    top: topPos,
+                    score: 80
+                });
+            }
         }
 
-        // Try bottom-right corner (over canvas but avoiding components)
-        if (componentBox.right + margin + panelWidth < canvasRect.right) {
-            positions.push({
-                left: componentBox.right + margin,
-                top: Math.max(canvasRect.top + margin, Math.min(componentBox.top, canvasRect.bottom - panelHeight - margin)),
-                score: 60
-            });
+        // Try left of components (within canvas)
+        if (componentBox.left - margin - panelWidth > canvasLeft + margin) {
+            const topPos = Math.max(canvasTop + margin, Math.min(componentBox.top, canvasBottom - panelHeight - margin));
+            if (topPos + panelHeight <= canvasBottom - margin) {
+                positions.push({
+                    left: componentBox.left - panelWidth - margin,
+                    top: topPos,
+                    score: 75
+                });
+            }
         }
 
-        // Try top-right corner
-        if (componentBox.right + margin + panelWidth < canvasRect.right) {
-            positions.push({
-                left: componentBox.right + margin,
-                top: canvasRect.top + margin,
-                score: 50
-            });
+        // Try below components (within canvas)
+        if (componentBox.bottom + margin + panelHeight < canvasBottom - margin) {
+            const leftPos = Math.max(canvasLeft + margin, Math.min(componentBox.left, canvasRight - panelWidth - margin));
+            if (leftPos + panelWidth <= canvasRight - margin) {
+                positions.push({
+                    left: leftPos,
+                    top: componentBox.bottom + margin,
+                    score: 70
+                });
+            }
         }
 
-        // Try bottom-left corner
-        if (componentBox.left - margin - panelWidth > canvasRect.left) {
-            positions.push({
-                left: componentBox.left - panelWidth - margin,
-                top: Math.max(canvasRect.top + margin, Math.min(componentBox.top, canvasRect.bottom - panelHeight - margin)),
-                score: 40
-            });
+        // Try above components (within canvas)
+        if (componentBox.top - margin - panelHeight > canvasTop + margin) {
+            const leftPos = Math.max(canvasLeft + margin, Math.min(componentBox.left, canvasRight - panelWidth - margin));
+            if (leftPos + panelWidth <= canvasRight - margin) {
+                positions.push({
+                    left: leftPos,
+                    top: componentBox.top - panelHeight - margin,
+                    score: 65
+                });
+            }
         }
 
         // If we have candidate positions, choose the best one
@@ -1403,14 +1432,21 @@ class CircuitSimulator {
             panel.style.left = best.left + 'px';
             panel.style.top = best.top + 'px';
         } else {
-            // Fallback: position to the right of component bounding box on canvas
-            const fallbackLeft = Math.min(
-                componentBox.right + margin,
-                canvasRect.right - panelWidth - margin
+            // Fallback: center within canvas, even if it overlaps components
+            // This handles cases where panel is larger than available space
+            const fallbackLeft = Math.max(
+                canvasLeft + margin,
+                Math.min(
+                    canvasLeft + (canvasRect.width - panelWidth) / 2,
+                    canvasRight - panelWidth - margin
+                )
             );
             const fallbackTop = Math.max(
-                margin,
-                Math.min(componentBox.top, viewportHeight - panelHeight - margin)
+                canvasTop + margin,
+                Math.min(
+                    canvasTop + (canvasRect.height - panelHeight) / 2,
+                    canvasBottom - panelHeight - margin
+                )
             );
 
             panel.style.transform = 'none';
