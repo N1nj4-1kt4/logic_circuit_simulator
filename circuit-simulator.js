@@ -46,6 +46,23 @@ class CircuitSimulator {
         };
     }
 
+    exitToNeutralMode() {
+        // Clear all selections
+        document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('selected'));
+        document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('active'));
+
+        // Reset state
+        this.selectedTool = null;
+        this.mode = 'neutral';
+        this.connectStart = null;
+
+        // Update UI
+        this.updateModeIndicator();
+
+        // Visual feedback
+        console.log('Exited to neutral mode');
+    }
+
     setupEventListeners() {
         // Tool selection with toggle
         document.querySelectorAll('.tool-btn').forEach(btn => {
@@ -194,6 +211,19 @@ class CircuitSimulator {
 
         document.getElementById('resetSim').addEventListener('click', () => {
             this.resetSimulation();
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                this.exitToNeutralMode();
+            }
+        });
+
+        // Right-click on canvas to exit mode
+        this.canvas.addEventListener('contextmenu', (e) => {
+            e.preventDefault(); // Prevent context menu
+            this.exitToNeutralMode();
         });
 
         // Rename Dialog
