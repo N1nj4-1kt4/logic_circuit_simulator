@@ -36,6 +36,16 @@ class CircuitSimulator {
         this.applyTheme();
     }
 
+    getScaledCoordinates(e) {
+        const rect = this.canvas.getBoundingClientRect();
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+        return {
+            x: (e.clientX - rect.left) * scaleX,
+            y: (e.clientY - rect.top) * scaleY
+        };
+    }
+
     setupEventListeners() {
         // Tool selection
         document.querySelectorAll('.tool-btn').forEach(btn => {
@@ -194,9 +204,7 @@ class CircuitSimulator {
 
         // Canvas mousedown for dragging
         this.canvas.addEventListener('mousedown', (e) => {
-            const rect = this.canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            const { x, y } = this.getScaledCoordinates(e);
 
             // Reset hasMoved flag for all clicks
             this.hasMoved = false;
@@ -218,9 +226,7 @@ class CircuitSimulator {
 
         // Canvas mousemove for dragging and connection preview
         this.canvas.addEventListener('mousemove', (e) => {
-            const rect = this.canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            const { x, y } = this.getScaledCoordinates(e);
 
             // Check if we should start dragging (movement threshold)
             if (this.draggedComponent && !this.isDraggingComponent && this.dragStartPos) {
@@ -292,11 +298,10 @@ class CircuitSimulator {
             return;
         }
 
-        const rect = this.canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        const { x, y } = this.getScaledCoordinates(e);
 
         console.log('Canvas click - Mode:', this.mode, 'SelectedTool:', this.selectedTool);
+        console.log('Scaled coords:', x.toFixed(0), y.toFixed(0));
 
         if (this.mode === 'place' && this.selectedTool) {
             this.placeComponent(x, y, this.selectedTool);
@@ -1618,10 +1623,7 @@ class CircuitSimulator {
 
     // Rename Methods
     handleCanvasDoubleClick(e) {
-        const rect = this.canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-
+        const { x, y } = this.getScaledCoordinates(e);
         const component = this.findComponent(x, y);
 
         if (component && (component.type === 'INPUT' || component.type === 'OUTPUT')) {
