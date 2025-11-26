@@ -2612,6 +2612,12 @@ class CircuitSimulator {
         this.currentBoardName = null;
         this.currentComponentName = null; // Clear both names
         this.lastSavedState = null;
+
+        // Reset Truth Table state for new board
+        this.truthTableState = null;
+        this.truthTableColumnOrder = null;
+        this.truthTableData = null;
+
         this.redraw();
         this.updateCircuitNameDisplay();
         this.updateBoardsList(); // Update dropdown to remove (current) marker
