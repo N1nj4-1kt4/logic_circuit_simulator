@@ -1751,6 +1751,49 @@ class CircuitSimulator {
             }
         }
 
+        // Fallback corner positions (lower priority, may overlap components)
+        // These ensure we always have at least some options
+        // Only add if not already added above (check if score 100 positions exist)
+        const hasTopRight = positions.some(p => p.score === 100);
+        const hasBottomRight = positions.some(p => p.score === 95);
+        const hasTopLeft = positions.some(p => p.score === 90);
+        const hasBottomLeft = positions.some(p => p.score === 85);
+
+        // Add corner fallbacks if they fit within canvas and weren't added yet
+        if (!hasBottomRight && canvasRight - panelWidth - margin > canvasLeft &&
+            canvasBottom - panelHeight - margin > canvasTop) {
+            positions.push({
+                left: canvasRight - panelWidth - margin,
+                top: canvasBottom - panelHeight - margin,
+                score: 50 // Lower priority - may overlap components
+            });
+        }
+
+        if (!hasTopRight && canvasRight - panelWidth - margin > canvasLeft) {
+            positions.push({
+                left: canvasRight - panelWidth - margin,
+                top: canvasTop + margin,
+                score: 45 // Lower priority - may overlap components
+            });
+        }
+
+        if (!hasBottomLeft && canvasLeft + panelWidth + margin < canvasRight &&
+            canvasBottom - panelHeight - margin > canvasTop) {
+            positions.push({
+                left: canvasLeft + margin,
+                top: canvasBottom - panelHeight - margin,
+                score: 40 // Lower priority - may overlap components
+            });
+        }
+
+        if (!hasTopLeft && canvasLeft + panelWidth + margin < canvasRight) {
+            positions.push({
+                left: canvasLeft + margin,
+                top: canvasTop + margin,
+                score: 35 // Lower priority - may overlap components
+            });
+        }
+
         console.log('Candidate positions found:', positions.length);
 
         // If we have candidate positions, choose the best one
