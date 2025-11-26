@@ -177,6 +177,9 @@ class CircuitSimulator {
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
 
+            // Reset hasMoved flag for all clicks
+            this.hasMoved = false;
+
             // Only allow dragging if not in special modes and no tool selected for placement
             const isPlacementMode = this.mode === 'place' && this.selectedTool;
             if (this.mode !== 'connect' && this.mode !== 'delete' && !isPlacementMode) {
@@ -188,7 +191,6 @@ class CircuitSimulator {
                     this.dragStartPos = { x, y };
                     this.dragOffset.x = x - component.x;
                     this.dragOffset.y = y - component.y;
-                    this.hasMoved = false; // Track if mouse has moved
                 }
             }
         });
@@ -231,9 +233,14 @@ class CircuitSimulator {
                 this.ctx.setLineDash([]);
             }
             // Update cursor based on hover
-            else if (this.mode !== 'connect' && this.mode !== 'delete' && !this.selectedTool) {
-                const component = this.findComponent(x, y);
-                this.canvas.style.cursor = component ? 'grab' : 'crosshair';
+            else if (this.mode !== 'connect' && this.mode !== 'delete') {
+                const isPlacementMode = this.mode === 'place' && this.selectedTool;
+                if (!isPlacementMode) {
+                    const component = this.findComponent(x, y);
+                    this.canvas.style.cursor = component ? 'grab' : 'crosshair';
+                } else {
+                    this.canvas.style.cursor = 'crosshair';
+                }
             }
         });
 
@@ -1464,14 +1471,23 @@ class CircuitSimulator {
         }
 
         if (this.components.length > 0) {
-            const message = 'Loading this component will replace your current board.\n\n' +
-                          'Your current work is auto-saved and will be restored when you reload the page.\n\n' +
-                          'Continue loading this component for editing?';
-            if (!confirm(message)) {
+            // First ask if they want to continue
+            const continueMessage = 'Loading this component will replace your current board.\n\n' +
+                                  'Do you want to continue?';
+            if (!confirm(continueMessage)) {
                 return;
             }
-            // Save current state before clearing
-            this.saveBoardState();
+
+            // Then ask if they want to save
+            const saveMessage = 'Would you like to save the current board state?\n\n' +
+                              'OK = Save current board (can restore by reloading page)\n' +
+                              'Cancel = Discard current board';
+            if (confirm(saveMessage)) {
+                this.saveBoardState();
+            } else {
+                // User chose to discard - clear the auto-saved state
+                this.clearBoardState();
+            }
         }
 
         this.stopAutoCycle();
