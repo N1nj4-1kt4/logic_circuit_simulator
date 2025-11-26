@@ -1993,6 +1993,7 @@ class CircuitSimulator {
             connections: JSON.parse(JSON.stringify(this.connections)),
             inputPorts: inputs.map(i => ({ id: i.id, label: i.label })),
             outputPorts: outputs.map(o => ({ id: o.id, label: o.label })),
+            truthTableState: this.truthTableState ? JSON.parse(JSON.stringify(this.truthTableState)) : null,
             created: new Date().toISOString()
         };
 
