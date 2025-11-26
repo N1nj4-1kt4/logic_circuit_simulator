@@ -1912,6 +1912,7 @@ class CircuitSimulator {
         this.lastSavedState = JSON.stringify(this.getCurrentState());
         this.redraw();
         this.updateCircuitNameDisplay();
+        this.updateBoardsList(); // Update dropdown to reflect current board
         console.log(`Board loaded: ${boardName}`);
     }
 
@@ -1924,6 +1925,7 @@ class CircuitSimulator {
         this.lastSavedState = null;
         this.redraw();
         this.updateCircuitNameDisplay();
+        this.updateBoardsList(); // Update dropdown to remove (current) marker
         console.log('New board created');
     }
 
@@ -1975,15 +1977,40 @@ class CircuitSimulator {
         section.style.display = 'block';
         dropdown.innerHTML = '<option value="">Select a board...</option>';
 
-        boardNames.sort().forEach(name => {
-            const option = document.createElement('option');
-            option.value = name;
-            option.textContent = name;
-            if (name === this.currentBoardName) {
-                option.textContent += ' (current)';
-            }
-            dropdown.appendChild(option);
-        });
+        // Sort all boards alphabetically
+        boardNames.sort();
+
+        // If there's a current board, show it at top with separator
+        if (this.currentBoardName && this.savedBoards[this.currentBoardName]) {
+            const currentOption = document.createElement('option');
+            currentOption.value = this.currentBoardName;
+            currentOption.textContent = `${this.currentBoardName} (current)`;
+            dropdown.appendChild(currentOption);
+
+            // Add separator
+            const separator = document.createElement('option');
+            separator.disabled = true;
+            separator.textContent = '─────';
+            dropdown.appendChild(separator);
+
+            // Add other boards (excluding current)
+            boardNames.forEach(name => {
+                if (name !== this.currentBoardName) {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name;
+                    dropdown.appendChild(option);
+                }
+            });
+        } else {
+            // No current board, just show all boards
+            boardNames.forEach(name => {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                dropdown.appendChild(option);
+            });
+        }
     }
 
     showSaveOptionsDialog(onComplete) {
