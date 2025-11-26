@@ -1665,31 +1665,68 @@ class CircuitSimulator {
         const canvasRight = canvasRect.right;
         const canvasBottom = canvasRect.bottom;
 
-        // Helper function to calculate overlap area between panel and component box
-        const calculateOverlap = (panelLeft, panelTop, panelWidth, panelHeight, compBox) => {
+        // Helper function to calculate overlap with individual components
+        const calculateComponentOverlap = (panelLeft, panelTop, panelWidth, panelHeight) => {
             const panelRight = panelLeft + panelWidth;
             const panelBottom = panelTop + panelHeight;
+            let totalOverlapArea = 0;
+            let maxOverlap = 0;
 
-            // Calculate intersection rectangle
-            const overlapLeft = Math.max(panelLeft, compBox.left);
-            const overlapTop = Math.max(panelTop, compBox.top);
-            const overlapRight = Math.min(panelRight, compBox.right);
-            const overlapBottom = Math.min(panelBottom, compBox.bottom);
+            // Check overlap with each individual component
+            this.components.forEach(component => {
+                const { x, y, type } = component;
 
-            // If no overlap, return 0
-            if (overlapLeft >= overlapRight || overlapTop >= overlapBottom) {
-                return 0;
-            }
+                // Use half-widths and half-heights (same as getComponentsBoundingBox)
+                let halfWidth = 25, halfHeight = 20;
+                if (type === 'INPUT' || type === 'OUTPUT') {
+                    halfWidth = halfHeight = 20;
+                } else if (type === 'CUSTOM') {
+                    halfWidth = halfHeight = 45;
+                } else if (type === 'NOT') {
+                    halfWidth = 22.5;
+                    halfHeight = 20;
+                }
 
-            // Calculate overlap area
-            const overlapArea = (overlapRight - overlapLeft) * (overlapBottom - overlapTop);
-            const panelArea = panelWidth * panelHeight;
+                // Component bounds in canvas coordinates
+                const compLeft = x - halfWidth;
+                const compRight = x + halfWidth;
+                const compTop = y - halfHeight;
+                const compBottom = y + halfHeight;
 
-            // Return overlap percentage (0-100)
-            return (overlapArea / panelArea) * 100;
+                // Convert to viewport coordinates
+                const canvasRect = this.canvas.getBoundingClientRect();
+                const compLeftViewport = canvasRect.left + (compLeft / this.canvas.width) * canvasRect.width;
+                const compRightViewport = canvasRect.left + (compRight / this.canvas.width) * canvasRect.width;
+                const compTopViewport = canvasRect.top + (compTop / this.canvas.height) * canvasRect.height;
+                const compBottomViewport = canvasRect.top + (compBottom / this.canvas.height) * canvasRect.height;
+
+                // Calculate intersection with panel
+                const overlapLeft = Math.max(panelLeft, compLeftViewport);
+                const overlapTop = Math.max(panelTop, compTopViewport);
+                const overlapRight = Math.min(panelRight, compRightViewport);
+                const overlapBottom = Math.min(panelBottom, compBottomViewport);
+
+                // If there's overlap
+                if (overlapLeft < overlapRight && overlapTop < overlapBottom) {
+                    const overlapArea = (overlapRight - overlapLeft) * (overlapBottom - overlapTop);
+                    totalOverlapArea += overlapArea;
+
+                    const overlapPercent = (overlapArea / (panelWidth * panelHeight)) * 100;
+                    maxOverlap = Math.max(maxOverlap, overlapPercent);
+                }
+            });
+
+            // Return total overlap percentage (can exceed 100% if multiple components overlap)
+            const totalOverlapPercent = (totalOverlapArea / (panelWidth * panelHeight)) * 100;
+
+            return {
+                total: Math.min(totalOverlapPercent, 100), // Cap at 100%
+                max: maxOverlap,
+                count: totalOverlapArea > 0 ? 'multiple' : 0
+            };
         };
 
-        // Always try all 4 corners and score based on overlap
+        // Always try all 4 corners and score based on overlap with actual components
         const cornerPositions = [
             {
                 name: 'bottom-right',
@@ -1717,20 +1754,20 @@ class CircuitSimulator {
             }
         ];
 
-        // Score each corner based on overlap with components
+        // Score each corner based on overlap with actual components
         cornerPositions.forEach(corner => {
-            const overlap = calculateOverlap(corner.left, corner.top, panelWidth, panelHeight, componentBox);
-            // Score: base priority - overlap percentage
+            const overlapInfo = calculateComponentOverlap(corner.left, corner.top, panelWidth, panelHeight);
+            // Score: base priority - total overlap percentage
             // No overlap = full priority, 100% overlap = priority - 100
-            const score = corner.basePriority - overlap;
+            const score = corner.basePriority - overlapInfo.total;
 
-            console.log(`Corner ${corner.name}: overlap=${overlap.toFixed(1)}%, score=${score.toFixed(1)}`);
+            console.log(`Corner ${corner.name}: overlap=${overlapInfo.total.toFixed(1)}% (max single=${overlapInfo.max.toFixed(1)}%), score=${score.toFixed(1)}`);
 
             positions.push({
                 left: corner.left,
                 top: corner.top,
                 score: score,
-                overlap: overlap
+                overlap: overlapInfo.total
             });
         });
 
