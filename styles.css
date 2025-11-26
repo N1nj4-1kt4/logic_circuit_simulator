@@ -363,13 +363,17 @@ header p {
     width: 100%;
     border-collapse: collapse;
     margin-top: 10px;
+    table-layout: fixed; /* Equal width columns */
 }
 
 #truthTableContent th,
 #truthTableContent td {
     border: 1px solid #ddd;
-    padding: 12px;
+    padding: 12px 8px;
     text-align: center;
+    width: auto; /* Equal distribution */
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 #truthTableContent th {
@@ -378,11 +382,60 @@ header p {
     font-weight: 600;
 }
 
-#truthTableContent tr:nth-child(even) {
+/* Group header row (Inputs/Outputs) */
+#truthTableContent .group-header th {
+    background: #5568d3;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 10px 8px;
+    border: 2px solid #4554b8;
+}
+
+#truthTableContent .group-header .group-input {
+    background: #5568d3;
+}
+
+#truthTableContent .group-header .group-output {
+    background: #764ba2;
+}
+
+/* Column header row (draggable individual columns) */
+#truthTableContent .column-header th {
+    background: #667eea;
+    padding: 8px 6px;
+    font-size: 12px;
+    cursor: grab;
+    user-select: none;
+    position: relative;
+}
+
+#truthTableContent .column-header th.dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+}
+
+#truthTableContent .column-header th.drag-over {
+    background: #4caf50;
+    transform: scale(1.05);
+    transition: all 0.2s ease;
+}
+
+#truthTableContent .column-header th:hover {
+    background: #5568d3;
+}
+
+#truthTableContent .column-header .col-label {
+    display: block;
+    line-height: 1.3;
+    word-break: break-word;
+}
+
+/* Data rows */
+#truthTableContent tbody tr:nth-child(even) {
     background: #f9f9f9;
 }
 
-#truthTableContent tr:hover {
+#truthTableContent tbody tr:hover {
     background: #f0f0f0;
 }
 
@@ -394,6 +447,20 @@ header p {
 
 #truthTableContent tr.truth-table-active td {
     border-color: #388e3c;
+}
+
+/* Cell styling */
+#truthTableContent .input-cell {
+    background: rgba(102, 126, 234, 0.05);
+}
+
+#truthTableContent .output-cell {
+    background: rgba(118, 75, 162, 0.05);
+}
+
+#truthTableContent tr.truth-table-active .input-cell,
+#truthTableContent tr.truth-table-active .output-cell {
+    background: transparent;
 }
 
 /* Dialog Panels */
@@ -684,13 +751,38 @@ body.dark-mode .library-item-info {
 body.dark-mode #truthTableContent th {
     background: #53a8f4;
     color: #0f3460;
+    border-color: #1a1a2e;
 }
 
-body.dark-mode #truthTableContent tr:nth-child(even) {
+body.dark-mode #truthTableContent td {
+    border-color: #1a1a2e;
+}
+
+body.dark-mode #truthTableContent .group-header th {
+    background: #3d8fd1;
+    color: #0f3460;
+    border-color: #2c7ab8;
+}
+
+body.dark-mode #truthTableContent .group-header .group-output {
+    background: #9b59b6;
+    color: white;
+}
+
+body.dark-mode #truthTableContent .column-header th:hover {
+    background: #3d8fd1;
+}
+
+body.dark-mode #truthTableContent .column-header th.drag-over {
+    background: #2e7d32;
+    color: white;
+}
+
+body.dark-mode #truthTableContent tbody tr:nth-child(even) {
     background: #1a1a2e;
 }
 
-body.dark-mode #truthTableContent tr:hover {
+body.dark-mode #truthTableContent tbody tr:hover {
     background: #16213e;
 }
 
@@ -701,6 +793,14 @@ body.dark-mode #truthTableContent tr.truth-table-active {
 
 body.dark-mode #truthTableContent tr.truth-table-active td {
     border-color: #1b5e20;
+}
+
+body.dark-mode #truthTableContent .input-cell {
+    background: rgba(83, 168, 244, 0.1);
+}
+
+body.dark-mode #truthTableContent .output-cell {
+    background: rgba(155, 89, 182, 0.1);
 }
 
 body.dark-mode .form-group input[type="text"],

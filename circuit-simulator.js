@@ -29,6 +29,7 @@ class CircuitSimulator {
         this.lastSavedState = null; // To track if board has been modified
         this.pendingActionAfterSave = null; // Callback after save dialog
         this.truthTableData = null; // Store truth table data for highlighting
+        this.truthTableColumnOrder = null; // Store column order for drag-and-drop
 
         this.init();
     }
@@ -1182,6 +1183,9 @@ class CircuitSimulator {
         const numCombinations = Math.pow(2, inputs.length);
         const table = [];
 
+        // Reset column order for new truth table
+        this.truthTableColumnOrder = null;
+
         // Generate all input combinations
         for (let i = 0; i < numCombinations; i++) {
             const row = { inputs: [], outputs: [] };
@@ -1218,29 +1222,61 @@ class CircuitSimulator {
         const panel = document.getElementById('truthTablePanel');
         const content = document.getElementById('truthTableContent');
 
-        let html = '<table><thead><tr>';
+        // Store column order for drag-and-drop (indices into combined array)
+        if (!this.truthTableColumnOrder) {
+            this.truthTableColumnOrder = [];
+            for (let i = 0; i < inputs.length + outputs.length; i++) {
+                this.truthTableColumnOrder.push(i);
+            }
+        }
 
-        // Input columns
-        inputs.forEach(input => {
-            html += `<th>${input.label}</th>`;
-        });
+        // Build table with two-level headers and equal-width columns
+        let html = '<table class="truth-table"><thead>';
 
-        // Output columns
-        outputs.forEach(output => {
-            html += `<th>${output.label}</th>`;
+        // First header row: Input/Output groups
+        html += '<tr class="group-header">';
+        if (inputs.length > 0) {
+            html += `<th colspan="${inputs.length}" class="group-input">Inputs</th>`;
+        }
+        if (outputs.length > 0) {
+            html += `<th colspan="${outputs.length}" class="group-output">Outputs</th>`;
+        }
+        html += '</tr>';
+
+        // Second header row: Individual column headers (draggable)
+        html += '<tr class="column-header">';
+
+        // Render columns in current order
+        this.truthTableColumnOrder.forEach((colIndex, displayIndex) => {
+            const isInput = colIndex < inputs.length;
+            const dataIndex = isInput ? colIndex : colIndex - inputs.length;
+            const label = isInput ? inputs[dataIndex].label : outputs[dataIndex].label;
+            const colType = isInput ? 'input' : 'output';
+
+            html += `<th class="draggable-header"
+                         draggable="true"
+                         data-col-index="${colIndex}"
+                         data-col-type="${colType}"
+                         data-display-index="${displayIndex}">
+                        <span class="col-label">${label}</span>
+                    </th>`;
         });
 
         html += '</tr></thead><tbody>';
 
-        // Data rows
-        table.forEach((row, index) => {
-            html += `<tr data-row-index="${index}">`;
-            row.inputs.forEach(val => {
-                html += `<td>${val}</td>`;
+        // Data rows - render in column order
+        table.forEach((row, rowIndex) => {
+            html += `<tr data-row-index="${rowIndex}">`;
+
+            this.truthTableColumnOrder.forEach(colIndex => {
+                const isInput = colIndex < inputs.length;
+                const dataIndex = isInput ? colIndex : colIndex - inputs.length;
+                const value = isInput ? row.inputs[dataIndex] : row.outputs[dataIndex];
+                const cellClass = isInput ? 'input-cell' : 'output-cell';
+
+                html += `<td class="${cellClass}">${isInput ? value : '<strong>' + value + '</strong>'}</td>`;
             });
-            row.outputs.forEach(val => {
-                html += `<td><strong>${val}</strong></td>`;
-            });
+
             html += '</tr>';
         });
 
@@ -1248,11 +1284,67 @@ class CircuitSimulator {
         content.innerHTML = html;
         panel.style.display = 'block';
 
+        // Setup drag and drop for column reordering
+        this.setupTruthTableDragDrop(inputs, outputs, table);
+
         // Highlight the row matching current circuit state
         this.updateTruthTableHighlight();
 
         // Position panel to avoid overlapping with circuit components
         this.positionPanelSmartly(panel);
+    }
+
+    setupTruthTableDragDrop(inputs, outputs, table) {
+        const headers = document.querySelectorAll('#truthTableContent .draggable-header');
+        let draggedElement = null;
+        let draggedIndex = null;
+
+        headers.forEach(header => {
+            header.addEventListener('dragstart', (e) => {
+                draggedElement = header;
+                draggedIndex = parseInt(header.dataset.displayIndex);
+                header.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            });
+
+            header.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+
+                const targetIndex = parseInt(header.dataset.displayIndex);
+                if (draggedIndex !== targetIndex) {
+                    header.classList.add('drag-over');
+                }
+            });
+
+            header.addEventListener('dragleave', (e) => {
+                header.classList.remove('drag-over');
+            });
+
+            header.addEventListener('drop', (e) => {
+                e.preventDefault();
+                header.classList.remove('drag-over');
+
+                const targetIndex = parseInt(header.dataset.displayIndex);
+
+                if (draggedIndex !== null && draggedIndex !== targetIndex) {
+                    // Reorder columns
+                    const movedColumn = this.truthTableColumnOrder[draggedIndex];
+                    this.truthTableColumnOrder.splice(draggedIndex, 1);
+                    this.truthTableColumnOrder.splice(targetIndex, 0, movedColumn);
+
+                    // Redraw table with new order
+                    this.displayTruthTable(inputs, outputs, table);
+                }
+            });
+
+            header.addEventListener('dragend', (e) => {
+                header.classList.remove('dragging');
+                headers.forEach(h => h.classList.remove('drag-over'));
+                draggedElement = null;
+                draggedIndex = null;
+            });
+        });
     }
 
     getComponentsBoundingBox() {
