@@ -1315,6 +1315,19 @@ class CircuitSimulator {
             panel.style.height = 'auto'; // Let content determine initial height
         }
 
+        // Apply saved position if available
+        if (this.truthTableState) {
+            if (this.truthTableState.left) {
+                panel.style.left = this.truthTableState.left;
+            }
+            if (this.truthTableState.top) {
+                panel.style.top = this.truthTableState.top;
+            }
+            if (this.truthTableState.transform) {
+                panel.style.transform = this.truthTableState.transform;
+            }
+        }
+
         // Check if panel is already visible (to preserve position on redraw)
         const wasVisible = panel.style.display !== 'none';
 
@@ -1329,7 +1342,7 @@ class CircuitSimulator {
         // Highlight the row matching current circuit state
         this.updateTruthTableHighlight();
 
-        // Position panel: use saved position if available, otherwise smart position on first open
+        // Position panel: only use smart positioning on first open if no saved position
         if (!wasVisible) {
             const hasSavedPosition = this.truthTableState &&
                                    (this.truthTableState.left || this.truthTableState.transform);
@@ -1338,7 +1351,6 @@ class CircuitSimulator {
                 // No saved position, use smart positioning
                 this.positionPanelSmartly(panel);
             }
-            // If we have saved position, it was already applied by restoreTruthTableState()
         }
     }
 
