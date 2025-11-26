@@ -296,11 +296,15 @@ class CircuitSimulator {
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
+        console.log('Canvas click - Mode:', this.mode, 'SelectedTool:', this.selectedTool);
+
         if (this.mode === 'place' && this.selectedTool) {
             this.placeComponent(x, y, this.selectedTool);
         } else if (this.mode === 'connect') {
+            console.log('Calling handleConnect');
             this.handleConnect(x, y);
         } else if (this.mode === 'delete') {
+            console.log('Calling handleDelete');
             this.handleDelete(x, y);
         } else {
             // Check if clicking on an input to toggle
