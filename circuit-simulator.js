@@ -49,6 +49,19 @@ import {
     setSavedBoards
 } from './src/storage/localStorage.js';
 
+import { evaluateGate } from './src/core/gateLogic.js';
+
+import {
+    simulateCircuit,
+    calculateComponentValue,
+    evaluateCustomComponent,
+    calculateInternalComponentValue,
+    getPortValue,
+    getComponentValue,
+    getInputCount,
+    getOutputCount
+} from './src/core/circuitEvaluator.js';
+
 class CircuitSimulator {
     constructor() {
         this.canvas = document.getElementById('breadboard');
@@ -466,8 +479,8 @@ class CircuitSimulator {
             value: actualType === 'INPUT' ? 0 : null,
             inputs: [],
             outputs: [],
-            label: actualType === 'INPUT' ? `I${this.getInputCount() + 1}` :
-                   actualType === 'OUTPUT' ? `O${this.getOutputCount() + 1}` :
+            label: actualType === 'INPUT' ? `I${getInputCount(this.components) + 1}` :
+                   actualType === 'OUTPUT' ? `O${getOutputCount(this.components) + 1}` :
                    actualType === 'CUSTOM' ? customName : null,
             customName: customName,
             customDefinition: customName ? this.customComponents[customName] : null
@@ -720,7 +733,7 @@ class CircuitSimulator {
             const toPort = to.inputs[conn.toPort];
 
             // Determine color based on signal value and theme
-            const value = this.getPortValue(from, conn.fromPort);
+            const value = getPortValue(from, conn.fromPort);
             this.ctx.strokeStyle = value === 1 ? '#4caf50' :
                                    value === 0 ? '#f44336' :
                                    (this.darkMode ? '#888' : '#666');
@@ -783,7 +796,7 @@ class CircuitSimulator {
             this.drawPort(component.outputs[0].x, component.outputs[0].y, true);
         } else if (type === 'OUTPUT') {
             // Draw output as a circle (same as input)
-            const outputValue = this.getComponentValue(component);
+            const outputValue = getComponentValue(component);
             this.ctx.fillStyle = outputValue === 1 ? '#4caf50' :
                                 outputValue === 0 ? '#f44336' : (this.darkMode ? '#555' : '#ccc');
             this.ctx.beginPath();
@@ -1003,195 +1016,8 @@ class CircuitSimulator {
     }
 
     simulate() {
-        // Reset all component values except inputs
-        this.components.forEach(c => {
-            if (c.type !== 'INPUT') {
-                c.value = null;
-            }
-        });
-
-        // Iteratively calculate values until stable
-        let changed = true;
-        let iterations = 0;
-        const maxIterations = 100;
-
-        while (changed && iterations < maxIterations) {
-            changed = false;
-            iterations++;
-
-            this.components.forEach(component => {
-                if (component.type === 'INPUT') return;
-
-                const oldValue = component.value;
-                const newValue = this.calculateComponentValue(component);
-
-                if (newValue !== null && newValue !== oldValue) {
-                    component.value = newValue;
-                    changed = true;
-                }
-            });
-        }
-
+        simulateCircuit(this.components, this.connections);
         this.redraw();
-    }
-
-    calculateComponentValue(component) {
-        const inputValues = [];
-
-        // Get input values from connections
-        for (let i = 0; i < component.inputs.length; i++) {
-            const connection = this.connections.find(
-                c => c.to === component.id && c.toPort === i
-            );
-
-            if (!connection) {
-                return null; // Not all inputs connected
-            }
-
-            const sourceComponent = this.components.find(c => c.id === connection.from);
-            if (!sourceComponent) {
-                return null; // Source component not found
-            }
-
-            // Get value from the specific output port (critical for multi-output components!)
-            const portValue = this.getPortValue(sourceComponent, connection.fromPort);
-            if (portValue === null) {
-                return null; // Source port not yet calculated
-            }
-
-            inputValues.push(portValue);
-        }
-
-        // Calculate output based on gate type
-        if (component.type === 'CUSTOM') {
-            return this.evaluateCustomComponent(component, inputValues);
-        } else {
-            return this.evaluateGate(component.type, inputValues);
-        }
-    }
-
-    evaluateCustomComponent(component, inputValues) {
-        const def = component.customDefinition;
-
-        // Create a temporary circuit for simulation
-        const tempComponents = JSON.parse(JSON.stringify(def.components));
-        const tempConnections = JSON.parse(JSON.stringify(def.connections));
-
-        // Set input values on the internal INPUT components
-        def.inputPorts.forEach((inputPort, index) => {
-            const internalInput = tempComponents.find(c => c.id === inputPort.id);
-            if (internalInput) {
-                internalInput.value = inputValues[index];
-            }
-        });
-
-        // Simulate the internal circuit
-        let changed = true;
-        let iterations = 0;
-        const maxIterations = 100;
-
-        while (changed && iterations < maxIterations) {
-            changed = false;
-            iterations++;
-
-            tempComponents.forEach(comp => {
-                if (comp.type === 'INPUT') return;
-
-                const oldValue = comp.value;
-                const newValue = this.calculateInternalComponentValue(comp, tempComponents, tempConnections);
-
-                if (newValue !== null && newValue !== oldValue) {
-                    comp.value = newValue;
-                    changed = true;
-                }
-            });
-        }
-
-        // Get ALL output values (not just the first one!)
-        const outputValues = [];
-        def.outputPorts.forEach(outputPort => {
-            const internalOutput = tempComponents.find(c => c.id === outputPort.id);
-            outputValues.push(internalOutput ? internalOutput.value : null);
-        });
-
-        // Store output values in the component for multi-output support
-        component.outputValues = outputValues;
-
-        // Return first output for backward compatibility with single-output components
-        return outputValues[0];
-    }
-
-    calculateInternalComponentValue(component, components, connections) {
-        const inputValues = [];
-
-        // Get input values from internal connections
-        for (let i = 0; i < component.inputs.length; i++) {
-            const connection = connections.find(
-                c => c.to === component.id && c.toPort === i
-            );
-
-            if (!connection) {
-                return null;
-            }
-
-            const sourceComponent = components.find(c => c.id === connection.from);
-            if (!sourceComponent || sourceComponent.value === null) {
-                return null;
-            }
-
-            inputValues.push(sourceComponent.value);
-        }
-
-        return this.evaluateGate(component.type, inputValues);
-    }
-
-    evaluateGate(type, inputs) {
-        if (inputs.some(v => v === null)) return null;
-
-        switch (type) {
-            case 'AND':
-                return inputs[0] && inputs[1] ? 1 : 0;
-            case 'OR':
-                return inputs[0] || inputs[1] ? 1 : 0;
-            case 'NOT':
-                return inputs[0] ? 0 : 1;
-            case 'XOR':
-                return inputs[0] !== inputs[1] ? 1 : 0;
-            case 'NAND':
-                return inputs[0] && inputs[1] ? 0 : 1;
-            case 'NOR':
-                return inputs[0] || inputs[1] ? 0 : 1;
-            case 'XNOR':
-                return inputs[0] === inputs[1] ? 1 : 0;
-            case 'OUTPUT':
-                return inputs[0];
-            default:
-                return null;
-        }
-    }
-
-    getComponentValue(component) {
-        if (component.type === 'INPUT') {
-            return component.value;
-        }
-        return component.value;
-    }
-
-    getPortValue(component, portIndex) {
-        // For custom components with multiple outputs, return the specific output value
-        if (component.type === 'CUSTOM' && component.outputValues) {
-            return component.outputValues[portIndex] !== undefined ? component.outputValues[portIndex] : null;
-        }
-        // For regular components with single output
-        return component.value;
-    }
-
-    getInputCount() {
-        return this.components.filter(c => c.type === 'INPUT').length;
-    }
-
-    getOutputCount() {
-        return this.components.filter(c => c.type === 'OUTPUT').length;
     }
 
     generateTruthTable() {
