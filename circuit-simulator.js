@@ -37,17 +37,10 @@ import {
     validateCircuitData
 } from './src/utils/serialization.js';
 
-import {
-    getDarkMode,
-    setDarkMode,
-    getCustomComponents,
-    setCustomComponents,
-    getBoardState,
-    setBoardState,
-    clearBoardState,
-    getSavedBoards,
-    setSavedBoards
-} from './src/storage/localStorage.js';
+import { LocalStorageAdapter } from './src/storage/LocalStorageAdapter.js';
+import { BoardManager } from './src/storage/BoardManager.js';
+import { ComponentLibrary } from './src/storage/ComponentLibrary.js';
+import { getDarkMode, setDarkMode } from './src/storage/localStorage.js';
 
 import { evaluateGate } from './src/core/gateLogic.js';
 
@@ -95,17 +88,22 @@ class CircuitSimulator {
         this.truthTableColumnOrder = null; // Store column order for drag-and-drop
         this.truthTableState = null; // Store truth table customization (size, column order)
 
+        // Initialize storage system
+        this.storageAdapter = new LocalStorageAdapter();
+        this.boardManager = new BoardManager(this.storageAdapter);
+        this.componentLibrary = new ComponentLibrary(this.storageAdapter);
+
         this.init();
     }
 
-    init() {
-        this.loadCustomComponents();
-        this.loadSavedBoards();
+    async init() {
+        await this.loadCustomComponents();
+        await this.loadSavedBoards();
         this.setupEventListeners();
         this.setupBoardManagementListeners();
         this.setupDraggableTruthTable();
         this.setupAutoSave();
-        this.loadBoardState();
+        await this.loadBoardState();
         this.drawGrid();
         this.updateCustomComponentsList();
         this.updateBoardsList();
@@ -1591,12 +1589,13 @@ class CircuitSimulator {
     }
 
     // Custom Component Management Methods
-    loadCustomComponents() {
-        this.customComponents = getCustomComponents();
+    async loadCustomComponents() {
+        this.customComponents = await this.componentLibrary.getAllComponents();
     }
 
-    saveCustomComponentsToStorage() {
-        setCustomComponents(this.customComponents);
+    async saveCustomComponentsToStorage() {
+        // Components are now saved individually, so sync the entire object
+        await this.storageAdapter.setItem('customComponents', this.customComponents);
     }
 
     showSaveComponentDialog() {
@@ -2098,7 +2097,7 @@ class CircuitSimulator {
         });
     }
 
-    saveBoardState() {
+    async saveBoardState() {
         const truthTablePanel = document.getElementById('truthTablePanel');
         const state = {
             components: this.components,
@@ -2109,11 +2108,11 @@ class CircuitSimulator {
             truthTableState: this.truthTableState,
             truthTableVisible: truthTablePanel ? truthTablePanel.style.display !== 'none' : false
         };
-        setBoardState(state);
+        await this.storageAdapter.setItem('circuitBoardState', state);
     }
 
-    loadBoardState() {
-        const state = getBoardState();
+    async loadBoardState() {
+        const state = await this.storageAdapter.getItem('circuitBoardState');
         if (state) {
             this.components = state.components || [];
             this.connections = state.connections || [];
@@ -2146,18 +2145,19 @@ class CircuitSimulator {
         }
     }
 
-    clearBoardState() {
-        clearBoardState();
+    async clearBoardState() {
+        await this.storageAdapter.removeItem('circuitBoardState');
     }
 
     // ===== BOARD MANAGEMENT METHODS =====
 
-    loadSavedBoards() {
-        this.savedBoards = getSavedBoards();
+    async loadSavedBoards() {
+        this.savedBoards = await this.boardManager.getAllBoards();
     }
 
-    saveBoardsToStorage() {
-        setSavedBoards(this.savedBoards);
+    async saveBoardsToStorage() {
+        // Boards are now saved individually, so sync the entire object
+        await this.storageAdapter.setItem('savedBoards', this.savedBoards);
     }
 
     getNextBoardName() {
