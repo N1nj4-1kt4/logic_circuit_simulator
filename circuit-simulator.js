@@ -37,6 +37,18 @@ import {
     validateCircuitData
 } from './src/utils/serialization.js';
 
+import {
+    getDarkMode,
+    setDarkMode,
+    getCustomComponents,
+    setCustomComponents,
+    getBoardState,
+    setBoardState,
+    clearBoardState,
+    getSavedBoards,
+    setSavedBoards
+} from './src/storage/localStorage.js';
+
 class CircuitSimulator {
     constructor() {
         this.canvas = document.getElementById('breadboard');
@@ -53,7 +65,7 @@ class CircuitSimulator {
         this.customComponents = {};
         this.renameTarget = null;
         // Default to dark mode if no preference is saved
-        this.darkMode = localStorage.getItem('darkMode') !== 'false';
+        this.darkMode = getDarkMode();
         this.isDraggingComponent = false;
         this.draggedComponent = null;
         this.dragOffset = { x: 0, y: 0 };
@@ -1754,24 +1766,11 @@ class CircuitSimulator {
 
     // Custom Component Management Methods
     loadCustomComponents() {
-        const saved = localStorage.getItem('customComponents');
-        if (saved) {
-            try {
-                this.customComponents = JSON.parse(saved);
-            } catch (e) {
-                console.error('Failed to load custom components:', e);
-                this.customComponents = {};
-            }
-        }
+        this.customComponents = getCustomComponents();
     }
 
     saveCustomComponentsToStorage() {
-        try {
-            localStorage.setItem('customComponents', JSON.stringify(this.customComponents));
-        } catch (e) {
-            console.error('Failed to save custom components:', e);
-            alert('Failed to save components to storage.');
-        }
+        setCustomComponents(this.customComponents);
     }
 
     showSaveComponentDialog() {
@@ -2209,7 +2208,7 @@ class CircuitSimulator {
 
     toggleTheme() {
         this.darkMode = !this.darkMode;
-        localStorage.setItem('darkMode', this.darkMode);
+        setDarkMode(this.darkMode);
         this.applyTheme();
     }
 
@@ -2284,68 +2283,55 @@ class CircuitSimulator {
             truthTableState: this.truthTableState,
             truthTableVisible: truthTablePanel ? truthTablePanel.style.display !== 'none' : false
         };
-        localStorage.setItem('circuitBoardState', JSON.stringify(state));
+        setBoardState(state);
     }
 
     loadBoardState() {
-        const saved = localStorage.getItem('circuitBoardState');
-        if (saved) {
-            try {
-                const state = JSON.parse(saved);
-                this.components = state.components || [];
-                this.connections = state.connections || [];
-                this.nextId = state.nextId || 1;
+        const state = getBoardState();
+        if (state) {
+            this.components = state.components || [];
+            this.connections = state.connections || [];
+            this.nextId = state.nextId || 1;
 
-                // Restore component/board name
-                this.currentComponentName = state.currentComponentName || null;
-                this.currentBoardName = state.currentBoardName || null;
+            // Restore component/board name
+            this.currentComponentName = state.currentComponentName || null;
+            this.currentBoardName = state.currentBoardName || null;
 
-                // Restore truth table state
-                this.truthTableState = state.truthTableState || null;
+            // Restore truth table state
+            this.truthTableState = state.truthTableState || null;
 
-                // Restore truth table column order if saved
-                if (this.truthTableState && this.truthTableState.columnOrder) {
-                    this.truthTableColumnOrder = [...this.truthTableState.columnOrder];
-                }
+            // Restore truth table column order if saved
+            if (this.truthTableState && this.truthTableState.columnOrder) {
+                this.truthTableColumnOrder = [...this.truthTableState.columnOrder];
+            }
 
-                // Recalculate port positions for auto-saved state (migrate to new positions)
-                if (this.components.length > 0) {
-                    this.migrateComponentPorts();
-                }
+            // Recalculate port positions for auto-saved state (migrate to new positions)
+            if (this.components.length > 0) {
+                this.migrateComponentPorts();
+            }
 
-                // Restore truth table visibility if it was open
-                if (state.truthTableVisible) {
-                    // Delay slightly to ensure DOM is ready
-                    setTimeout(() => {
-                        this.generateTruthTable();
-                    }, 100);
-                }
-            } catch (e) {
-                console.error('Failed to load board state:', e);
+            // Restore truth table visibility if it was open
+            if (state.truthTableVisible) {
+                // Delay slightly to ensure DOM is ready
+                setTimeout(() => {
+                    this.generateTruthTable();
+                }, 100);
             }
         }
     }
 
     clearBoardState() {
-        localStorage.removeItem('circuitBoardState');
+        clearBoardState();
     }
 
     // ===== BOARD MANAGEMENT METHODS =====
 
     loadSavedBoards() {
-        const saved = localStorage.getItem('savedBoards');
-        if (saved) {
-            try {
-                this.savedBoards = JSON.parse(saved);
-            } catch (e) {
-                console.error('Failed to load saved boards:', e);
-                this.savedBoards = {};
-            }
-        }
+        this.savedBoards = getSavedBoards();
     }
 
     saveBoardsToStorage() {
-        localStorage.setItem('savedBoards', JSON.stringify(this.savedBoards));
+        setSavedBoards(this.savedBoards);
     }
 
     getNextBoardName() {
