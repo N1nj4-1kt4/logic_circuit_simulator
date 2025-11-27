@@ -1,0 +1,34 @@
+{
+  "name": "logic-circuit-simulator",
+  "version": "2.0.0",
+  "description": "Interactive logic circuit simulator with truth tables and custom components",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run"
+  },
+  "keywords": [
+    "logic-gates",
+    "circuit-simulator",
+    "education",
+    "digital-logic"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "file-saver": "^2.0.5",
+    "interactjs": "^1.10.26",
+    "lodash-es": "^4.17.21",
+    "mitt": "^3.0.1",
+    "tabulator-tables": "^6.2.1"
+  },
+  "devDependencies": {
+    "@vitest/ui": "^1.2.0",
+    "vite": "^5.0.11",
+    "vitest": "^1.2.0"
+  }
+}
