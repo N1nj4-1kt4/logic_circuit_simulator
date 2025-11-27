@@ -6,10 +6,11 @@ Track your progress through the refactoring phases here.
 
 ## Overall Status
 
-**Current Phase:** Phase 0 (Setup)
-**Branch:** `refactor/modernization`
-**Started:** <!-- Add date when you start -->
-**Target Completion:** <!-- 8-10 weeks from start -->
+**Current Phase:** Phase 2 (Rewrite in Progress)
+**Branch:** `claude/logic-circuit-simulator-01M38HmZU9rT6ALdvxeHpGUK`
+**Started:** 2025-11-27
+**Approach:** Following comprehensive PROGRESS.md plan with proper OOP architecture
+**Next Step:** Continue in VSCode with testing infrastructure
 
 ---
 
@@ -34,156 +35,137 @@ Track your progress through the refactoring phases here.
 
 ---
 
-### Phase 1: Extract Constants & Utilities ⏸️ Not Started
+### Phase 1: Extract Constants & Utilities ✅ Completed
 **Goal:** Extract pure functions and constants (lowest risk)
-**Timeline:** Week 1, Days 3-5
+**Completed:** 2025-11-27
+**Commit:** `9eef16e`
 
-#### 1.1: Constants
-- [ ] Create `src/constants.js`
-- [ ] Extract GATE_SIZES
-- [ ] Extract COLORS
-- [ ] Extract GRID_SIZE, PORT_RADIUS, etc.
-- [ ] Update `circuit-simulator.js` to import constants
-- [ ] Test: App still works
+#### 1.1: Constants ✅
+- [x] Create `src/constants.js`
+- [x] Extract GATE_SIZES, COLORS, GRID_SIZE, PORT_RADIUS, etc.
+- [x] Update `circuit-simulator.js` to import constants
+- [x] Test: App still works
 
-#### 1.2: Geometry Utilities
-- [ ] Create `src/utils/geometry.js`
-- [ ] Extract `pointDistance()`
-- [ ] Extract `distanceToLine()`
-- [ ] Extract `getBoundingBox()`
-- [ ] Extract `calculateRectOverlap()`
-- [ ] Update `circuit-simulator.js` to import geometry utils
-- [ ] Test: App still works
+#### 1.2: Geometry Utilities ✅
+- [x] Create `src/utils/geometry.js`
+- [x] Extract `pointDistance()`, `distanceToLine()`, `getBoundingBox()`, `calculateRectOverlap()`
+- [x] Update `circuit-simulator.js` to import geometry utils
+- [x] Test: App still works
 
-#### 1.3: Positioning Utilities
-- [ ] Create `src/utils/positioning.js`
-- [ ] Extract `findSmartPosition()` algorithm
-- [ ] Update `circuit-simulator.js` to import positioning utils
-- [ ] Test: Truth table smart positioning works
+#### 1.3: Positioning Utilities ✅
+- [x] Create `src/utils/positioning.js`
+- [x] Extract `positionPanelSmartly()` algorithm
+- [x] Update `circuit-simulator.js` to import positioning utils
+- [x] Test: Truth table smart positioning works
 
-#### 1.4: Serialization Utilities
-- [ ] Create `src/utils/serialization.js`
-- [ ] Add `deepClone()` using lodash
-- [ ] Add `exportToJSON()` using file-saver
-- [ ] Add `importFromJSON()`
-- [ ] Update export/import code to use new utils
-- [ ] Test: Export/import component works
+#### 1.4: Serialization Utilities ✅
+- [x] Create `src/utils/serialization.js`
+- [x] Add `deepClone()` (custom implementation, no lodash due to npm restrictions)
+- [x] Add `exportToJSON()`, `importFromJSON()` (custom, no file-saver)
+- [x] Update export/import code to use new utils
+- [x] Test: Export/import component works
 
-#### 1.5: Event Bus
-- [ ] Create `src/utils/eventBus.js`
-- [ ] Set up mitt event emitter
-- [ ] Document event types (JSDoc)
-- [ ] Test: Event bus ready for use
+#### 1.5: Event Bus ✅
+- [x] Create `src/utils/eventBus.js`
+- [x] Custom EventBus implementation (no mitt due to npm restrictions)
+- [x] Document event types (JSDoc)
+- [x] Event bus ready for use (not yet integrated into main code)
 
-#### 1.6: Testing
-- [ ] Create `tests/unit/utils/geometry.test.js`
-- [ ] Write tests for geometry functions
-- [ ] Run: `npm test`
-- [ ] All tests pass
+#### 1.6: Testing ⚠️ DEFERRED
+- [ ] Tests deferred to VSCode environment (no vitest in container)
 
-**Deliverable:** ✅ 5 utility modules extracted, ~300 lines removed from monolith, tests passing
+**Deliverable:** ✅ 5 utility modules extracted, ~500 lines removed, app works
+**Note:** Used custom implementations instead of external libraries due to container restrictions
 
 ---
 
-### Phase 2: Extract Storage Layer ⏸️ Not Started
-**Goal:** Isolate all localStorage/persistence logic
-**Timeline:** Week 2
+### Phase 2: Extract Storage Layer 🔄 IN PROGRESS (Proper Architecture)
+**Goal:** Isolate all localStorage/persistence logic with class-based OOP architecture
+**Started:** 2025-11-27
+**Commit:** `2e00ab6` (WIP)
 
-#### 2.1: Storage Adapter
-- [ ] Create `src/storage/StorageAdapter.js` (abstract class)
-- [ ] Create `src/storage/LocalStorageAdapter.js`
-- [ ] Test: Can save/load data
+#### 2.1: Storage Adapter ✅
+- [x] Create `src/storage/StorageAdapter.js` (abstract class)
+- [x] Create `src/storage/LocalStorageAdapter.js` with full async API
+- [x] Added: `getItem()`, `setItem()`, `removeItem()`, `clear()`, `getAllKeys()`, `isAvailable()`
 
-#### 2.2: Board Manager
-- [ ] Create `src/storage/BoardManager.js`
-- [ ] Implement `saveBoard()`
-- [ ] Implement `loadBoard()`
-- [ ] Implement `listBoards()`
-- [ ] Implement `deleteBoard()`
-- [ ] Update `circuit-simulator.js` to use BoardManager
+#### 2.2: Board Manager ✅
+- [x] Create `src/storage/BoardManager.js` with comprehensive API
+- [x] Implement `saveBoard()`, `loadBoard()`, `listBoards()`, `deleteBoard()`
+- [x] Implement `getAllBoards()`, `boardExists()`, `renameBoard()`, `clearAllBoards()`, `getNextBoardName()`
+- [x] Integrated into `circuit-simulator.js` constructor
+- [ ] **TODO:** Update all board-related methods in circuit-simulator.js to use BoardManager API
 - [ ] Test: Save/load boards works
 
-#### 2.3: Component Library
-- [ ] Create `src/storage/ComponentLibrary.js`
-- [ ] Implement `saveComponent()`
-- [ ] Implement `loadComponent()`
-- [ ] Implement `listComponents()`
-- [ ] Implement `deleteComponent()`
-- [ ] Implement `exportComponent()` (uses serialization utils)
-- [ ] Implement `importComponent()`
-- [ ] Update `circuit-simulator.js` to use ComponentLibrary
+#### 2.3: Component Library ✅
+- [x] Create `src/storage/ComponentLibrary.js` with comprehensive API
+- [x] Implement `saveComponent()`, `loadComponent()`, `listComponents()`, `deleteComponent()`
+- [x] Implement `exportComponent()`, `importComponent()` using serialization utils
+- [x] Implement `componentExists()`, `renameComponent()`, `duplicateComponent()`, `clearAllComponents()`
+- [x] Integrated into `circuit-simulator.js` constructor
+- [ ] **TODO:** Update export/import methods in circuit-simulator.js to use ComponentLibrary API
 - [ ] Test: Custom components work
 
-#### 2.4: Testing
-- [ ] Create `tests/unit/storage/BoardManager.test.js`
-- [ ] Write tests for storage layer
-- [ ] Run: `npm test`
-- [ ] All tests pass
+#### 2.4: circuit-simulator.js Integration 🔄
+- [x] Imported new storage classes
+- [x] Created instances in constructor
+- [x] Made `init()`, `loadCustomComponents()`, `loadSavedBoards()` async
+- [x] Updated board state methods to use async storage
+- [ ] **TODO:** Update remaining storage calls (many still using old patterns)
+- [ ] **TODO:** Ensure all async methods are properly awaited
 
-**Deliverable:** ✅ Storage layer isolated, easy to swap implementations later
+#### 2.5: Testing ⚠️ DEFERRED
+- [ ] Tests deferred to VSCode environment
+- [ ] Create `tests/unit/storage/StorageAdapter.test.js`
+- [ ] Create `tests/unit/storage/BoardManager.test.js`
+- [ ] Create `tests/unit/storage/ComponentLibrary.test.js`
+
+**Status:** Architecture complete, integration partial
+**Next:** Complete circuit-simulator.js integration in VSCode, add tests
 
 ---
 
-### Phase 3: Extract Core Simulation Logic ⏸️ Not Started
+### Phase 3: Extract Core Simulation Logic ⚠️ SIMPLIFIED VERSION COMPLETED
 **Goal:** Create pure simulation engine (no DOM, no Canvas)
-**Timeline:** Week 3
+**Completed:** 2025-11-27 (simplified functional approach)
+**Commit:** `44c555b`
 
-#### 3.1: Component Class
-- [ ] Create `src/core/Component.js`
-- [ ] Implement constructor
-- [ ] Implement `calculatePorts()`
-- [ ] Implement `move()`
-- [ ] Implement `clone()`
-- [ ] Implement `toJSON()` / `fromJSON()`
-- [ ] Test: Component class works
+**⚠️ IMPORTANT:** Initial implementation used **functional approach** instead of full OOP.
+**TODO in VSCode:** Decide whether to keep functional or rewrite as OOP with classes.
 
-#### 3.2: Connection Class
-- [ ] Create `src/core/Connection.js`
-- [ ] Implement constructor
-- [ ] Implement `containsPoint()`
-- [ ] Implement `toJSON()` / `fromJSON()`
-- [ ] Test: Connection class works
+#### 3.1-3.3: Component/Connection/Circuit Classes ❌ NOT IMPLEMENTED
+- [ ] **TODO:** Decide if needed. Current approach uses plain objects + functions.
+- [ ] If OOP desired: Create `Component.js`, `Connection.js`, `Circuit.js` classes
+- [ ] Would require significant refactoring of circuit-simulator.js
 
-#### 3.3: Circuit Class
-- [ ] Create `src/core/Circuit.js`
-- [ ] Implement `addComponent()`
-- [ ] Implement `removeComponent()`
-- [ ] Implement `addConnection()`
-- [ ] Implement `removeConnection()`
-- [ ] Implement `findComponentById()`, `findComponentAt()`
-- [ ] Implement `getInputs()`, `getOutputs()`
-- [ ] Implement `clear()`
-- [ ] Implement `toJSON()` / `fromJSON()`
-- [ ] Test: Circuit class works
+#### 3.4: Gate Evaluator ✅ (Functional)
+- [x] Created `src/core/gateLogic.js` (functional, not class-based)
+- [x] Individual gate functions: `evaluateAND()`, `evaluateOR()`, `evaluateNOT()`, etc.
+- [x] Generic `evaluateGate()` dispatcher
+- [x] `getGateTruthTable()` utility
+- [x] All gates work correctly
 
-#### 3.4: Gate Evaluator
-- [ ] Create `src/core/GateEvaluator.js`
-- [ ] Implement `evaluate()` for all gate types
-- [ ] Test: All gates evaluate correctly
+#### 3.5: Simulation Engine ✅ (Functional)
+- [x] Created `src/core/circuitEvaluator.js` (functional, not class-based)
+- [x] Implement `simulateCircuit()` - iterative evaluation
+- [x] Implement `calculateComponentValue()`
+- [x] Implement `evaluateCustomComponent()`
+- [x] Implement `getPortValue()`, `getComponentValue()`, etc.
+- [x] Updated `circuit-simulator.js` to use functions
+- [x] Simulation works
 
-#### 3.5: Simulation Engine
-- [ ] Create `src/core/SimulationEngine.js`
-- [ ] Implement `simulate()`
-- [ ] Implement `getComponentInputs()`
-- [ ] Implement `evaluateCustomComponent()`
-- [ ] Update `circuit-simulator.js` to use SimulationEngine
-- [ ] Test: Simulation works
+#### 3.6: Truth Table Generator ❌ NOT EXTRACTED
+- [ ] **TODO:** Extract from circuit-simulator.js (still embedded)
+- [ ] Truth table generation currently in `generateTruthTable()` method
+- [ ] Consider extracting to separate module
 
-#### 3.6: Truth Table Generator
-- [ ] Create `src/core/TruthTableGenerator.js`
-- [ ] Implement `generate()`
-- [ ] Implement `getAllInputCombinations()`
-- [ ] Update `circuit-simulator.js` to use TruthTableGenerator
-- [ ] Test: Truth table generation works
+#### 3.7: Testing ⚠️ DEFERRED
+- [ ] Tests deferred to VSCode environment
+- [ ] Create `tests/unit/core/gateLogic.test.js`
+- [ ] Create `tests/unit/core/circuitEvaluator.test.js`
 
-#### 3.7: Testing
-- [ ] Create `tests/unit/core/GateEvaluator.test.js`
-- [ ] Create `tests/unit/core/SimulationEngine.test.js`
-- [ ] Write comprehensive tests
-- [ ] Run: `npm test`
-- [ ] All tests pass
-
-**Deliverable:** ✅ Pure simulation logic extracted, fully testable, ~600 lines removed
+**Status:** Functional implementation complete, works but diverges from OOP plan
+**Decision Needed:** Keep functional or rewrite as OOP? (Functional is simpler, OOP is more "proper")
 
 ---
 
