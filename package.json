@@ -27,8 +27,6 @@
     "tabulator-tables": "^6.2.1"
   },
   "devDependencies": {
-    "@vitest/ui": "^1.2.0",
-    "vite": "^5.0.11",
-    "vitest": "^1.2.0"
+    "vite": "^5.0.11"
   }
 }
