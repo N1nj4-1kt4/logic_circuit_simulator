@@ -55,6 +55,8 @@ import {
     getOutputCount
 } from './src/core/circuitEvaluator.js';
 
+import { CanvasRenderer } from './src/rendering/CanvasRenderer.js';
+
 class CircuitSimulator {
     constructor() {
         this.canvas = document.getElementById('breadboard');
@@ -93,6 +95,9 @@ class CircuitSimulator {
         this.boardManager = new BoardManager(this.storageAdapter);
         this.componentLibrary = new ComponentLibrary(this.storageAdapter);
 
+        // Initialize renderer (will be updated after components/connections are loaded)
+        this.canvasRenderer = new CanvasRenderer(this.canvas, this.components, this.connections, this.darkMode);
+
         this.init();
     }
 
@@ -104,7 +109,10 @@ class CircuitSimulator {
         this.setupDraggableTruthTable();
         this.setupAutoSave();
         await this.loadBoardState();
-        this.drawGrid();
+        // Update renderer with loaded components and connections
+        this.canvasRenderer.updateComponents(this.components);
+        this.canvasRenderer.updateConnections(this.connections);
+        this.canvasRenderer.render();
         this.updateCustomComponentsList();
         this.updateBoardsList();
         this.updateCircuitNameDisplay();
@@ -248,8 +256,8 @@ class CircuitSimulator {
             document.getElementById('saveComponentDialog').style.display = 'none';
         });
 
-        document.getElementById('confirmSave').addEventListener('click', () => {
-            this.saveCurrentCircuitAsComponent();
+        document.getElementById('confirmSave').addEventListener('click', async () => {
+            await this.saveCurrentCircuitAsComponent();
         });
 
         // Manage Components
@@ -262,16 +270,16 @@ class CircuitSimulator {
         });
 
         // Export/Import Components
-        document.getElementById('exportComponent').addEventListener('click', () => {
-            this.exportComponentToFile();
+        document.getElementById('exportComponent').addEventListener('click', async () => {
+            await this.exportComponentToFile();
         });
 
         document.getElementById('importComponent').addEventListener('click', () => {
             document.getElementById('importFile').click();
         });
 
-        document.getElementById('importFile').addEventListener('change', (e) => {
-            this.importComponentFromFile(e);
+        document.getElementById('importFile').addEventListener('change', async (e) => {
+            await this.importComponentFromFile(e);
         });
 
         // Manual Simulation Controls
@@ -387,14 +395,7 @@ class CircuitSimulator {
             // Handle connection preview
             else if (this.mode === 'connect' && this.connectStart) {
                 this.redraw();
-                this.ctx.strokeStyle = 'rgba(102, 126, 234, 0.5)';
-                this.ctx.lineWidth = 2;
-                this.ctx.setLineDash([5, 5]);
-                this.ctx.beginPath();
-                this.ctx.moveTo(this.connectStart.x, this.connectStart.y);
-                this.ctx.lineTo(x, y);
-                this.ctx.stroke();
-                this.ctx.setLineDash([]);
+                this.canvasRenderer.drawConnectionPreview(this.connectStart.x, this.connectStart.y, x, y);
             }
             // Update cursor based on hover
             else if (this.mode !== 'connect' && this.mode !== 'delete') {
@@ -704,313 +705,11 @@ class CircuitSimulator {
         return null;
     }
 
-    drawGrid() {
-        // Grid is now drawn via CSS background
-    }
-
     redraw() {
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
-        // Draw connections
-        this.drawConnections();
-
-        // Draw components
-        this.components.forEach(component => {
-            this.drawComponent(component);
-        });
-    }
-
-    drawConnections() {
-        this.connections.forEach((conn, index) => {
-            const from = this.components.find(c => c.id === conn.from);
-            const to = this.components.find(c => c.id === conn.to);
-
-            if (!from || !to) return;
-
-            const fromPort = from.outputs[conn.fromPort];
-            const toPort = to.inputs[conn.toPort];
-
-            // Determine color based on signal value and theme
-            const value = getPortValue(from, conn.fromPort);
-            this.ctx.strokeStyle = value === 1 ? '#4caf50' :
-                                   value === 0 ? '#f44336' :
-                                   (this.darkMode ? '#888' : '#666');
-            this.ctx.lineWidth = 3;
-
-            this.ctx.beginPath();
-            this.ctx.moveTo(fromPort.x, fromPort.y);
-
-            // Improved routing with offset to avoid overlaps
-            const dx = toPort.x - fromPort.x;
-            const dy = toPort.y - fromPort.y;
-
-            // Calculate offset based on port index to spread wires
-            const offset = (conn.toPort - 0.5) * 10;
-
-            if (Math.abs(dx) > Math.abs(dy)) {
-                // Horizontal preference
-                const midX = fromPort.x + dx * 0.6;
-                this.ctx.lineTo(midX, fromPort.y);
-                this.ctx.lineTo(midX, toPort.y + offset * 0.3);
-                this.ctx.lineTo(toPort.x, toPort.y);
-            } else {
-                // Vertical preference
-                const midY = fromPort.y + dy * 0.6;
-                this.ctx.lineTo(fromPort.x, midY);
-                this.ctx.lineTo(toPort.x, midY);
-                this.ctx.lineTo(toPort.x, toPort.y);
-            }
-
-            this.ctx.stroke();
-        });
-    }
-
-    drawComponent(component) {
-        const { type, x, y, value } = component;
-
-        this.ctx.save();
-
-        if (type === 'INPUT') {
-            // Draw input as a circle
-            this.ctx.fillStyle = value === 1 ? '#4caf50' : '#f44336';
-            this.ctx.beginPath();
-            this.ctx.arc(x, y, 20, 0, Math.PI * 2);
-            this.ctx.fill();
-            this.ctx.strokeStyle = this.darkMode ? '#e9e9e9' : '#333';
-            this.ctx.lineWidth = 2;
-            this.ctx.stroke();
-
-            // Label
-            this.ctx.fillStyle = this.darkMode ? '#e9e9e9' : '#333';
-            this.ctx.font = 'bold 14px Arial';
-            this.ctx.textAlign = 'center';
-            this.ctx.textBaseline = 'middle';
-            this.ctx.fillText(component.label, x, y - 35);
-
-            this.ctx.fillStyle = 'white';
-            this.ctx.fillText(value.toString(), x, y);
-
-            // Output port
-            this.drawPort(component.outputs[0].x, component.outputs[0].y, true);
-        } else if (type === 'OUTPUT') {
-            // Draw output as a circle (same as input)
-            const outputValue = getComponentValue(component);
-            this.ctx.fillStyle = outputValue === 1 ? '#4caf50' :
-                                outputValue === 0 ? '#f44336' : (this.darkMode ? '#555' : '#ccc');
-            this.ctx.beginPath();
-            this.ctx.arc(x, y, 20, 0, Math.PI * 2);
-            this.ctx.fill();
-            this.ctx.strokeStyle = this.darkMode ? '#e9e9e9' : '#333';
-            this.ctx.lineWidth = 2;
-            this.ctx.stroke();
-
-            // Label
-            this.ctx.fillStyle = this.darkMode ? '#e9e9e9' : '#333';
-            this.ctx.font = 'bold 14px Arial';
-            this.ctx.textAlign = 'center';
-            this.ctx.textBaseline = 'middle';
-            this.ctx.fillText(component.label, x, y - 35);
-
-            if (outputValue !== null) {
-                this.ctx.fillStyle = 'white';
-                this.ctx.fillText(outputValue.toString(), x, y);
-            }
-
-            // Input port
-            this.drawPort(component.inputs[0].x, component.inputs[0].y, false);
-        } else if (type === 'CUSTOM') {
-            // Draw custom component
-            this.drawCustomComponent(component);
-        } else {
-            // Draw logic gate
-            this.drawGate(component);
-        }
-
-        this.ctx.restore();
-    }
-
-    drawCustomComponent(component) {
-        const { x, y, label, customDefinition } = component;
-
-        // Draw component body with theme colors (90x90 size - 15% larger)
-        this.ctx.fillStyle = this.darkMode ? '#1a1a2e' : '#fff3e0';
-        this.ctx.strokeStyle = this.darkMode ? '#f39c12' : '#ff9800';
-        this.ctx.lineWidth = 3;
-        this.ctx.fillRect(x - 45, y - 45, 90, 90);
-        this.ctx.strokeRect(x - 45, y - 45, 90, 90);
-
-        // Draw label (larger font for better readability)
-        this.ctx.fillStyle = this.darkMode ? '#f39c12' : '#ff9800';
-        this.ctx.font = 'bold 14px Arial';
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
-
-        // Wrap text if too long
-        const maxWidth = 80;
-        if (this.ctx.measureText(label).width > maxWidth) {
-            const words = label.split(/(?=[A-Z])/); // Split on capital letters
-            if (words.length > 1) {
-                this.ctx.fillText(words[0], x, y - 7);
-                this.ctx.fillText(words.slice(1).join(''), x, y + 7);
-            } else {
-                this.ctx.fillText(label.substring(0, 10), x, y - 7);
-                this.ctx.fillText(label.substring(10), x, y + 7);
-            }
-        } else {
-            this.ctx.fillText(label, x, y);
-        }
-
-        // Draw ports with labels (larger font)
-        this.ctx.font = 'bold 11px Arial';
-        this.ctx.fillStyle = this.darkMode ? '#b3b3b3' : '#666';
-
-        // Draw input ports with labels
-        component.inputs.forEach((port, index) => {
-            this.drawPort(port.x, port.y, false);
-
-            // Draw input label to the left of the port
-            if (customDefinition && customDefinition.inputPorts[index]) {
-                const inputLabel = customDefinition.inputPorts[index].label;
-                this.ctx.textAlign = 'right';
-                this.ctx.textBaseline = 'middle';
-                this.ctx.fillText(inputLabel, port.x - 8, port.y);
-            }
-        });
-
-        // Draw output ports with labels
-        component.outputs.forEach((port, index) => {
-            this.drawPort(port.x, port.y, true);
-
-            // Draw output label to the right of the port
-            if (customDefinition && customDefinition.outputPorts[index]) {
-                const outputLabel = customDefinition.outputPorts[index].label;
-                this.ctx.textAlign = 'left';
-                this.ctx.textBaseline = 'middle';
-                this.ctx.fillText(outputLabel, port.x + 8, port.y);
-            }
-        });
-    }
-
-    drawGate(component) {
-        const { type, x, y } = component;
-
-        const fillColor = this.darkMode ? '#0f3460' : '#e3f2fd';
-        const strokeColor = this.darkMode ? '#53a8f4' : '#1976d2';
-        const textColor = this.darkMode ? '#53a8f4' : '#1976d2';
-
-        this.ctx.fillStyle = fillColor;
-        this.ctx.strokeStyle = strokeColor;
-        this.ctx.lineWidth = 2;
-
-        // Draw standard logic gate symbols
-        switch(type) {
-            case 'AND':
-                this.drawAndGate(x, y, false);
-                break;
-            case 'OR':
-                this.drawOrGate(x, y, false);
-                break;
-            case 'NOT':
-                this.drawNotGate(x, y);
-                break;
-            case 'XOR':
-                this.drawOrGate(x, y, true);
-                break;
-            case 'NAND':
-                this.drawAndGate(x, y, true);
-                break;
-            case 'NOR':
-                this.drawOrGate(x, y, false, true);
-                break;
-            case 'XNOR':
-                this.drawOrGate(x, y, true, true);
-                break;
-        }
-
-        // Draw ports
-        component.inputs.forEach(port => {
-            this.drawPort(port.x, port.y, false);
-        });
-        component.outputs.forEach(port => {
-            this.drawPort(port.x, port.y, true);
-        });
-    }
-
-    drawAndGate(x, y, inverted) {
-        // AND gate shape (D-shape)
-        this.ctx.beginPath();
-        this.ctx.moveTo(x - 25, y - 20);
-        this.ctx.lineTo(x, y - 20);
-        this.ctx.arc(x, y, 20, -Math.PI/2, Math.PI/2);
-        this.ctx.lineTo(x - 25, y + 20);
-        this.ctx.closePath();
-        this.ctx.fill();
-        this.ctx.stroke();
-
-        if (inverted) {
-            // Add inversion bubble for NAND
-            this.ctx.beginPath();
-            this.ctx.arc(x + 25, y, 5, 0, Math.PI * 2);
-            this.ctx.fill();
-            this.ctx.stroke();
-        }
-    }
-
-    drawOrGate(x, y, isXor, inverted) {
-        // OR/XOR gate shape
-        this.ctx.beginPath();
-        this.ctx.moveTo(x - 25, y - 20);
-        // Curved back
-        this.ctx.quadraticCurveTo(x - 15, y, x - 25, y + 20);
-        // Bottom to output curve
-        this.ctx.quadraticCurveTo(x - 5, y + 15, x + 20, y);
-        // Top curve back
-        this.ctx.quadraticCurveTo(x - 5, y - 15, x - 25, y - 20);
-        this.ctx.fill();
-        this.ctx.stroke();
-
-        if (isXor) {
-            // Extra line for XOR
-            this.ctx.beginPath();
-            this.ctx.moveTo(x - 30, y - 20);
-            this.ctx.quadraticCurveTo(x - 20, y, x - 30, y + 20);
-            this.ctx.stroke();
-        }
-
-        if (inverted) {
-            // Add inversion bubble for NOR/XNOR
-            this.ctx.beginPath();
-            this.ctx.arc(x + 25, y, 5, 0, Math.PI * 2);
-            this.ctx.fill();
-            this.ctx.stroke();
-        }
-    }
-
-    drawNotGate(x, y) {
-        // NOT gate - triangle with bubble
-        this.ctx.beginPath();
-        this.ctx.moveTo(x - 20, y - 15);
-        this.ctx.lineTo(x - 20, y + 15);
-        this.ctx.lineTo(x + 15, y);
-        this.ctx.closePath();
-        this.ctx.fill();
-        this.ctx.stroke();
-
-        // Inversion circle
-        this.ctx.beginPath();
-        this.ctx.arc(x + 20, y, 5, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.stroke();
-    }
-
-    drawPort(x, y, isOutput) {
-        this.ctx.fillStyle = isOutput ? '#4caf50' : '#2196f3';
-        this.ctx.beginPath();
-        this.ctx.arc(x, y, 5, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.strokeStyle = '#333';
-        this.ctx.lineWidth = 1;
-        this.ctx.stroke();
+        // Update renderer with current components and connections
+        this.canvasRenderer.updateComponents(this.components);
+        this.canvasRenderer.updateConnections(this.connections);
+        this.canvasRenderer.render();
     }
 
     simulate() {
@@ -1594,8 +1293,9 @@ class CircuitSimulator {
     }
 
     async saveCustomComponentsToStorage() {
-        // Components are now saved individually, so sync the entire object
-        await this.storageAdapter.setItem('customComponents', this.customComponents);
+        // DEPRECATED: Components are now saved through ComponentLibrary
+        // This method kept for backward compatibility but does nothing
+        console.warn('saveCustomComponentsToStorage() is deprecated, components are saved automatically through ComponentLibrary');
     }
 
     showSaveComponentDialog() {
@@ -1631,7 +1331,7 @@ class CircuitSimulator {
         document.getElementById('saveComponentDialog').style.display = 'block';
     }
 
-    saveCurrentCircuitAsComponent() {
+    async saveCurrentCircuitAsComponent() {
         const name = document.getElementById('componentName').value.trim();
         const description = document.getElementById('componentDescription').value.trim();
 
@@ -1641,7 +1341,8 @@ class CircuitSimulator {
         }
 
         // Check if name already exists
-        if (this.customComponents[name]) {
+        const exists = await this.componentLibrary.componentExists(name);
+        if (exists) {
             if (!confirm(`A component named "${name}" already exists. Overwrite it?`)) {
                 return;
             }
@@ -1665,18 +1366,23 @@ class CircuitSimulator {
             created: new Date().toISOString()
         };
 
-        this.customComponents[name] = componentData;
-        this.saveCustomComponentsToStorage();
-        this.updateCustomComponentsList();
+        const success = await this.componentLibrary.saveComponent(name, componentData);
 
-        // Update current circuit name to reflect it's now a saved component
-        this.currentComponentName = name;
-        this.currentBoardName = null; // Clear board name when saving as component
-        this.lastSavedState = JSON.stringify(this.getCurrentState());
-        this.updateCircuitNameDisplay();
+        if (success) {
+            await this.loadCustomComponents(); // Refresh local copy
+            this.updateCustomComponentsList();
 
-        document.getElementById('saveComponentDialog').style.display = 'none';
-        alert(`Component "${name}" saved successfully!`);
+            // Update current circuit name to reflect it's now a saved component
+            this.currentComponentName = name;
+            this.currentBoardName = null; // Clear board name when saving as component
+            this.lastSavedState = JSON.stringify(this.getCurrentState());
+            this.updateCircuitNameDisplay();
+
+            document.getElementById('saveComponentDialog').style.display = 'none';
+            alert(`Component "${name}" saved successfully!`);
+        } else {
+            alert(`Failed to save component "${name}"`);
+        }
     }
 
     updateCustomComponentsList() {
@@ -1764,17 +1470,21 @@ class CircuitSimulator {
             });
 
             // Add export handler
-            item.querySelector('.export-btn').addEventListener('click', () => {
-                this.downloadComponent(name);
+            item.querySelector('.export-btn').addEventListener('click', async () => {
+                await this.downloadComponent(name);
             });
 
             // Add delete handler
-            item.querySelector('.delete-btn').addEventListener('click', () => {
+            item.querySelector('.delete-btn').addEventListener('click', async () => {
                 if (confirm(`Delete component "${name}"?`)) {
-                    delete this.customComponents[name];
-                    this.saveCustomComponentsToStorage();
-                    this.updateCustomComponentsList();
-                    this.updateComponentLibraryList();
+                    const success = await this.componentLibrary.deleteComponent(name);
+                    if (success) {
+                        await this.loadCustomComponents(); // Refresh local copy
+                        this.updateCustomComponentsList();
+                        this.updateComponentLibraryList();
+                    } else {
+                        alert(`Failed to delete component "${name}"`);
+                    }
                 }
             });
 
@@ -1783,7 +1493,7 @@ class CircuitSimulator {
     }
 
     // Export/Import Methods
-    exportComponentToFile() {
+    async exportComponentToFile() {
         const componentNames = Object.keys(this.customComponents);
 
         if (componentNames.length === 0) {
@@ -1793,66 +1503,42 @@ class CircuitSimulator {
 
         if (componentNames.length === 1) {
             // Export the only component
-            this.downloadComponent(componentNames[0]);
+            await this.downloadComponent(componentNames[0]);
         } else {
             // Let user choose which component to export
             const name = prompt('Enter component name to export:\n\n' + componentNames.join('\n'));
             if (name && this.customComponents[name]) {
-                this.downloadComponent(name);
+                await this.downloadComponent(name);
             } else if (name) {
                 alert('Component not found.');
             }
         }
     }
 
-    downloadComponent(name) {
-        const component = this.customComponents[name];
-        const dataStr = JSON.stringify(component, null, 2);
-        const dataBlob = new Blob([dataStr], { type: 'application/json' });
-        const url = URL.createObjectURL(dataBlob);
-
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `${name}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-
-        alert(`Component "${name}" exported successfully!`);
+    async downloadComponent(name) {
+        const success = await this.componentLibrary.exportComponent(name);
+        if (success) {
+            alert(`Component "${name}" exported successfully!`);
+        } else {
+            alert(`Failed to export component "${name}"`);
+        }
     }
 
-    importComponentFromFile(event) {
+    async importComponentFromFile(event) {
         const file = event.target.files[0];
         if (!file) return;
 
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const componentData = JSON.parse(e.target.result);
+        try {
+            const componentData = await this.componentLibrary.importComponent(file);
 
-                // Validate component data
-                if (!componentData.name || !componentData.components || !componentData.connections) {
-                    throw new Error('Invalid component file format');
-                }
-
-                // Check if component already exists
-                if (this.customComponents[componentData.name]) {
-                    if (!confirm(`Component "${componentData.name}" already exists. Overwrite it?`)) {
-                        return;
-                    }
-                }
-
-                this.customComponents[componentData.name] = componentData;
-                this.saveCustomComponentsToStorage();
+            if (componentData) {
+                await this.loadCustomComponents(); // Refresh local copy
                 this.updateCustomComponentsList();
-
                 alert(`Component "${componentData.name}" imported successfully!`);
-            } catch (error) {
-                alert('Failed to import component: ' + error.message);
             }
-        };
-        reader.readAsText(file);
+        } catch (error) {
+            alert('Failed to import component: ' + error.message);
+        }
 
         // Reset file input
         event.target.value = '';
@@ -2034,6 +1720,7 @@ class CircuitSimulator {
     toggleTheme() {
         this.darkMode = !this.darkMode;
         setDarkMode(this.darkMode);
+        this.canvasRenderer.setDarkMode(this.darkMode);
         this.applyTheme();
     }
 
@@ -2156,8 +1843,9 @@ class CircuitSimulator {
     }
 
     async saveBoardsToStorage() {
-        // Boards are now saved individually, so sync the entire object
-        await this.storageAdapter.setItem('savedBoards', this.savedBoards);
+        // DEPRECATED: Boards are now saved through BoardManager
+        // This method kept for backward compatibility but does nothing
+        console.warn('saveBoardsToStorage() is deprecated, boards are saved automatically through BoardManager');
     }
 
     getNextBoardName() {
@@ -2188,25 +1876,34 @@ class CircuitSimulator {
         return currentState !== this.lastSavedState;
     }
 
-    saveCurrentBoard(boardName) {
+    async saveCurrentBoard(boardName) {
         const state = this.getCurrentState();
-        this.savedBoards[boardName] = {
+        const boardData = {
             ...state,
             savedAt: Date.now(),
             createdFrom: this.currentBoardName ?
                 { type: 'board', name: this.currentBoardName } : null
         };
-        this.saveBoardsToStorage();
-        this.currentBoardName = boardName;
-        this.currentComponentName = null; // Clear component name when saving as board
-        this.lastSavedState = JSON.stringify(state);
-        this.updateCircuitNameDisplay();
-        this.updateBoardsList();
-        console.log(`Board saved: ${boardName}`);
+
+        const success = await this.boardManager.saveBoard(boardName, boardData);
+
+        if (success) {
+            await this.loadSavedBoards(); // Refresh local copy
+            this.currentBoardName = boardName;
+            this.currentComponentName = null; // Clear component name when saving as board
+            this.lastSavedState = JSON.stringify(state);
+            this.updateCircuitNameDisplay();
+            this.updateBoardsList();
+            console.log(`Board saved: ${boardName}`);
+        } else {
+            alert(`Failed to save board "${boardName}"`);
+        }
     }
 
-    loadBoard(boardName) {
-        if (!this.savedBoards[boardName]) {
+    async loadBoard(boardName) {
+        const board = await this.boardManager.loadBoard(boardName);
+
+        if (!board) {
             alert(`Board "${boardName}" not found.`);
             return;
         }
@@ -2217,7 +1914,6 @@ class CircuitSimulator {
             truthTablePanel.style.display = 'none';
         }
 
-        const board = this.savedBoards[boardName];
         this.components = JSON.parse(JSON.stringify(board.components || []));
         this.connections = JSON.parse(JSON.stringify(board.connections || []));
         this.nextId = board.nextId || 1;
@@ -2263,16 +1959,21 @@ class CircuitSimulator {
         console.log('New board created');
     }
 
-    deleteBoard(boardName) {
+    async deleteBoard(boardName) {
         if (confirm(`Are you sure you want to delete board "${boardName}"?`)) {
-            delete this.savedBoards[boardName];
-            this.saveBoardsToStorage();
-            if (this.currentBoardName === boardName) {
-                this.currentBoardName = null;
+            const success = await this.boardManager.deleteBoard(boardName);
+
+            if (success) {
+                await this.loadSavedBoards(); // Refresh local copy
+                if (this.currentBoardName === boardName) {
+                    this.currentBoardName = null;
+                }
+                this.updateBoardsList();
+                this.updateCurrentBoardDisplay();
+                console.log(`Board deleted: ${boardName}`);
+            } else {
+                alert(`Failed to delete board "${boardName}"`);
             }
-            this.updateBoardsList();
-            this.updateCurrentBoardDisplay();
-            console.log(`Board deleted: ${boardName}`);
         }
     }
 
@@ -2435,32 +2136,32 @@ class CircuitSimulator {
         document.getElementById('saveBoard').addEventListener('click', () => {
             // Always prompt for name (pre-filled with current name if exists)
             // This allows saving as a new board by changing the name
-            this.promptForBoardName(null, (boardName) => {
-                this.saveCurrentBoard(boardName);
+            this.promptForBoardName(null, async (boardName) => {
+                await this.saveCurrentBoard(boardName);
                 alert(`Board "${boardName}" saved successfully!`);
             });
         });
 
         // Load Board dropdown
-        document.getElementById('savedBoardsDropdown').addEventListener('change', (e) => {
+        document.getElementById('savedBoardsDropdown').addEventListener('change', async (e) => {
             const boardName = e.target.value;
             if (!boardName) return;
 
             if (this.hasUnsavedChanges()) {
-                this.showSaveOptionsDialog(() => {
-                    this.loadBoard(boardName);
+                this.showSaveOptionsDialog(async () => {
+                    await this.loadBoard(boardName);
                     e.target.value = ''; // Reset dropdown
                 });
             } else {
-                this.loadBoard(boardName);
+                await this.loadBoard(boardName);
                 e.target.value = ''; // Reset dropdown
             }
         });
 
         // Save Options Dialog buttons
-        document.getElementById('saveAsCurrentBoard').addEventListener('click', () => {
+        document.getElementById('saveAsCurrentBoard').addEventListener('click', async () => {
             if (this.currentBoardName) {
-                this.saveCurrentBoard(this.currentBoardName);
+                await this.saveCurrentBoard(this.currentBoardName);
             }
             this.hideSaveOptionsDialog();
             if (this.pendingActionAfterSave) {
@@ -2471,8 +2172,8 @@ class CircuitSimulator {
 
         document.getElementById('saveAsNewBoard').addEventListener('click', () => {
             this.hideSaveOptionsDialog();
-            this.promptForBoardName(null, (boardName) => {
-                this.saveCurrentBoard(boardName);
+            this.promptForBoardName(null, async (boardName) => {
+                await this.saveCurrentBoard(boardName);
                 if (this.pendingActionAfterSave) {
                     this.pendingActionAfterSave();
                     this.pendingActionAfterSave = null;
