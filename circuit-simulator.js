@@ -57,6 +57,8 @@ import {
 
 import { CanvasRenderer } from './src/rendering/CanvasRenderer.js';
 
+import { TruthTablePanel } from './src/ui/TruthTablePanel.js';
+
 class CircuitSimulator {
     constructor() {
         this.canvas = document.getElementById('breadboard');
@@ -98,6 +100,9 @@ class CircuitSimulator {
         // Initialize renderer (will be updated after components/connections are loaded)
         this.canvasRenderer = new CanvasRenderer(this.canvas, this.components, this.connections, this.darkMode);
 
+        // Initialize truth table panel
+        this.truthTablePanel = null;
+
         this.init();
     }
 
@@ -106,7 +111,7 @@ class CircuitSimulator {
         await this.loadSavedBoards();
         this.setupEventListeners();
         this.setupBoardManagementListeners();
-        this.setupDraggableTruthTable();
+        // Truth table dragging now handled by TruthTablePanel + Interact.js
         this.setupAutoSave();
         await this.loadBoardState();
         // Update renderer with loaded components and connections
@@ -239,7 +244,11 @@ class CircuitSimulator {
         });
 
         document.getElementById('closeTruthTable').addEventListener('click', () => {
-            document.getElementById('truthTablePanel').style.display = 'none';
+            if (this.truthTablePanel) {
+                this.truthTablePanel.hide();
+            } else {
+                document.getElementById('truthTablePanel').style.display = 'none';
+            }
             this.saveBoardState(); // Save state when truth table is hidden
         });
 
@@ -715,423 +724,43 @@ class CircuitSimulator {
     simulate() {
         simulateCircuit(this.components, this.connections);
         this.redraw();
+        this.updateTruthTableHighlight(); // Update truth table highlighting after simulation
     }
 
     generateTruthTable() {
-        const inputs = this.components.filter(c => c.type === 'INPUT').sort((a, b) =>
-            a.label.localeCompare(b.label));
-        const outputs = this.components.filter(c => c.type === 'OUTPUT').sort((a, b) =>
-            a.label.localeCompare(b.label));
+        // Initialize truth table panel if not already created
+        if (!this.truthTablePanel) {
+            this.truthTablePanel = new TruthTablePanel(
+                this.canvas,
+                this.components,
+                this.connections,
+                this.simulate.bind(this)
+            );
 
-        if (inputs.length === 0) {
-            alert('Please add at least one input to generate a truth table.');
-            return;
-        }
-
-        if (outputs.length === 0) {
-            alert('Please add at least one output to generate a truth table.');
-            return;
-        }
-
-        const numCombinations = Math.pow(2, inputs.length);
-        const table = [];
-
-        // Only reset column order if no saved state exists
-        if (!this.truthTableState || !this.truthTableState.columnOrder) {
-            this.truthTableColumnOrder = null;
-        }
-
-        // Generate all input combinations
-        for (let i = 0; i < numCombinations; i++) {
-            const row = { inputs: [], outputs: [] };
-
-            // Set input values
-            inputs.forEach((input, index) => {
-                const bitValue = (i >> (inputs.length - 1 - index)) & 1;
-                input.value = bitValue;
-                row.inputs.push(bitValue);
-            });
-
-            // Simulate circuit
-            this.simulate();
-
-            // Record output values
-            outputs.forEach(output => {
-                row.outputs.push(output.value !== null ? output.value : '?');
-            });
-
-            table.push(row);
-        }
-
-        // Store truth table data for highlighting
-        this.truthTableData = {
-            inputs: inputs,
-            outputs: outputs,
-            table: table
-        };
-
-        this.displayTruthTable(inputs, outputs, table);
-    }
-
-    displayTruthTable(inputs, outputs, table) {
-        const panel = document.getElementById('truthTablePanel');
-        const content = document.getElementById('truthTableContent');
-
-        // Store column order for drag-and-drop (indices into combined array)
-        if (!this.truthTableColumnOrder) {
-            this.truthTableColumnOrder = [];
-            for (let i = 0; i < inputs.length + outputs.length; i++) {
-                this.truthTableColumnOrder.push(i);
-            }
-        }
-
-        // Build table with two-level headers and equal-width columns
-        let html = '<table class="truth-table"><thead>';
-
-        // First header row: Input/Output groups
-        html += '<tr class="group-header">';
-        if (inputs.length > 0) {
-            html += `<th colspan="${inputs.length}" class="group-input">Inputs</th>`;
-        }
-        if (outputs.length > 0) {
-            html += `<th colspan="${outputs.length}" class="group-output">Outputs</th>`;
-        }
-        html += '</tr>';
-
-        // Second header row: Individual column headers (draggable)
-        html += '<tr class="column-header">';
-
-        // Render columns in current order
-        this.truthTableColumnOrder.forEach((colIndex, displayIndex) => {
-            const isInput = colIndex < inputs.length;
-            const dataIndex = isInput ? colIndex : colIndex - inputs.length;
-            const label = isInput ? inputs[dataIndex].label : outputs[dataIndex].label;
-            const colType = isInput ? 'input' : 'output';
-
-            html += `<th class="draggable-header"
-                         draggable="true"
-                         data-col-index="${colIndex}"
-                         data-col-type="${colType}"
-                         data-display-index="${displayIndex}">
-                        <span class="col-label">${label}</span>
-                    </th>`;
-        });
-
-        html += '</tr></thead><tbody>';
-
-        // Data rows - render in column order
-        table.forEach((row, rowIndex) => {
-            html += `<tr data-row-index="${rowIndex}">`;
-
-            this.truthTableColumnOrder.forEach(colIndex => {
-                const isInput = colIndex < inputs.length;
-                const dataIndex = isInput ? colIndex : colIndex - inputs.length;
-                const value = isInput ? row.inputs[dataIndex] : row.outputs[dataIndex];
-                const cellClass = isInput ? 'input-cell' : 'output-cell';
-
-                html += `<td class="${cellClass}">${isInput ? value : '<strong>' + value + '</strong>'}</td>`;
-            });
-
-            html += '</tr>';
-        });
-
-        html += '</tbody></table>';
-        content.innerHTML = html;
-
-        // Add resize handles if not already present
-        if (!panel.querySelector('.resize-handle')) {
-            const corners = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
-            corners.forEach(corner => {
-                const handle = document.createElement('div');
-                handle.className = `resize-handle ${corner}`;
-                panel.appendChild(handle);
-            });
-        }
-
-        // Calculate minimum width based on columns (60px per column + padding/borders)
-        const numColumns = inputs.length + outputs.length;
-        const minColumnWidth = 60; // matches CSS min-width
-        const padding = 40; // panel padding
-        const minWidth = Math.max(250, (numColumns * minColumnWidth) + padding + (numColumns * 2)); // +2 for borders
-
-        // Apply saved size if available, otherwise use minimum width
-        if (this.truthTableState && this.truthTableState.width) {
-            panel.style.width = this.truthTableState.width;
-        } else {
-            panel.style.width = minWidth + 'px';
-        }
-
-        if (this.truthTableState && this.truthTableState.height) {
-            panel.style.height = this.truthTableState.height;
-        } else {
-            panel.style.height = 'auto'; // Let content determine initial height
-        }
-
-        // Apply saved position if available
-        if (this.truthTableState) {
-            if (this.truthTableState.left) {
-                panel.style.left = this.truthTableState.left;
-            }
-            if (this.truthTableState.top) {
-                panel.style.top = this.truthTableState.top;
-            }
-            if (this.truthTableState.transform) {
-                panel.style.transform = this.truthTableState.transform;
-            }
-        }
-
-        // Check if panel is already visible (to preserve position on redraw)
-        const wasVisible = panel.style.display !== 'none';
-
-        panel.style.display = 'block';
-
-        // Setup resize handles
-        this.setupTruthTableResize(panel);
-
-        // Setup drag and drop for column reordering
-        this.setupTruthTableDragDrop(inputs, outputs, table);
-
-        // Highlight the row matching current circuit state
-        this.updateTruthTableHighlight();
-
-        // Position panel: only use smart positioning on first open if no saved position
-        if (!wasVisible) {
-            console.log('displayTruthTable: !wasVisible = true, truthTableState =', this.truthTableState);
-            const hasSavedPosition = this.truthTableState &&
-                                   (this.truthTableState.left || this.truthTableState.transform);
-            console.log('displayTruthTable: hasSavedPosition =', hasSavedPosition);
-
-            if (!hasSavedPosition) {
-                // No saved position, use smart positioning
-                console.log('displayTruthTable: Calling positionPanelSmartly()');
-                positionPanelSmartly(panel, this.canvas, this.components);
-            } else {
-                console.log('displayTruthTable: Using saved position, skipping smart positioning');
-            }
-
-            // Save board state when truth table is first shown
-            this.saveBoardState();
-        } else {
-            console.log('displayTruthTable: wasVisible = true, skipping positioning');
-        }
-    }
-
-    setupTruthTableDragDrop(inputs, outputs, table) {
-        const headers = document.querySelectorAll('#truthTableContent .draggable-header');
-        let draggedElement = null;
-        let draggedIndex = null;
-        let draggedType = null;
-
-        headers.forEach(header => {
-            header.addEventListener('dragstart', (e) => {
-                draggedElement = header;
-                draggedIndex = parseInt(header.dataset.displayIndex);
-                draggedType = header.dataset.colType; // 'input' or 'output'
-                header.classList.add('dragging');
-                e.dataTransfer.effectAllowed = 'move';
-            });
-
-            header.addEventListener('dragover', (e) => {
-                const targetType = header.dataset.colType;
-                const targetIndex = parseInt(header.dataset.displayIndex);
-
-                // Only allow drop if same type (input->input, output->output)
-                if (draggedType === targetType && draggedIndex !== targetIndex) {
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = 'move';
-                    header.classList.add('drag-over');
-                } else if (draggedType !== targetType) {
-                    e.dataTransfer.dropEffect = 'none';
-                    header.classList.add('drag-forbidden');
-                }
-            });
-
-            header.addEventListener('dragleave', (e) => {
-                header.classList.remove('drag-over');
-                header.classList.remove('drag-forbidden');
-            });
-
-            header.addEventListener('drop', (e) => {
-                e.preventDefault();
-                header.classList.remove('drag-over');
-                header.classList.remove('drag-forbidden');
-
-                const targetIndex = parseInt(header.dataset.displayIndex);
-                const targetType = header.dataset.colType;
-
-                // Only reorder if same type and different index
-                if (draggedIndex !== null && draggedIndex !== targetIndex && draggedType === targetType) {
-                    // Reorder columns
-                    const movedColumn = this.truthTableColumnOrder[draggedIndex];
-                    this.truthTableColumnOrder.splice(draggedIndex, 1);
-                    this.truthTableColumnOrder.splice(targetIndex, 0, movedColumn);
-
-                    // Save the updated column order
-                    this.saveTruthTableState();
-                    this.saveBoardState(); // Persist to localStorage
-
-                    // Redraw table with new order
-                    this.displayTruthTable(inputs, outputs, table);
-                }
-            });
-
-            header.addEventListener('dragend', (e) => {
-                header.classList.remove('dragging');
-                headers.forEach(h => {
-                    h.classList.remove('drag-over');
-                    h.classList.remove('drag-forbidden');
-                });
-                draggedElement = null;
-                draggedIndex = null;
-                draggedType = null;
-            });
-        });
-    }
-
-    setupTruthTableResize(panel) {
-        const handles = panel.querySelectorAll('.resize-handle');
-
-        handles.forEach(handle => {
-            let isResizing = false;
-            let startX, startY, startWidth, startHeight, startLeft, startTop;
-
-            handle.addEventListener('mousedown', (e) => {
-                e.stopPropagation(); // Prevent dragging when resizing
-                isResizing = true;
-                startX = e.clientX;
-                startY = e.clientY;
-
-                const rect = panel.getBoundingClientRect();
-                startWidth = rect.width;
-                startHeight = rect.height;
-                startLeft = rect.left;
-                startTop = rect.top;
-
-                // Remove transform for easier calculations
-                if (panel.style.transform && panel.style.transform !== 'none') {
-                    panel.style.transform = 'none';
-                    panel.style.left = startLeft + 'px';
-                    panel.style.top = startTop + 'px';
-                }
-
-                document.body.style.cursor = handle.style.cursor;
-                e.preventDefault();
-            });
-
-            const handleMouseMove = (e) => {
-                if (!isResizing) return;
-
-                const deltaX = e.clientX - startX;
-                const deltaY = e.clientY - startY;
-
-                let newWidth = startWidth;
-                let newHeight = startHeight;
-                let newLeft = startLeft;
-                let newTop = startTop;
-
-                if (handle.classList.contains('top-left')) {
-                    newWidth = startWidth - deltaX;
-                    newHeight = startHeight - deltaY;
-                    newLeft = startLeft + deltaX;
-                    newTop = startTop + deltaY;
-                } else if (handle.classList.contains('top-right')) {
-                    newWidth = startWidth + deltaX;
-                    newHeight = startHeight - deltaY;
-                    newTop = startTop + deltaY;
-                } else if (handle.classList.contains('bottom-left')) {
-                    newWidth = startWidth - deltaX;
-                    newHeight = startHeight + deltaY;
-                    newLeft = startLeft + deltaX;
-                } else if (handle.classList.contains('bottom-right')) {
-                    newWidth = startWidth + deltaX;
-                    newHeight = startHeight + deltaY;
-                }
-
-                // Apply minimum constraints
-                const minWidth = 200;
-                const minHeight = 150;
-
-                if (newWidth >= minWidth) {
-                    panel.style.width = newWidth + 'px';
-                    if (handle.classList.contains('top-left') || handle.classList.contains('bottom-left')) {
-                        panel.style.left = newLeft + 'px';
-                    }
-                }
-
-                if (newHeight >= minHeight) {
-                    panel.style.height = newHeight + 'px';
-                    if (handle.classList.contains('top-left') || handle.classList.contains('top-right')) {
-                        panel.style.top = newTop + 'px';
-                    }
-                }
+            // Hook up state persistence
+            this.truthTablePanel.onStateChange = (state) => {
+                this.truthTableState = state;
+                this.saveBoardState();
             };
 
-            const handleMouseUp = () => {
-                if (isResizing) {
-                    isResizing = false;
-                    document.body.style.cursor = '';
-                    document.removeEventListener('mousemove', handleMouseMove);
-                    document.removeEventListener('mouseup', handleMouseUp);
+            // Restore saved state if available
+            if (this.truthTableState) {
+                this.truthTablePanel.setState(this.truthTableState);
+            }
+        }
 
-                    // Save the new size
-                    this.saveTruthTableState();
-                    this.saveBoardState(); // Persist to localStorage
-                }
-            };
+        // Generate and display truth table
+        const success = this.truthTablePanel.generate();
+        if (success) {
+            this.truthTablePanel.display();
 
-            document.addEventListener('mousemove', handleMouseMove);
-            document.addEventListener('mouseup', handleMouseUp);
-        });
-    }
-
-    saveTruthTableState() {
-        // Save Truth Table customization (column order, panel size, and position)
-        const panel = document.getElementById('truthTablePanel');
-
-        if (panel && panel.style.display !== 'none') {
-            this.truthTableState = {
-                columnOrder: this.truthTableColumnOrder ? [...this.truthTableColumnOrder] : null,
-                width: panel.style.width || null,
-                height: panel.style.height || null,
-                left: panel.style.left || null,
-                top: panel.style.top || null,
-                transform: panel.style.transform || null
-            };
+            // Store reference for backward compatibility
+            this.truthTableData = this.truthTablePanel.truthTableData;
         }
     }
 
-    restoreTruthTableState() {
-        // Restore Truth Table customization if saved
-        if (!this.truthTableState) return;
-
-        // Restore column order (independent of panel existence)
-        if (this.truthTableState.columnOrder) {
-            this.truthTableColumnOrder = [...this.truthTableState.columnOrder];
-        }
-
-        // Restore panel styles only if panel exists
-        const panel = document.getElementById('truthTablePanel');
-        if (!panel) return;
-
-        // Restore panel size (will be applied when truth table is opened)
-        if (this.truthTableState.width) {
-            panel.style.width = this.truthTableState.width;
-        }
-        if (this.truthTableState.height) {
-            panel.style.height = this.truthTableState.height;
-        }
-
-        // Restore panel position
-        if (this.truthTableState.left) {
-            panel.style.left = this.truthTableState.left;
-        }
-        if (this.truthTableState.top) {
-            panel.style.top = this.truthTableState.top;
-        }
-        if (this.truthTableState.transform) {
-            panel.style.transform = this.truthTableState.transform;
-        }
-    }
+    // Old truth table methods removed - now handled by TruthTablePanel class
+    // (displayTruthTable, setupTruthTableDragDrop, setupTruthTableResize, saveTruthTableState, restoreTruthTableState)
 
     getCurrentInputState() {
         // Get current input values sorted by label (same order as truth table)
@@ -1161,28 +790,8 @@ class CircuitSimulator {
     }
 
     updateTruthTableHighlight() {
-        const panel = document.getElementById('truthTablePanel');
-
-        // Only update if truth table is visible
-        if (!panel || panel.style.display === 'none') {
-            return;
-        }
-
-        if (!this.truthTableData) {
-            return; // No truth table data available
-        }
-
-        // Remove existing highlighting
-        const allRows = panel.querySelectorAll('tbody tr');
-        allRows.forEach(row => row.classList.remove('truth-table-active'));
-
-        // Find and highlight matching row
-        const matchingRowIndex = this.findMatchingTruthTableRow();
-        if (matchingRowIndex >= 0) {
-            const matchingRow = panel.querySelector(`tbody tr[data-row-index="${matchingRowIndex}"]`);
-            if (matchingRow) {
-                matchingRow.classList.add('truth-table-active');
-            }
+        if (this.truthTablePanel) {
+            this.truthTablePanel.updateHighlight();
         }
     }
 
@@ -1577,7 +1186,9 @@ class CircuitSimulator {
 
             // Restore Truth Table state if saved
             this.truthTableState = componentData.truthTableState ? JSON.parse(JSON.stringify(componentData.truthTableState)) : null;
-            this.restoreTruthTableState();
+            if (this.truthTablePanel) {
+                this.truthTablePanel.setState(this.truthTableState);
+            }
 
             // Recalculate port positions for all components (migrate old components to new port positions)
             this.migrateComponentPorts();
@@ -1725,45 +1336,7 @@ class CircuitSimulator {
     }
 
     // Draggable Truth Table
-    setupDraggableTruthTable() {
-        const panel = document.getElementById('truthTablePanel');
-        const header = panel.querySelector('.panel-header');
-        let isDragging = false;
-        let currentX, currentY, initialX, initialY;
-
-        header.addEventListener('mousedown', (e) => {
-            if (e.target.id === 'closeTruthTable') return; // Don't drag when clicking close button
-
-            isDragging = true;
-            initialX = e.clientX - (panel.offsetLeft || 0);
-            initialY = e.clientY - (panel.offsetTop || 0);
-
-            // Remove transform to use absolute positioning
-            panel.style.transform = 'none';
-            panel.style.left = panel.offsetLeft + 'px';
-            panel.style.top = panel.offsetTop + 'px';
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            if (!isDragging) return;
-
-            e.preventDefault();
-            currentX = e.clientX - initialX;
-            currentY = e.clientY - initialY;
-
-            panel.style.left = currentX + 'px';
-            panel.style.top = currentY + 'px';
-        });
-
-        document.addEventListener('mouseup', () => {
-            if (isDragging) {
-                isDragging = false;
-                // Save the new position
-                this.saveTruthTableState();
-                this.saveBoardState(); // Persist to localStorage
-            }
-        });
-    }
+    // setupDraggableTruthTable removed - now handled by TruthTablePanel + Interact.js
 
     // Auto-Save Functionality
     setupAutoSave() {
@@ -1908,11 +1481,18 @@ class CircuitSimulator {
             return;
         }
 
-        // Hide Truth Table when loading a different board
+        // Hide and clear Truth Table when loading a different board
         const truthTablePanel = document.getElementById('truthTablePanel');
         if (truthTablePanel) {
             truthTablePanel.style.display = 'none';
         }
+
+        // Clear truth table panel instance so it regenerates for the new board
+        if (this.truthTablePanel) {
+            this.truthTablePanel.hide();
+        }
+        this.truthTablePanel = null;
+        this.truthTableData = null;
 
         this.components = JSON.parse(JSON.stringify(board.components || []));
         this.connections = JSON.parse(JSON.stringify(board.connections || []));
@@ -1920,9 +1500,8 @@ class CircuitSimulator {
         this.currentBoardName = boardName;
         this.currentComponentName = null; // Clear component name when loading board
 
-        // Restore Truth Table state if saved
+        // Restore Truth Table state if saved (will be applied when truth table is next generated)
         this.truthTableState = board.truthTableState ? JSON.parse(JSON.stringify(board.truthTableState)) : null;
-        this.restoreTruthTableState();
 
         // Recalculate port positions for all components (migrate old boards to new port positions)
         this.migrateComponentPorts();
@@ -1935,11 +1514,17 @@ class CircuitSimulator {
     }
 
     createNewBoard() {
-        // Hide Truth Table when creating a new board
+        // Hide and clear Truth Table when creating a new board
         const truthTablePanel = document.getElementById('truthTablePanel');
         if (truthTablePanel) {
             truthTablePanel.style.display = 'none';
         }
+
+        // Clear truth table panel instance so it regenerates for the new board
+        if (this.truthTablePanel) {
+            this.truthTablePanel.hide();
+        }
+        this.truthTablePanel = null;
 
         this.components = [];
         this.connections = [];

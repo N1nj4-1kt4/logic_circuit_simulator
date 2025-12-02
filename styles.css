@@ -539,6 +539,63 @@ header p {
     background: transparent;
 }
 
+/* ===== Tabulator Overrides for Truth Table ===== */
+.truth-table-panel .tabulator {
+    border: none;
+    font-size: 14px;
+    background: transparent;
+    width: 100%;
+}
+
+.truth-table-panel .tabulator-header {
+    background: #f5f7fa;
+    border-bottom: 2px solid #667eea;
+}
+
+.truth-table-panel .tabulator-col {
+    background: #f5f7fa;
+}
+
+.truth-table-panel .tabulator-col-content {
+    padding: 8px;
+    text-align: center;
+    justify-content: center;
+}
+
+.truth-table-panel .tabulator-row.tabulator-selected {
+    background-color: rgba(76, 175, 80, 0.2) !important;
+}
+
+.truth-table-panel .tabulator-row.tabulator-selected:hover {
+    background-color: rgba(76, 175, 80, 0.3) !important;
+}
+
+.truth-table-panel .tabulator-cell {
+    border-right: 1px solid #ddd;
+    text-align: center;
+    padding: 6px;
+    vertical-align: middle;
+}
+
+.truth-table-panel .input-cell {
+    background-color: #e3f2fd;
+}
+
+.truth-table-panel .output-cell {
+    background-color: #fff3e0;
+}
+
+/* Interact.js resize handles */
+.truth-table-panel {
+    touch-action: none;
+}
+
+/* Ensure Tabulator fills available space */
+#truthTableContent {
+    width: 100%;
+    height: 100%;
+}
+
 /* Dialog Panels */
 .dialog-panel {
     position: fixed;
@@ -944,6 +1001,52 @@ body.dark-mode #truthTableContent .input-cell {
 
 body.dark-mode #truthTableContent .output-cell {
     background: rgba(155, 89, 182, 0.1);
+}
+
+/* Dark mode - Tabulator overrides */
+body.dark-mode .truth-table-panel .tabulator {
+    background: #1a1a2e;
+    color: #e9e9e9;
+    width: 100%;
+}
+
+body.dark-mode .truth-table-panel .tabulator-header {
+    background: #2a2a3e;
+    border-bottom-color: #53a8f4;
+}
+
+body.dark-mode .truth-table-panel .tabulator-col {
+    background: #2a2a3e;
+    color: #e9e9e9;
+    border-right-color: #444;
+}
+
+body.dark-mode .truth-table-panel .tabulator-col-content {
+    text-align: center;
+    justify-content: center;
+}
+
+body.dark-mode .truth-table-panel .tabulator-row {
+    background: #1a1a2e;
+    color: #e9e9e9;
+}
+
+body.dark-mode .truth-table-panel .tabulator-row.tabulator-selected {
+    background-color: rgba(46, 125, 50, 0.4) !important;
+}
+
+body.dark-mode .truth-table-panel .tabulator-cell {
+    border-right-color: #444;
+    text-align: center;
+    vertical-align: middle;
+}
+
+body.dark-mode .truth-table-panel .input-cell {
+    background-color: rgba(83, 168, 244, 0.15);
+}
+
+body.dark-mode .truth-table-panel .output-cell {
+    background-color: rgba(155, 89, 182, 0.15);
 }
 
 body.dark-mode .form-group input[type="text"],

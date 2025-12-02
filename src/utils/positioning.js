@@ -216,10 +216,12 @@ export function positionPanelSmartly(panel, canvas, components) {
         const best = positions[0];
         console.log('Chose best position:', best);
 
-        // Apply the position (remove transform and use absolute positioning)
-        panel.style.transform = 'none';
-        panel.style.left = best.left + 'px';
-        panel.style.top = best.top + 'px';
+        // Apply the position using transform (compatible with Interact.js)
+        panel.style.left = '0';
+        panel.style.top = '0';
+        panel.style.transform = `translate(${best.left}px, ${best.top}px)`;
+        panel.setAttribute('data-x', best.left);
+        panel.setAttribute('data-y', best.top);
     } else {
         console.log('No valid positions found, using fallback (centered in canvas)');
         // Fallback: center within canvas, even if it overlaps components
@@ -240,8 +242,11 @@ export function positionPanelSmartly(panel, canvas, components) {
         );
         console.log('Fallback position:', fallbackLeft, fallbackTop);
 
-        panel.style.transform = 'none';
-        panel.style.left = fallbackLeft + 'px';
-        panel.style.top = fallbackTop + 'px';
+        // Apply the position using transform (compatible with Interact.js)
+        panel.style.left = '0';
+        panel.style.top = '0';
+        panel.style.transform = `translate(${fallbackLeft}px, ${fallbackTop}px)`;
+        panel.setAttribute('data-x', fallbackLeft);
+        panel.setAttribute('data-y', fallbackTop);
     }
 }
