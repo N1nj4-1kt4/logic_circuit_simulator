@@ -15,8 +15,6 @@
         <div class="main-content">
             <!-- Toolbar -->
             <div class="toolbar">
-                <h3>Components</h3>
-
                 <div class="tool-section">
                     <h4>Logic Gates</h4>
                     <div class="gate-grid">
@@ -101,11 +99,23 @@
 
                 <div class="tool-section">
                     <h4>Simulation Controls</h4>
-                    <button class="action-btn" id="simulate">▶ Simulate</button>
-                    <button class="action-btn" id="truthTable">📊 Truth Table</button>
-                    <button class="action-btn" id="prevStep">◀ Previous</button>
-                    <button class="action-btn" id="nextStep">Next ▶</button>
+                    <button class="action-btn" id="simulate">▶ Simulation</button>
+                    <div class="simulation-stepper">
+                        <button class="step-btn" id="prevStep" title="Previous input combination" aria-label="Previous">
+                            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12 4L6 10L12 16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span>Prev</span>
+                        </button>
+                        <button class="step-btn" id="nextStep" title="Next input combination" aria-label="Next">
+                            <span>Next</span>
+                            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M8 4L14 10L8 16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                    </div>
                     <button class="action-btn" id="resetSim">Reset</button>
+                    <button class="action-btn" id="truthTable">📊 Truth Table</button>
                 </div>
 
                 <div class="tool-section">

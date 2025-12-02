@@ -6,19 +6,21 @@ Track your progress through the refactoring phases here.
 
 ## Overall Status
 
-**Current Phase:** Phase 4 Complete, Ready for Phase 5
+**Current Phase:** Phase 5.2.1 Complete (Toolbar extracted)
 **Branch:** `refactor/modernization`
 **Started:** 2025-11-27
-**Last Updated:** 2025-11-27
-**Approach:** Hybrid approach - OOP for storage layer, functional for core logic, rendering layer extracted
-**Next Step:** Phase 5 - Extract UI Components
+**Last Updated:** 2025-12-02
+**Approach:** Hybrid approach - OOP for storage layer, functional for core logic, rendering layer extracted, UI components being modularized
+**Next Step:** Phase 5.2.2 - Extract DialogManager, Phase 5.2.3 - Extract ThemeManager
 
 ### Recent Accomplishments
 - ✅ Phase 2 fully integrated with comprehensive tests (60/60 passing)
 - ✅ Phase 3 fully tested with comprehensive test suite (88/88 passing)
 - ✅ Phase 4 rendering layer extracted (~500 lines removed from main file)
+- ✅ Phase 5.1 Truth Table Panel extracted with Tabulator + Interact.js
+- ✅ Phase 5.2.1 Toolbar extracted (~300 lines removed from main file)
 - ✅ All 148 tests passing
-- ✅ Dev server running successfully at http://localhost:3001/
+- ✅ Dev server running successfully at http://localhost:3002/
 - ✅ Application fully functional with new architecture
 
 ---
@@ -247,28 +249,47 @@ Track your progress through the refactoring phases here.
 
 ---
 
-### Phase 5: Extract UI Components ⏸️ Not Started
+### Phase 5: Extract UI Components ⏳ In Progress
 **Goal:** Modularize non-canvas UI (Truth Table, Dialogs, Toolbar)
 **Timeline:** Week 5
 
-#### 5.1: Truth Table Panel
-- [ ] Create `src/ui/TruthTablePanel.js`
-- [ ] Integrate Tabulator library
-- [ ] Integrate Interact.js for drag/resize
-- [ ] Implement `show()`, `hide()`
-- [ ] Implement `positionPanel()` (smart positioning)
-- [ ] Implement `saveState()`, `restoreState()`
-- [ ] Update `circuit-simulator.js` to use TruthTablePanel
-- [ ] Test: Truth table works (drag, resize, reorder)
+#### 5.1: Truth Table Panel ✅ COMPLETE
+- [x] Create `src/ui/TruthTablePanel.js`
+- [x] Integrate Tabulator library
+- [x] Integrate Interact.js for drag/resize
+- [x] Implement `generate()`, `display()`, `hide()`
+- [x] Implement smart positioning
+- [x] Implement `saveState()`, `restoreState()`
+- [x] Update `circuit-simulator.js` to use TruthTablePanel
+- [x] Test: Truth table works (drag, resize, reorder)
 
-#### 5.2: Other UI Components
+#### 5.2.1: Toolbar ✅ COMPLETE
+- [x] Create `src/ui/Toolbar.js`
+- [x] Implement tool selection (gates, I/O, custom components)
+- [x] Implement mode management (place, connect, delete, neutral)
+- [x] Implement action buttons (simulate, clear, truth table, etc.)
+- [x] Implement component & board management buttons
+- [x] Implement UI update methods (mode indicator, dropdowns, circuit name)
+- [x] Update `circuit-simulator.js` to use Toolbar with callbacks
+- [x] Remove old toolbar code (~300 lines extracted)
+- [x] Test: All toolbar buttons work correctly
+
+**Status:** ✅ Toolbar extracted and fully functional
+**Deliverable:** ~300 lines removed from circuit-simulator.js, clean separation of toolbar UI
+
+#### 5.2.2: DialogManager ⏸️ Not Started
 - [ ] Create `src/ui/DialogManager.js`
-- [ ] Create `src/ui/Toolbar.js`
-- [ ] Create `src/ui/ThemeManager.js`
-- [ ] Update `circuit-simulator.js` to use UI components
-- [ ] Test: All dialogs and toolbar work
+- [ ] Extract all dialog methods (save, manage, rename, help, etc.)
+- [ ] Update `circuit-simulator.js` to use DialogManager
+- [ ] Test: All dialogs work correctly
 
-**Deliverable:** ✅ UI components modularized, Tabulator + Interact.js integrated
+#### 5.2.3: ThemeManager ⏸️ Not Started
+- [ ] Create `src/ui/ThemeManager.js`
+- [ ] Extract theme toggle and apply methods
+- [ ] Update `circuit-simulator.js` to use ThemeManager
+- [ ] Test: Dark mode toggle works
+
+**Overall Phase 5 Deliverable:** ✅ UI components modularized, Tabulator + Interact.js integrated (partial - 2/4 components done)
 
 ---
 

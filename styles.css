@@ -160,6 +160,82 @@ header p {
     padding: 10px 4px;
 }
 
+/* ===== Simulation Stepper Controls ===== */
+.simulation-stepper {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.step-btn {
+    flex: 1;
+    height: 40px;
+    padding: 0 10px;
+    border: 2px solid #764ba2;
+    background: white;
+    color: #764ba2;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 0.9em;
+    font-weight: 500;
+}
+
+.step-btn svg {
+    width: 16px;
+    height: 16px;
+    transition: transform 0.2s ease;
+}
+
+.step-btn:hover {
+    background: #764ba2;
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(118, 75, 162, 0.3);
+}
+
+.step-btn:hover svg {
+    transform: scale(1.1);
+}
+
+.step-btn:active {
+    transform: translateY(0px);
+}
+
+.step-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.step-btn:disabled:hover {
+    background: white;
+    color: #764ba2;
+    box-shadow: none;
+}
+
+/* Dark mode support for simulation stepper */
+[data-theme="dark"] .step-btn {
+    background: #2a2a3e;
+    border-color: #9b7dc4;
+    color: #9b7dc4;
+}
+
+[data-theme="dark"] .step-btn:hover {
+    background: #9b7dc4;
+    color: #2a2a3e;
+}
+
+[data-theme="dark"] .step-btn:disabled:hover {
+    background: #2a2a3e;
+    color: #9b7dc4;
+}
+
 /* Custom Components Dropdown */
 .custom-dropdown {
     width: 100%;
@@ -349,7 +425,7 @@ header p {
 
 #truthTableContent {
     flex: 1;
-    overflow: auto;
+    overflow: hidden;
     min-height: 0;
 }
 

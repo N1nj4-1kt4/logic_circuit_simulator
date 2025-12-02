@@ -173,11 +173,12 @@ export class TruthTablePanel {
             columns: columns,
             data: this.truthTableData.table,
             layout: 'fitColumns',
-            height: '100%',
+            // Don't set height - let it fill the flex container naturally
             selectable: 1, // Single row selection
             movableColumns: true,
             columnHeaderVertAlign: 'bottom',
             reactiveData: false,
+            maxHeight: '100%', // Limit to container height
         });
         console.log('✅ Tabulator instance created:', this.table);
 

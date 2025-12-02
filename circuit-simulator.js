@@ -58,6 +58,7 @@ import {
 import { CanvasRenderer } from './src/rendering/CanvasRenderer.js';
 
 import { TruthTablePanel } from './src/ui/TruthTablePanel.js';
+import { Toolbar } from './src/ui/Toolbar.js';
 
 class CircuitSimulator {
     constructor() {
@@ -103,6 +104,23 @@ class CircuitSimulator {
         // Initialize truth table panel
         this.truthTablePanel = null;
 
+        // Initialize toolbar with callbacks
+        this.toolbar = new Toolbar({
+            onToolSelect: (tool) => this.handleToolSelect(tool),
+            onModeChange: (mode) => this.handleModeChange(mode),
+            onClearBoard: () => this.handleClearBoard(),
+            onSimulate: () => this.toggleSimulation(),
+            onTruthTable: () => this.handleTruthTable(),
+            onSaveComponent: () => this.showSaveComponentDialog(),
+            onManageComponents: () => this.showManageComponentsDialog(),
+            onExportComponent: () => this.exportComponentToFile(),
+            onImportComponent: () => this.handleImportComponent(),
+            onNewBoard: () => this.handleNewBoard(),
+            onSaveBoard: () => this.handleSaveBoard(),
+            onLoadBoard: (boardName) => this.loadBoard(boardName),
+            onSimulationStep: (direction) => this.handleSimulationStep(direction)
+        });
+
         this.init();
     }
 
@@ -118,9 +136,18 @@ class CircuitSimulator {
         this.canvasRenderer.updateComponents(this.components);
         this.canvasRenderer.updateConnections(this.connections);
         this.canvasRenderer.render();
-        this.updateCustomComponentsList();
-        this.updateBoardsList();
-        this.updateCircuitNameDisplay();
+
+        // Initialize toolbar (after DOM is ready)
+        this.toolbar.init();
+
+        // Update toolbar displays
+        this.toolbar.updateCustomComponentsList(this.customComponents);
+        this.toolbar.updateBoardsList(this.savedBoards, this.currentBoardName);
+        this.toolbar.updateCircuitNameDisplay(
+            this.currentComponentName || this.currentBoardName,
+            !!this.currentComponentName
+        );
+
         this.applyTheme();
     }
 
@@ -134,129 +161,86 @@ class CircuitSimulator {
         };
     }
 
-    exitToNeutralMode() {
-        // Clear all selections
-        document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('selected'));
-        document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('active'));
+    // ====================================
+    // Toolbar Handler Methods
+    // ====================================
 
-        // Reset state
-        this.selectedTool = null;
-        this.mode = 'neutral';
-        this.connectStart = null;
-
-        // Update UI
-        this.updateModeIndicator();
-        this.redraw(); // Clear any visual artifacts (like incomplete connector lines)
-
-        // Visual feedback
-        console.log('Exited to neutral mode');
+    handleToolSelect(tool) {
+        this.selectedTool = tool;
     }
 
+    handleModeChange(mode) {
+        this.mode = mode;
+        this.connectStart = null;
+        this.toolbar.setConnectionStart(false);
+        this.redraw();
+    }
+
+    handleClearBoard() {
+        this.showSaveOptionsDialog(() => {
+            this.components = [];
+            this.connections = [];
+            this.nextId = 1;
+            this.currentBoardName = null;
+            this.currentComponentName = null;
+            this.toolbar.updateCircuitNameDisplay(null, false);
+            this.redraw();
+        });
+    }
+
+    handleTruthTable() {
+        // Generate and show truth table
+        this.generateTruthTable();
+    }
+
+    handleImportComponent() {
+        // Trigger the hidden file input for component import
+        console.log('handleImportComponent called');
+        const fileInput = document.getElementById('importFile');
+        console.log('File input element:', fileInput);
+        if (fileInput) {
+            console.log('Triggering file input click');
+            fileInput.click();
+        } else {
+            console.error('importFile element not found in DOM');
+        }
+    }
+
+    handleNewBoard() {
+        this.createNewBoard();
+    }
+
+    handleSaveBoard() {
+        // Show save options dialog to let user choose save method
+        this.showSaveOptionsDialog(null);
+    }
+
+    handleSimulationStep(direction) {
+        if (direction === 'next') {
+            this.stepSimulation(1);
+        } else if (direction === 'prev') {
+            this.stepSimulation(-1);
+        } else if (direction === 'reset') {
+            this.resetSimulation();
+        }
+    }
+
+    toggleSimulation() {
+        if (this.isAutoCycling) {
+            this.stopAutoCycle();
+        } else {
+            this.startAutoCycle();
+        }
+    }
+
+    // ====================================
+    // End of Toolbar Handler Methods
+    // ====================================
+
     setupEventListeners() {
-        // Tool selection with toggle
-        document.querySelectorAll('.tool-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const isAlreadySelected = e.currentTarget.classList.contains('selected');
+        // NOTE: Toolbar button event listeners now handled by Toolbar class
 
-                // Clear all selections
-                document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('selected'));
-                document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('active'));
-
-                if (isAlreadySelected) {
-                    // Toggle off - return to neutral mode
-                    this.selectedTool = null;
-                    this.mode = 'neutral';
-                } else {
-                    // Select this tool
-                    e.currentTarget.classList.add('selected');
-                    this.selectedTool = e.currentTarget.dataset.type;
-                    this.mode = 'place';
-                }
-                this.updateModeIndicator();
-            });
-        });
-
-        // Action buttons with toggle
-        document.getElementById('connectMode').addEventListener('click', () => {
-            const btn = document.getElementById('connectMode');
-            const isAlreadyActive = btn.classList.contains('active');
-
-            // Clear all selections
-            document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('selected'));
-            document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('active'));
-            this.selectedTool = null;
-
-            if (isAlreadyActive) {
-                // Toggle off - return to neutral mode
-                this.mode = 'neutral';
-                this.connectStart = null;
-            } else {
-                // Activate connect mode
-                btn.classList.add('active');
-                this.mode = 'connect';
-                this.connectStart = null;
-            }
-            this.updateModeIndicator();
-        });
-
-        document.getElementById('deleteMode').addEventListener('click', () => {
-            const btn = document.getElementById('deleteMode');
-            const isAlreadyActive = btn.classList.contains('active');
-
-            // Clear all selections
-            document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('selected'));
-            document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('active'));
-            this.selectedTool = null;
-
-            if (isAlreadyActive) {
-                // Toggle off - return to neutral mode
-                this.mode = 'neutral';
-            } else {
-                // Activate delete mode
-                btn.classList.add('active');
-                this.mode = 'delete';
-            }
-            this.updateModeIndicator();
-        });
-
-        document.getElementById('clearBoard').addEventListener('click', () => {
-            if (this.hasUnsavedChanges()) {
-                this.showSaveOptionsDialog(() => {
-                    this.createNewBoard();
-                });
-            } else {
-                if (confirm('Clear entire board?')) {
-                    this.createNewBoard();
-                }
-            }
-        });
-
-        document.getElementById('simulate').addEventListener('click', () => {
-            if (this.isAutoCycling) {
-                this.stopAutoCycle();
-            } else {
-                this.startAutoCycle();
-            }
-        });
-
-        document.getElementById('truthTable').addEventListener('click', () => {
-            this.generateTruthTable();
-        });
-
-        document.getElementById('closeTruthTable').addEventListener('click', () => {
-            if (this.truthTablePanel) {
-                this.truthTablePanel.hide();
-            } else {
-                document.getElementById('truthTablePanel').style.display = 'none';
-            }
-            this.saveBoardState(); // Save state when truth table is hidden
-        });
-
-        // Save Component
-        document.getElementById('saveComponent').addEventListener('click', () => {
-            this.showSaveComponentDialog();
-        });
-
+        // Save Component Dialog buttons
         document.getElementById('closeSaveDialog').addEventListener('click', () => {
             document.getElementById('saveComponentDialog').style.display = 'none';
         });
@@ -269,45 +253,20 @@ class CircuitSimulator {
             await this.saveCurrentCircuitAsComponent();
         });
 
-        // Manage Components
-        document.getElementById('manageComponents').addEventListener('click', () => {
-            this.showManageComponentsDialog();
-        });
-
+        // Manage Components Dialog buttons
         document.getElementById('closeManageDialog').addEventListener('click', () => {
             document.getElementById('manageComponentsDialog').style.display = 'none';
         });
 
-        // Export/Import Components
-        document.getElementById('exportComponent').addEventListener('click', async () => {
-            await this.exportComponentToFile();
-        });
-
-        document.getElementById('importComponent').addEventListener('click', () => {
-            document.getElementById('importFile').click();
-        });
-
+        // Import file input
         document.getElementById('importFile').addEventListener('change', async (e) => {
             await this.importComponentFromFile(e);
-        });
-
-        // Manual Simulation Controls
-        document.getElementById('nextStep').addEventListener('click', () => {
-            this.stepSimulation(1);
-        });
-
-        document.getElementById('prevStep').addEventListener('click', () => {
-            this.stepSimulation(-1);
-        });
-
-        document.getElementById('resetSim').addEventListener('click', () => {
-            this.resetSimulation();
         });
 
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
-                this.exitToNeutralMode();
+                this.toolbar.exitToNeutralMode();
             } else if (e.key === '?' && !e.target.matches('input, textarea')) {
                 // Open help dialog with '?' key (if not typing in an input field)
                 document.getElementById('helpDialog').style.display = 'block';
@@ -319,7 +278,7 @@ class CircuitSimulator {
             e.preventDefault(); // Prevent context menu
             e.stopPropagation();
             console.log('Right-click detected - exiting to neutral mode');
-            this.exitToNeutralMode();
+            this.toolbar.exitToNeutralMode();
             return false;
         });
 
@@ -578,6 +537,7 @@ class CircuitSimulator {
                     x: port.x,
                     y: port.y
                 };
+                this.toolbar.setConnectionStart(true);
             } else {
                 console.log('Clicked port is not an output port');
             }
@@ -592,6 +552,7 @@ class CircuitSimulator {
                     toPort: port.portIndex
                 });
                 this.connectStart = null;
+                this.toolbar.setConnectionStart(false);
                 this.redraw();
             } else {
                 console.log('Clicked port is not an input port');
@@ -795,22 +756,6 @@ class CircuitSimulator {
         }
     }
 
-    updateModeIndicator() {
-        const indicator = document.getElementById('modeIndicator');
-        const selected = document.getElementById('selectedComponent');
-
-        if (this.mode === 'place') {
-            indicator.textContent = 'Mode: Place Component';
-            selected.textContent = this.selectedTool ? `Selected: ${this.selectedTool}` : '';
-        } else if (this.mode === 'connect') {
-            indicator.textContent = 'Mode: Connect Components';
-            selected.textContent = this.connectStart ? 'Click on input port to complete' : 'Click on output port to start';
-        } else if (this.mode === 'delete') {
-            indicator.textContent = 'Mode: Delete Component/Connection';
-            selected.textContent = 'Click on component or connection to delete';
-        }
-    }
-
     startAutoCycle() {
         const inputs = this.components.filter(c => c.type === 'INPUT').sort((a, b) =>
             a.label.localeCompare(b.label));
@@ -830,16 +775,8 @@ class CircuitSimulator {
         this.currentCycleIndex = 0;
         this.totalCombinations = Math.pow(2, inputs.length);
 
-        // Update button text
-        const btn = document.getElementById('simulate');
-        btn.textContent = 'Stop Simulation';
-        btn.style.background = '#f44336';
-
-        // Update mode indicator
-        const indicator = document.getElementById('modeIndicator');
-        indicator.textContent = 'Mode: Auto-Cycling Inputs';
-        document.getElementById('selectedComponent').textContent =
-            `Combination ${this.currentCycleIndex + 1} / ${this.totalCombinations}`;
+        // Update toolbar simulation state
+        this.toolbar.setSimulationState(true, this.currentCycleIndex, this.totalCombinations);
 
         this.autoCycleStep();
     }
@@ -851,13 +788,8 @@ class CircuitSimulator {
             this.autoCycleTimeout = null;
         }
 
-        // Reset button text
-        const btn = document.getElementById('simulate');
-        btn.textContent = 'Simulate';
-        btn.style.background = '#4caf50';
-
-        // Reset mode indicator
-        this.updateModeIndicator();
+        // Reset toolbar simulation state
+        this.toolbar.setSimulationState(false);
     }
 
     autoCycleStep() {
@@ -979,54 +911,19 @@ class CircuitSimulator {
 
         if (success) {
             await this.loadCustomComponents(); // Refresh local copy
-            this.updateCustomComponentsList();
+            this.toolbar.updateCustomComponentsList(this.customComponents);
 
             // Update current circuit name to reflect it's now a saved component
             this.currentComponentName = name;
             this.currentBoardName = null; // Clear board name when saving as component
             this.lastSavedState = JSON.stringify(this.getCurrentState());
-            this.updateCircuitNameDisplay();
+            this.toolbar.updateCircuitNameDisplay(this.currentComponentName || this.currentBoardName, !!this.currentComponentName);
 
             document.getElementById('saveComponentDialog').style.display = 'none';
             alert(`Component "${name}" saved successfully!`);
         } else {
             alert(`Failed to save component "${name}"`);
         }
-    }
-
-    updateCustomComponentsList() {
-        const dropdown = document.getElementById('customComponentsDropdown');
-        const section = document.getElementById('customComponentsSection');
-
-        const componentNames = Object.keys(this.customComponents);
-
-        if (componentNames.length === 0) {
-            section.style.display = 'none';
-            return;
-        }
-
-        section.style.display = 'block';
-
-        // Clear existing options except the first one
-        dropdown.innerHTML = '<option value="">Select a component...</option>';
-
-        // Add custom components as options
-        componentNames.sort().forEach(name => {
-            const option = document.createElement('option');
-            option.value = 'CUSTOM:' + name;
-            option.textContent = name;
-            dropdown.appendChild(option);
-        });
-
-        // Add event listener for dropdown change
-        dropdown.onchange = (e) => {
-            if (e.target.value) {
-                document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('selected'));
-                this.selectedTool = e.target.value;
-                this.mode = 'place';
-                this.updateModeIndicator();
-            }
-        };
     }
 
     showManageComponentsDialog() {
@@ -1089,7 +986,7 @@ class CircuitSimulator {
                     const success = await this.componentLibrary.deleteComponent(name);
                     if (success) {
                         await this.loadCustomComponents(); // Refresh local copy
-                        this.updateCustomComponentsList();
+                        this.toolbar.updateCustomComponentsList(this.customComponents);
                         this.updateComponentLibraryList();
                     } else {
                         alert(`Failed to delete component "${name}"`);
@@ -1142,7 +1039,7 @@ class CircuitSimulator {
 
             if (componentData) {
                 await this.loadCustomComponents(); // Refresh local copy
-                this.updateCustomComponentsList();
+                this.toolbar.updateCustomComponentsList(this.customComponents);
                 alert(`Component "${componentData.name}" imported successfully!`);
             }
         } catch (error) {
@@ -1194,7 +1091,7 @@ class CircuitSimulator {
             this.migrateComponentPorts();
 
             this.redraw();
-            this.updateCircuitNameDisplay();
+            this.toolbar.updateCircuitNameDisplay(this.currentComponentName || this.currentBoardName, !!this.currentComponentName);
             document.getElementById('manageComponentsDialog').style.display = 'none';
             alert(`Component "${name}" loaded for editing. Make your changes and save it again.`);
         };
@@ -1465,8 +1362,8 @@ class CircuitSimulator {
             this.currentBoardName = boardName;
             this.currentComponentName = null; // Clear component name when saving as board
             this.lastSavedState = JSON.stringify(state);
-            this.updateCircuitNameDisplay();
-            this.updateBoardsList();
+            this.toolbar.updateCircuitNameDisplay(this.currentComponentName || this.currentBoardName, !!this.currentComponentName);
+            this.toolbar.updateBoardsList(this.savedBoards, this.currentBoardName);
             console.log(`Board saved: ${boardName}`);
         } else {
             alert(`Failed to save board "${boardName}"`);
@@ -1508,8 +1405,8 @@ class CircuitSimulator {
 
         this.lastSavedState = JSON.stringify(this.getCurrentState());
         this.redraw();
-        this.updateCircuitNameDisplay();
-        this.updateBoardsList(); // Update dropdown to reflect current board
+        this.toolbar.updateCircuitNameDisplay(this.currentComponentName || this.currentBoardName, !!this.currentComponentName);
+        this.toolbar.updateBoardsList(this.savedBoards, this.currentBoardName); // Update dropdown to reflect current board
         console.log(`Board loaded: ${boardName}`);
     }
 
@@ -1539,8 +1436,8 @@ class CircuitSimulator {
         this.truthTableData = null;
 
         this.redraw();
-        this.updateCircuitNameDisplay();
-        this.updateBoardsList(); // Update dropdown to remove (current) marker
+        this.toolbar.updateCircuitNameDisplay(this.currentComponentName || this.currentBoardName, !!this.currentComponentName);
+        this.toolbar.updateBoardsList(this.savedBoards, this.currentBoardName); // Update dropdown to remove (current) marker
         console.log('New board created');
     }
 
@@ -1553,83 +1450,12 @@ class CircuitSimulator {
                 if (this.currentBoardName === boardName) {
                     this.currentBoardName = null;
                 }
-                this.updateBoardsList();
-                this.updateCurrentBoardDisplay();
+                this.toolbar.updateBoardsList(this.savedBoards, this.currentBoardName);
+                this.toolbar.updateCircuitNameDisplay(this.currentComponentName || this.currentBoardName, !!this.currentComponentName);
                 console.log(`Board deleted: ${boardName}`);
             } else {
                 alert(`Failed to delete board "${boardName}"`);
             }
-        }
-    }
-
-    updateCircuitNameDisplay() {
-        // Update canvas header circuit name
-        const canvasHeaderElement = document.getElementById('currentCircuitName');
-        if (canvasHeaderElement) {
-            let displayName;
-            if (this.currentComponentName) {
-                displayName = `${this.currentComponentName} (Component)`;
-            } else if (this.currentBoardName) {
-                displayName = this.currentBoardName;
-            } else {
-                displayName = 'Unsaved Board';
-            }
-            canvasHeaderElement.textContent = displayName;
-        }
-    }
-
-    // Legacy method name for compatibility
-    updateCurrentBoardDisplay() {
-        this.updateCircuitNameDisplay();
-    }
-
-    updateBoardsList() {
-        const dropdown = document.getElementById('savedBoardsDropdown');
-        const section = document.getElementById('savedBoardsSection');
-
-        const boardNames = Object.keys(this.savedBoards);
-
-        if (boardNames.length === 0) {
-            section.style.display = 'none';
-            return;
-        }
-
-        section.style.display = 'block';
-        dropdown.innerHTML = '<option value="">Select a board...</option>';
-
-        // Sort all boards alphabetically
-        boardNames.sort();
-
-        // If there's a current board, show it at top with separator
-        if (this.currentBoardName && this.savedBoards[this.currentBoardName]) {
-            const currentOption = document.createElement('option');
-            currentOption.value = this.currentBoardName;
-            currentOption.textContent = `${this.currentBoardName} (current)`;
-            dropdown.appendChild(currentOption);
-
-            // Add separator
-            const separator = document.createElement('option');
-            separator.disabled = true;
-            separator.textContent = '─────';
-            dropdown.appendChild(separator);
-
-            // Add other boards (excluding current)
-            boardNames.forEach(name => {
-                if (name !== this.currentBoardName) {
-                    const option = document.createElement('option');
-                    option.value = name;
-                    option.textContent = name;
-                    dropdown.appendChild(option);
-                }
-            });
-        } else {
-            // No current board, just show all boards
-            boardNames.forEach(name => {
-                const option = document.createElement('option');
-                option.value = name;
-                option.textContent = name;
-                dropdown.appendChild(option);
-            });
         }
     }
 
@@ -1706,42 +1532,7 @@ class CircuitSimulator {
     }
 
     setupBoardManagementListeners() {
-        // New Board button
-        document.getElementById('newBoard').addEventListener('click', () => {
-            if (this.hasUnsavedChanges()) {
-                this.showSaveOptionsDialog(() => {
-                    this.createNewBoard();
-                });
-            } else {
-                this.createNewBoard();
-            }
-        });
-
-        // Save Board button
-        document.getElementById('saveBoard').addEventListener('click', () => {
-            // Always prompt for name (pre-filled with current name if exists)
-            // This allows saving as a new board by changing the name
-            this.promptForBoardName(null, async (boardName) => {
-                await this.saveCurrentBoard(boardName);
-                alert(`Board "${boardName}" saved successfully!`);
-            });
-        });
-
-        // Load Board dropdown
-        document.getElementById('savedBoardsDropdown').addEventListener('change', async (e) => {
-            const boardName = e.target.value;
-            if (!boardName) return;
-
-            if (this.hasUnsavedChanges()) {
-                this.showSaveOptionsDialog(async () => {
-                    await this.loadBoard(boardName);
-                    e.target.value = ''; // Reset dropdown
-                });
-            } else {
-                await this.loadBoard(boardName);
-                e.target.value = ''; // Reset dropdown
-            }
-        });
+        // NOTE: New/Save Board buttons and Load Board dropdown now handled by Toolbar
 
         // Save Options Dialog buttons
         document.getElementById('saveAsCurrentBoard').addEventListener('click', async () => {
