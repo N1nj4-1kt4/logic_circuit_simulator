@@ -166,7 +166,7 @@
             <div id="saveComponentDialog" class="dialog-panel" style="display: none;">
                 <div class="panel-header">
                     <h3>Save Circuit as Component</h3>
-                    <button id="closeSaveDialog">Close</button>
+                    <button id="closeSaveDialog" class="dialog-close-btn" title="Close">×</button>
                 </div>
                 <div class="dialog-content">
                     <p>Save the current circuit as a reusable component.</p>
@@ -192,7 +192,7 @@
             <div id="manageComponentsDialog" class="dialog-panel" style="display: none;">
                 <div class="panel-header">
                     <h3>Component Library</h3>
-                    <button id="closeManageDialog">Close</button>
+                    <button id="closeManageDialog" class="dialog-close-btn" title="Close">×</button>
                 </div>
                 <div class="dialog-content">
                     <p>Manage your saved custom components.</p>
@@ -204,7 +204,7 @@
             <div id="renameDialog" class="dialog-panel small-dialog" style="display: none;">
                 <div class="panel-header">
                     <h3>Rename Component</h3>
-                    <button id="closeRenameDialog">Close</button>
+                    <button id="closeRenameDialog" class="dialog-close-btn" title="Close">×</button>
                 </div>
                 <div class="dialog-content">
                     <div class="form-group">
@@ -218,11 +218,23 @@
                 </div>
             </div>
 
+            <!-- Export Component Dialog -->
+            <div id="exportComponentDialog" class="dialog-panel" style="display: none;">
+                <div class="panel-header">
+                    <h3>Export Component</h3>
+                    <button id="closeExportDialog" class="dialog-close-btn" title="Close">×</button>
+                </div>
+                <div class="dialog-content">
+                    <p>Select a component to export:</p>
+                    <div id="exportComponentList" class="export-component-list"></div>
+                </div>
+            </div>
+
             <!-- Save Options Dialog -->
             <div id="saveOptionsDialog" class="dialog-panel" style="display: none;">
                 <div class="panel-header">
                     <h3>Save Current Work</h3>
-                    <button id="closeSaveOptions">Close</button>
+                    <button id="closeSaveOptions" class="dialog-close-btn" title="Close">×</button>
                 </div>
                 <div class="dialog-content">
                     <p>You have unsaved changes. How would you like to save your work?</p>
@@ -251,7 +263,7 @@
             <div id="boardNameDialog" class="dialog-panel small-dialog" style="display: none;">
                 <div class="panel-header">
                     <h3>Board Name</h3>
-                    <button id="closeBoardNameDialog">Close</button>
+                    <button id="closeBoardNameDialog" class="dialog-close-btn" title="Close">×</button>
                 </div>
                 <div class="dialog-content">
                     <div class="form-group">
@@ -269,7 +281,7 @@
             <div id="helpDialog" class="dialog-panel help-dialog" style="display: none;">
                 <div class="panel-header">
                     <h3>📖 Help & Instructions</h3>
-                    <button id="closeHelp">Close</button>
+                    <button id="closeHelp" class="dialog-close-btn" title="Close">×</button>
                 </div>
                 <div class="dialog-content help-content">
                     <section>

@@ -6,12 +6,12 @@ Track your progress through the refactoring phases here.
 
 ## Overall Status
 
-**Current Phase:** Phase 5.2.1 Complete (Toolbar extracted)
+**Current Phase:** Phase 5.2.2 Complete (DialogManager extracted)
 **Branch:** `refactor/modernization`
 **Started:** 2025-11-27
 **Last Updated:** 2025-12-02
 **Approach:** Hybrid approach - OOP for storage layer, functional for core logic, rendering layer extracted, UI components being modularized
-**Next Step:** Phase 5.2.2 - Extract DialogManager, Phase 5.2.3 - Extract ThemeManager
+**Next Step:** Phase 5.2.3 - Extract ThemeManager (final UI component)
 
 ### Recent Accomplishments
 - ✅ Phase 2 fully integrated with comprehensive tests (60/60 passing)
@@ -19,9 +19,11 @@ Track your progress through the refactoring phases here.
 - ✅ Phase 4 rendering layer extracted (~500 lines removed from main file)
 - ✅ Phase 5.1 Truth Table Panel extracted with Tabulator + Interact.js
 - ✅ Phase 5.2.1 Toolbar extracted (~300 lines removed from main file)
+- ✅ Phase 5.2.2 DialogManager extracted (~400 lines removed from main file)
 - ✅ All 148 tests passing
 - ✅ Dev server running successfully at http://localhost:3002/
 - ✅ Application fully functional with new architecture
+- ✅ circuit-simulator.js reduced from ~2,900 to ~1,300 lines
 
 ---
 
@@ -277,11 +279,21 @@ Track your progress through the refactoring phases here.
 **Status:** ✅ Toolbar extracted and fully functional
 **Deliverable:** ~300 lines removed from circuit-simulator.js, clean separation of toolbar UI
 
-#### 5.2.2: DialogManager ⏸️ Not Started
-- [ ] Create `src/ui/DialogManager.js`
-- [ ] Extract all dialog methods (save, manage, rename, help, etc.)
-- [ ] Update `circuit-simulator.js` to use DialogManager
-- [ ] Test: All dialogs work correctly
+#### 5.2.2: DialogManager ✅ COMPLETE
+- [x] Create `src/ui/DialogManager.js` (461 lines)
+- [x] Extract all dialog methods (save component, manage library, rename, board save)
+- [x] Implement callback-based architecture matching Toolbar pattern
+- [x] Manage 3 dialog groups: component, rename, board save
+- [x] Create handler methods: `handleSaveComponent()`, `handleDeleteComponent()`
+- [x] Update `circuit-simulator.js` to use DialogManager with callbacks
+- [x] Remove old dialog methods (~400 lines extracted)
+- [x] Remove dialog state properties: `renameTarget`, `pendingActionAfterSave`
+- [x] Remove dialog event listeners from `setupEventListeners()`
+- [x] Test: All dialogs work correctly
+
+**Status:** ✅ DialogManager extracted and fully functional
+**Deliverable:** ~400 lines removed from circuit-simulator.js, all dialog logic centralized
+**Files:** [src/ui/DialogManager.js](src/ui/DialogManager.js), [circuit-simulator.js](circuit-simulator.js)
 
 #### 5.2.3: ThemeManager ⏸️ Not Started
 - [ ] Create `src/ui/ThemeManager.js`
@@ -289,7 +301,7 @@ Track your progress through the refactoring phases here.
 - [ ] Update `circuit-simulator.js` to use ThemeManager
 - [ ] Test: Dark mode toggle works
 
-**Overall Phase 5 Deliverable:** ✅ UI components modularized, Tabulator + Interact.js integrated (partial - 2/4 components done)
+**Overall Phase 5 Deliverable:** ⏳ UI components modularized, Tabulator + Interact.js integrated (3/4 components done - only ThemeManager remaining)
 
 ---
 
@@ -473,3 +485,45 @@ git push origin v2.0.0
 - Create TruthTablePanel, DialogManager, ThemeManager
 - Extract non-canvas UI from main file
 - Estimated: 6-8 hours work
+
+### Session 2025-12-02 (VSCode) - Phase 5.2.2 Complete
+**Completed:** DialogManager Extraction
+
+#### Accomplishments:
+- ✅ **Phase 5.2.2 DialogManager Complete:**
+  - Created `src/ui/DialogManager.js` (461 lines)
+  - Extracted all dialog management logic into dedicated class
+  - Implemented callback-based architecture matching Toolbar pattern
+  - Manages 3 dialog groups:
+    - Component dialogs: Save component, manage library
+    - Rename dialog: For INPUT/OUTPUT labels
+    - Board save dialogs: Save options, board name prompt
+  - Created handler methods in circuit-simulator.js:
+    - `handleSaveComponent(name, description)` - Component save logic
+    - `handleDeleteComponent(name)` - Component deletion logic
+  - Integrated DialogManager with 17 callbacks for clean separation
+  - Removed ~400 lines from circuit-simulator.js:
+    - Dialog methods: `showSaveComponentDialog()`, `saveCurrentCircuitAsComponent()`, `showManageComponentsDialog()`, `updateComponentLibraryList()`, `showRenameDialog()`, `confirmRename()`, `showSaveOptionsDialog()`, `hideSaveOptionsDialog()`, `promptForBoardName()`, `setupBoardManagementListeners()`
+    - State properties: `renameTarget`, `pendingActionAfterSave`
+    - Dialog event listeners from `setupEventListeners()`
+  - Updated all dialog method calls throughout codebase
+  - All dialog workflows tested and functional
+
+#### Technical Details:
+- **Architecture Pattern:** Callback-based like Toolbar and TruthTablePanel
+- **State Management:** Internal state in DialogManager for `renameTarget` and `pendingActionAfterSave`
+- **DOM Caching:** All dialog elements cached in `this.elements` for performance
+- **Event Cleanup:** Proper cleanup using `cloneNode()` pattern in `promptForBoardName()`
+- **Feature Parity:** All original dialog functionality preserved
+- circuit-simulator.js reduced from ~1,700 to ~1,300 lines
+- Dev server running successfully at http://localhost:3002/
+- No compilation or runtime errors
+
+#### File Changes:
+- **Created:** `src/ui/DialogManager.js` (461 lines)
+- **Modified:** `circuit-simulator.js` (~400 lines removed, handler methods added)
+
+#### Next Steps:
+- Phase 5.2.3: Extract ThemeManager (~20 lines, simple theme toggle logic)
+- Phase 5 will be complete after ThemeManager (final UI component)
+- Total Phase 5: ~900 lines extracted from circuit-simulator.js

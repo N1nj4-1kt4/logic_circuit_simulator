@@ -59,6 +59,7 @@ import { CanvasRenderer } from './src/rendering/CanvasRenderer.js';
 
 import { TruthTablePanel } from './src/ui/TruthTablePanel.js';
 import { Toolbar } from './src/ui/Toolbar.js';
+import { DialogManager } from './src/ui/DialogManager.js';
 
 class CircuitSimulator {
     constructor() {
@@ -74,7 +75,6 @@ class CircuitSimulator {
         this.autoCycleTimeout = null;
         this.currentCycleIndex = 0;
         this.customComponents = {};
-        this.renameTarget = null;
         // Default to dark mode if no preference is saved
         this.darkMode = getDarkMode();
         this.isDraggingComponent = false;
@@ -88,7 +88,6 @@ class CircuitSimulator {
         this.currentComponentName = null; // null means not a saved component
         this.savedBoards = {};
         this.lastSavedState = null; // To track if board has been modified
-        this.pendingActionAfterSave = null; // Callback after save dialog
         this.truthTableData = null; // Store truth table data for highlighting
         this.truthTableColumnOrder = null; // Store column order for drag-and-drop
         this.truthTableState = null; // Store truth table customization (size, column order)
@@ -111,14 +110,32 @@ class CircuitSimulator {
             onClearBoard: () => this.handleClearBoard(),
             onSimulate: () => this.toggleSimulation(),
             onTruthTable: () => this.handleTruthTable(),
-            onSaveComponent: () => this.showSaveComponentDialog(),
-            onManageComponents: () => this.showManageComponentsDialog(),
+            onSaveComponent: () => this.dialogManager.showSaveComponentDialog(),
+            onManageComponents: () => this.dialogManager.showManageComponentsDialog(),
             onExportComponent: () => this.exportComponentToFile(),
             onImportComponent: () => this.handleImportComponent(),
             onNewBoard: () => this.handleNewBoard(),
             onSaveBoard: () => this.handleSaveBoard(),
             onLoadBoard: (boardName) => this.loadBoard(boardName),
             onSimulationStep: (direction) => this.handleSimulationStep(direction)
+        });
+
+        // Initialize dialog manager with callbacks
+        this.dialogManager = new DialogManager({
+            onSaveComponent: async (name, description) => await this.handleSaveComponent(name, description),
+            onLoadComponentForEditing: (name) => this.loadComponentForEditing(name),
+            onDownloadComponent: async (name) => await this.downloadComponent(name),
+            onDeleteComponent: async (name) => await this.handleDeleteComponent(name),
+            onRenameComplete: () => this.redraw(),
+            onSaveCurrentBoard: async (name) => await this.saveCurrentBoard(name),
+            onImportComponent: async (e) => await this.importComponentFromFile(e),
+            getComponentLibrary: () => this.componentLibrary,
+            getBoardManager: () => this.boardManager,
+            getCurrentBoardName: () => this.currentBoardName,
+            getCurrentComponentName: () => this.currentComponentName,
+            getCustomComponents: () => this.customComponents,
+            getSavedBoards: () => this.savedBoards,
+            getCircuitData: () => ({ components: this.components, connections: this.connections })
         });
 
         this.init();
@@ -128,7 +145,6 @@ class CircuitSimulator {
         await this.loadCustomComponents();
         await this.loadSavedBoards();
         this.setupEventListeners();
-        this.setupBoardManagementListeners();
         // Truth table dragging now handled by TruthTablePanel + Interact.js
         this.setupAutoSave();
         await this.loadBoardState();
@@ -139,6 +155,9 @@ class CircuitSimulator {
 
         // Initialize toolbar (after DOM is ready)
         this.toolbar.init();
+
+        // Initialize dialog manager (after DOM is ready)
+        this.dialogManager.init();
 
         // Update toolbar displays
         this.toolbar.updateCustomComponentsList(this.customComponents);
@@ -177,7 +196,7 @@ class CircuitSimulator {
     }
 
     handleClearBoard() {
-        this.showSaveOptionsDialog(() => {
+        this.dialogManager.showSaveOptionsDialog(() => {
             this.components = [];
             this.connections = [];
             this.nextId = 1;
@@ -212,7 +231,7 @@ class CircuitSimulator {
 
     handleSaveBoard() {
         // Show save options dialog to let user choose save method
-        this.showSaveOptionsDialog(null);
+        this.dialogManager.showSaveOptionsDialog(null);
     }
 
     handleSimulationStep(direction) {
@@ -239,29 +258,7 @@ class CircuitSimulator {
 
     setupEventListeners() {
         // NOTE: Toolbar button event listeners now handled by Toolbar class
-
-        // Save Component Dialog buttons
-        document.getElementById('closeSaveDialog').addEventListener('click', () => {
-            document.getElementById('saveComponentDialog').style.display = 'none';
-        });
-
-        document.getElementById('cancelSave').addEventListener('click', () => {
-            document.getElementById('saveComponentDialog').style.display = 'none';
-        });
-
-        document.getElementById('confirmSave').addEventListener('click', async () => {
-            await this.saveCurrentCircuitAsComponent();
-        });
-
-        // Manage Components Dialog buttons
-        document.getElementById('closeManageDialog').addEventListener('click', () => {
-            document.getElementById('manageComponentsDialog').style.display = 'none';
-        });
-
-        // Import file input
-        document.getElementById('importFile').addEventListener('change', async (e) => {
-            await this.importComponentFromFile(e);
-        });
+        // NOTE: Dialog event listeners now handled by DialogManager class
 
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
@@ -285,19 +282,6 @@ class CircuitSimulator {
         // Help Dialog
         document.getElementById('closeHelp').addEventListener('click', () => {
             document.getElementById('helpDialog').style.display = 'none';
-        });
-
-        // Rename Dialog
-        document.getElementById('closeRenameDialog').addEventListener('click', () => {
-            document.getElementById('renameDialog').style.display = 'none';
-        });
-
-        document.getElementById('cancelRename').addEventListener('click', () => {
-            document.getElementById('renameDialog').style.display = 'none';
-        });
-
-        document.getElementById('confirmRename').addEventListener('click', () => {
-            this.confirmRename();
         });
 
         // Theme Toggle
@@ -839,56 +823,10 @@ class CircuitSimulator {
         console.warn('saveCustomComponentsToStorage() is deprecated, components are saved automatically through ComponentLibrary');
     }
 
-    showSaveComponentDialog() {
-        if (this.components.length === 0) {
-            alert('Please create a circuit before saving it as a component.');
-            return;
-        }
-
-        const inputs = this.components.filter(c => c.type === 'INPUT');
-        const outputs = this.components.filter(c => c.type === 'OUTPUT');
-
-        if (inputs.length === 0 || outputs.length === 0) {
-            alert('Your circuit must have at least one INPUT and one OUTPUT to be saved as a component.');
-            return;
-        }
-
-        // Pre-fill with current component name if it exists
-        if (this.currentComponentName) {
-            document.getElementById('componentName').value = this.currentComponentName;
-            // Optionally load description from saved component
-            const savedComponent = this.customComponents[this.currentComponentName];
-            if (savedComponent && savedComponent.description) {
-                document.getElementById('componentDescription').value = savedComponent.description;
-            } else {
-                document.getElementById('componentDescription').value = '';
-            }
-        } else {
-            document.getElementById('componentName').value = '';
-            document.getElementById('componentDescription').value = '';
-        }
-
-        // Show dialog
-        document.getElementById('saveComponentDialog').style.display = 'block';
-    }
-
-    async saveCurrentCircuitAsComponent() {
-        const name = document.getElementById('componentName').value.trim();
-        const description = document.getElementById('componentDescription').value.trim();
-
-        if (!name) {
-            alert('Please enter a component name.');
-            return;
-        }
-
-        // Check if name already exists
-        const exists = await this.componentLibrary.componentExists(name);
-        if (exists) {
-            if (!confirm(`A component named "${name}" already exists. Overwrite it?`)) {
-                return;
-            }
-        }
-
+    /**
+     * Handle saving component - callback for DialogManager
+     */
+    async handleSaveComponent(name, description) {
         // Prepare component data
         const inputs = this.components.filter(c => c.type === 'INPUT').sort((a, b) =>
             a.label.localeCompare(b.label));
@@ -919,106 +857,29 @@ class CircuitSimulator {
             this.lastSavedState = JSON.stringify(this.getCurrentState());
             this.toolbar.updateCircuitNameDisplay(this.currentComponentName || this.currentBoardName, !!this.currentComponentName);
 
-            document.getElementById('saveComponentDialog').style.display = 'none';
             alert(`Component "${name}" saved successfully!`);
         } else {
             alert(`Failed to save component "${name}"`);
         }
     }
 
-    showManageComponentsDialog() {
-        this.updateComponentLibraryList();
-        document.getElementById('manageComponentsDialog').style.display = 'block';
-    }
-
-    updateComponentLibraryList() {
-        const list = document.getElementById('componentLibraryList');
-        const componentNames = Object.keys(this.customComponents);
-
-        if (componentNames.length === 0) {
-            list.innerHTML = `
-                <div class="empty-library">
-                    <div class="empty-library-icon">📦</div>
-                    <p>No custom components saved yet.</p>
-                    <p style="font-size: 0.9em;">Create a circuit and click "Save as Component" to get started.</p>
-                </div>
-            `;
-            return;
+    /**
+     * Handle deleting component - callback for DialogManager
+     */
+    async handleDeleteComponent(name) {
+        const success = await this.componentLibrary.deleteComponent(name);
+        if (success) {
+            await this.loadCustomComponents(); // Refresh local copy
+            this.toolbar.updateCustomComponentsList(this.customComponents);
+        } else {
+            alert(`Failed to delete component "${name}"`);
         }
-
-        list.innerHTML = '';
-
-        componentNames.sort().forEach(name => {
-            const component = this.customComponents[name];
-            const item = document.createElement('div');
-            item.className = 'library-item';
-
-            const date = new Date(component.created).toLocaleDateString();
-
-            item.innerHTML = `
-                <div class="library-item-header">
-                    <div class="library-item-name">${name}</div>
-                </div>
-                ${component.description ? `<div class="library-item-description">${component.description}</div>` : ''}
-                <div class="library-item-info">
-                    ${component.inputPorts.length} input(s), ${component.outputPorts.length} output(s) • Created: ${date}
-                </div>
-                <div class="library-item-actions">
-                    <button class="edit-btn" data-name="${name}">Edit</button>
-                    <button class="export-btn" data-name="${name}">Export</button>
-                    <button class="delete-btn" data-name="${name}">Delete</button>
-                </div>
-            `;
-
-            // Add edit handler
-            item.querySelector('.edit-btn').addEventListener('click', () => {
-                this.loadComponentForEditing(name);
-            });
-
-            // Add export handler
-            item.querySelector('.export-btn').addEventListener('click', async () => {
-                await this.downloadComponent(name);
-            });
-
-            // Add delete handler
-            item.querySelector('.delete-btn').addEventListener('click', async () => {
-                if (confirm(`Delete component "${name}"?`)) {
-                    const success = await this.componentLibrary.deleteComponent(name);
-                    if (success) {
-                        await this.loadCustomComponents(); // Refresh local copy
-                        this.toolbar.updateCustomComponentsList(this.customComponents);
-                        this.updateComponentLibraryList();
-                    } else {
-                        alert(`Failed to delete component "${name}"`);
-                    }
-                }
-            });
-
-            list.appendChild(item);
-        });
     }
 
     // Export/Import Methods
     async exportComponentToFile() {
-        const componentNames = Object.keys(this.customComponents);
-
-        if (componentNames.length === 0) {
-            alert('No custom components to export. Please save a component first.');
-            return;
-        }
-
-        if (componentNames.length === 1) {
-            // Export the only component
-            await this.downloadComponent(componentNames[0]);
-        } else {
-            // Let user choose which component to export
-            const name = prompt('Enter component name to export:\n\n' + componentNames.join('\n'));
-            if (name && this.customComponents[name]) {
-                await this.downloadComponent(name);
-            } else if (name) {
-                alert('Component not found.');
-            }
-        }
+        // Use DialogManager to show export dialog
+        this.dialogManager.showExportComponentDialog();
     }
 
     async downloadComponent(name) {
@@ -1097,7 +958,7 @@ class CircuitSimulator {
         };
 
         if (this.hasUnsavedChanges()) {
-            this.showSaveOptionsDialog(doLoad);
+            this.dialogManager.showSaveOptionsDialog(doLoad);
         } else {
             doLoad();
         }
@@ -1179,38 +1040,8 @@ class CircuitSimulator {
         const component = this.findComponent(x, y);
 
         if (component && (component.type === 'INPUT' || component.type === 'OUTPUT')) {
-            this.showRenameDialog(component);
+            this.dialogManager.showRenameDialog(component);
         }
-    }
-
-    showRenameDialog(component) {
-        this.renameTarget = component;
-        document.getElementById('newComponentLabel').value = component.label;
-        document.getElementById('renameDialog').style.display = 'block';
-
-        // Focus and select the input
-        setTimeout(() => {
-            const input = document.getElementById('newComponentLabel');
-            input.focus();
-            input.select();
-        }, 100);
-    }
-
-    confirmRename() {
-        const newLabel = document.getElementById('newComponentLabel').value.trim();
-
-        if (!newLabel) {
-            alert('Please enter a label.');
-            return;
-        }
-
-        if (this.renameTarget) {
-            this.renameTarget.label = newLabel;
-            this.redraw();
-        }
-
-        document.getElementById('renameDialog').style.display = 'none';
-        this.renameTarget = null;
     }
 
     // Theme Management Methods
@@ -1457,133 +1288,6 @@ class CircuitSimulator {
                 alert(`Failed to delete board "${boardName}"`);
             }
         }
-    }
-
-    showSaveOptionsDialog(onComplete) {
-        this.pendingActionAfterSave = onComplete;
-
-        const dialog = document.getElementById('saveOptionsDialog');
-        const currentBoardBtn = document.getElementById('saveAsCurrentBoard');
-        const boardNameDisplay = document.getElementById('currentBoardNameInDialog');
-
-        // Update the current board option
-        if (this.currentBoardName) {
-            currentBoardBtn.style.display = 'block';
-            boardNameDisplay.textContent = this.currentBoardName;
-        } else {
-            currentBoardBtn.style.display = 'none';
-        }
-
-        dialog.style.display = 'block';
-    }
-
-    hideSaveOptionsDialog() {
-        document.getElementById('saveOptionsDialog').style.display = 'none';
-        // Don't clear pendingActionAfterSave here - let handlers execute it first
-    }
-
-    promptForBoardName(defaultName, onSave) {
-        const dialog = document.getElementById('boardNameDialog');
-        const input = document.getElementById('boardNameInput');
-
-        // Pre-fill with: explicit default > current board name > next board name
-        input.value = defaultName || this.currentBoardName || this.getNextBoardName();
-        dialog.style.display = 'block';
-
-        const confirmBtn = document.getElementById('confirmBoardName');
-        const cancelBtn = document.getElementById('cancelBoardName');
-        const closeBtn = document.getElementById('closeBoardNameDialog');
-
-        const cleanup = () => {
-            confirmBtn.replaceWith(confirmBtn.cloneNode(true));
-            cancelBtn.replaceWith(cancelBtn.cloneNode(true));
-            closeBtn.replaceWith(closeBtn.cloneNode(true));
-        };
-
-        document.getElementById('confirmBoardName').onclick = () => {
-            const boardName = input.value.trim();
-            if (!boardName) {
-                alert('Please enter a board name.');
-                return;
-            }
-            if (this.customComponents[boardName]) {
-                alert(`A component with name "${boardName}" already exists. Please choose a different name.`);
-                return;
-            }
-            if (this.savedBoards[boardName] && boardName !== this.currentBoardName) {
-                if (!confirm(`Board "${boardName}" already exists. Overwrite?`)) {
-                    return;
-                }
-            }
-            dialog.style.display = 'none';
-            cleanup();
-            onSave(boardName);
-        };
-
-        document.getElementById('cancelBoardName').onclick = () => {
-            dialog.style.display = 'none';
-            cleanup();
-        };
-
-        document.getElementById('closeBoardNameDialog').onclick = () => {
-            dialog.style.display = 'none';
-            cleanup();
-        };
-    }
-
-    setupBoardManagementListeners() {
-        // NOTE: New/Save Board buttons and Load Board dropdown now handled by Toolbar
-
-        // Save Options Dialog buttons
-        document.getElementById('saveAsCurrentBoard').addEventListener('click', async () => {
-            if (this.currentBoardName) {
-                await this.saveCurrentBoard(this.currentBoardName);
-            }
-            this.hideSaveOptionsDialog();
-            if (this.pendingActionAfterSave) {
-                this.pendingActionAfterSave();
-                this.pendingActionAfterSave = null;
-            }
-        });
-
-        document.getElementById('saveAsNewBoard').addEventListener('click', () => {
-            this.hideSaveOptionsDialog();
-            this.promptForBoardName(null, async (boardName) => {
-                await this.saveCurrentBoard(boardName);
-                if (this.pendingActionAfterSave) {
-                    this.pendingActionAfterSave();
-                    this.pendingActionAfterSave = null;
-                }
-            });
-        });
-
-        document.getElementById('saveAsNewComponent').addEventListener('click', () => {
-            this.hideSaveOptionsDialog();
-            // Open the save component dialog
-            document.getElementById('saveComponentDialog').style.display = 'block';
-            // After saving component, execute pending action
-            const originalConfirm = document.getElementById('confirmSave').onclick;
-            document.getElementById('confirmSave').onclick = () => {
-                originalConfirm?.();
-                if (this.pendingActionAfterSave) {
-                    this.pendingActionAfterSave();
-                    this.pendingActionAfterSave = null;
-                }
-            };
-        });
-
-        document.getElementById('discardChanges').addEventListener('click', () => {
-            this.hideSaveOptionsDialog();
-            if (this.pendingActionAfterSave) {
-                this.pendingActionAfterSave();
-                this.pendingActionAfterSave = null;
-            }
-        });
-
-        document.getElementById('closeSaveOptions').addEventListener('click', () => {
-            this.hideSaveOptionsDialog();
-            this.pendingActionAfterSave = null; // Cancel the pending action
-        });
     }
 }
 
