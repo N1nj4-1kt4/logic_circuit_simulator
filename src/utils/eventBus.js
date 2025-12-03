@@ -118,5 +118,8 @@ export const EVENT_TYPES = {
     THEME_CHANGED: 'theme:changed',
 
     // Circuit events
-    CIRCUIT_CLEARED: 'circuit:cleared'
+    CIRCUIT_CLEARED: 'circuit:cleared',
+
+    // Mode events
+    MODE_EXIT_REQUEST: 'mode:exitRequest'
 };
