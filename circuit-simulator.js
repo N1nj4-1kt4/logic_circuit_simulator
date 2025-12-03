@@ -266,7 +266,7 @@ class CircuitSimulator {
                 this.toolbar.exitToNeutralMode();
             } else if (e.key === '?' && !e.target.matches('input, textarea')) {
                 // Open help dialog with '?' key (if not typing in an input field)
-                document.getElementById('helpDialog').style.display = 'block';
+                this.dialogManager.showHelpDialog();
             }
         });
 
@@ -277,11 +277,6 @@ class CircuitSimulator {
             console.log('Right-click detected - exiting to neutral mode');
             this.toolbar.exitToNeutralMode();
             return false;
-        });
-
-        // Help Dialog
-        document.getElementById('closeHelp').addEventListener('click', () => {
-            document.getElementById('helpDialog').style.display = 'none';
         });
 
         // Theme Toggle

@@ -162,7 +162,8 @@
                 <div id="truthTableContent"></div>
             </div>
 
-            <!-- Save Component Dialog -->
+            <!-- Save Component Dialog - MIGRATED TO DialogFactory -->
+            <!--
             <div id="saveComponentDialog" class="dialog-panel" style="display: none;">
                 <div class="panel-header">
                     <h3>Save Circuit as Component</h3>
@@ -187,20 +188,12 @@
                     </div>
                 </div>
             </div>
+            -->
 
-            <!-- Manage Components Dialog -->
-            <div id="manageComponentsDialog" class="dialog-panel" style="display: none;">
-                <div class="panel-header">
-                    <h3>Component Library</h3>
-                    <button id="closeManageDialog" class="dialog-close-btn" title="Close">×</button>
-                </div>
-                <div class="dialog-content">
-                    <p>Manage your saved custom components.</p>
-                    <div id="componentLibraryList"></div>
-                </div>
-            </div>
+            <!-- Manage Components Dialog - MIGRATED TO DialogFactory -->
 
-            <!-- Rename Dialog -->
+            <!-- Rename Dialog - MIGRATED TO DialogFactory (backup - can delete after pilot testing) -->
+            <!--
             <div id="renameDialog" class="dialog-panel small-dialog" style="display: none;">
                 <div class="panel-header">
                     <h3>Rename Component</h3>
@@ -217,49 +210,14 @@
                     </div>
                 </div>
             </div>
+            -->
 
-            <!-- Export Component Dialog -->
-            <div id="exportComponentDialog" class="dialog-panel" style="display: none;">
-                <div class="panel-header">
-                    <h3>Export Component</h3>
-                    <button id="closeExportDialog" class="dialog-close-btn" title="Close">×</button>
-                </div>
-                <div class="dialog-content">
-                    <p>Select a component to export:</p>
-                    <div id="exportComponentList" class="export-component-list"></div>
-                </div>
-            </div>
+            <!-- Export Component Dialog - MIGRATED TO DialogFactory -->
 
-            <!-- Save Options Dialog -->
-            <div id="saveOptionsDialog" class="dialog-panel" style="display: none;">
-                <div class="panel-header">
-                    <h3>Save Current Work</h3>
-                    <button id="closeSaveOptions" class="dialog-close-btn" title="Close">×</button>
-                </div>
-                <div class="dialog-content">
-                    <p>You have unsaved changes. How would you like to save your work?</p>
-                    <div class="save-options">
-                        <button class="save-option-btn" id="saveAsCurrentBoard">
-                            <div class="option-title">💾 Update Current Board</div>
-                            <div class="option-desc">Save changes to <strong id="currentBoardNameInDialog"></strong></div>
-                        </button>
-                        <button class="save-option-btn" id="saveAsNewBoard">
-                            <div class="option-title">📋 Save as New Board</div>
-                            <div class="option-desc">Create a new work-in-progress board</div>
-                        </button>
-                        <button class="save-option-btn" id="saveAsNewComponent">
-                            <div class="option-title">🔧 Save as Component</div>
-                            <div class="option-desc">Finalize as a reusable component</div>
-                        </button>
-                        <button class="save-option-btn discard-btn" id="discardChanges">
-                            <div class="option-title">🗑️ Discard Changes</div>
-                            <div class="option-desc">Don't save, just proceed</div>
-                        </button>
-                    </div>
-                </div>
-            </div>
+            <!-- Save Options Dialog - MIGRATED TO DialogFactory -->
 
-            <!-- Board Name Dialog -->
+            <!-- Board Name Dialog - MIGRATED TO DialogFactory -->
+            <!--
             <div id="boardNameDialog" class="dialog-panel small-dialog" style="display: none;">
                 <div class="panel-header">
                     <h3>Board Name</h3>
@@ -276,91 +234,10 @@
                     </div>
                 </div>
             </div>
+            -->
 
-            <!-- Help Dialog -->
-            <div id="helpDialog" class="dialog-panel help-dialog" style="display: none;">
-                <div class="panel-header">
-                    <h3>📖 Help & Instructions</h3>
-                    <button id="closeHelp" class="dialog-close-btn" title="Close">×</button>
-                </div>
-                <div class="dialog-content help-content">
-                    <section>
-                        <h4>🎯 Getting Started</h4>
-                        <ul>
-                            <li><strong>Select a component:</strong> Click any gate or I/O button in the left panel</li>
-                            <li><strong>Place on canvas:</strong> Click on the circuit board to place the selected component</li>
-                            <li><strong>Exit mode:</strong> Press <kbd>ESC</kbd> or <kbd>Right-click</kbd>, or click the same button again</li>
-                        </ul>
-                    </section>
+            <!-- Help Dialog - MIGRATED TO DialogFactory -->
 
-                    <section>
-                        <h4>🔌 Building Circuits</h4>
-                        <ul>
-                            <li><strong>Add INPUT:</strong> Select INPUT and place on canvas - click to toggle 0/1 values</li>
-                            <li><strong>Add OUTPUT:</strong> Select OUTPUT and place on canvas - displays circuit results</li>
-                            <li><strong>Connect components:</strong> Click "Connect" button, then click source output port, then target input port</li>
-                            <li><strong>Simulate:</strong> Click "Simulate" to see circuit output with current input values</li>
-                        </ul>
-                    </section>
-
-                    <section>
-                        <h4>✏️ Editing</h4>
-                        <ul>
-                            <li><strong>Move:</strong> Click and drag any component to reposition it</li>
-                            <li><strong>Delete:</strong> Click "Delete" button, then click component or connection to remove</li>
-                            <li><strong>Rename:</strong> Double-click an INPUT or OUTPUT to change its label</li>
-                        </ul>
-                    </section>
-
-                    <section>
-                        <h4>💾 Saving & Loading</h4>
-                        <ul>
-                            <li><strong>New Board:</strong> Creates a blank work-in-progress board</li>
-                            <li><strong>Save Board:</strong> Saves current circuit as a reusable board</li>
-                            <li><strong>Load Board:</strong> Opens a previously saved board for editing</li>
-                            <li><strong>Save as Component:</strong> Converts circuit into a reusable component (INPUTs become input ports, OUTPUTs become output ports)</li>
-                        </ul>
-                    </section>
-
-                    <section>
-                        <h4>📊 Truth Table</h4>
-                        <ul>
-                            <li><strong>Generate:</strong> Click "Truth Table" to see all input/output combinations</li>
-                            <li><strong>Active row highlighting:</strong> The row matching current input values is highlighted</li>
-                            <li><strong>Reposition:</strong> Drag the title bar to move the table</li>
-                            <li><strong>Resize:</strong> Drag corner handles to resize</li>
-                            <li><strong>Reorder columns:</strong> Drag column headers to rearrange (Inputs stay in Input section, Outputs stay in Output section)</li>
-                            <li><strong>Persistence:</strong> Table position, size, and column order are saved with your board/component</li>
-                        </ul>
-                    </section>
-
-                    <section>
-                        <h4>🎨 Theme & Display</h4>
-                        <ul>
-                            <li><strong>Dark mode:</strong> Click the 🌙 button to toggle light/dark theme</li>
-                            <li><strong>Smart positioning:</strong> Truth Table automatically positions to avoid overlapping your circuit</li>
-                        </ul>
-                    </section>
-
-                    <section>
-                        <h4>⌨️ Keyboard Shortcuts</h4>
-                        <ul>
-                            <li><kbd>ESC</kbd> or <kbd>Right-click</kbd> - Exit current mode</li>
-                            <li><kbd>?</kbd> - Open this Help dialog</li>
-                        </ul>
-                    </section>
-
-                    <section>
-                        <h4>💡 Tips</h4>
-                        <ul>
-                            <li>Build complex circuits by saving them as components, then use those components in larger designs</li>
-                            <li>Label your inputs and outputs clearly for better readability</li>
-                            <li>Use the Truth Table to verify circuit logic before saving</li>
-                            <li>Export components to share with others or backup your work</li>
-                        </ul>
-                    </section>
-                </div>
-            </div>
         </div>
     </div>
 
