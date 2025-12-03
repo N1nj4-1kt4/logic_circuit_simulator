@@ -4,6 +4,7 @@
  */
 
 import { DialogFactory } from './DialogFactory.js';
+import { messages, formatMessage } from './messages.js';
 
 export class DialogManager {
     constructor(callbacks) {
@@ -87,40 +88,34 @@ export class DialogManager {
      * @returns {HTMLElement} Save component dialog element
      */
     _createSaveComponentDialog() {
+        const msg = messages.dialogs.saveComponent;
         const content = DialogFactory.createFormContent({
-            description: 'Create a reusable component from your current circuit.',
             fields: [
                 {
                     id: 'componentName',
-                    label: 'Component Name:',
+                    label: msg.nameLabel,
                     type: 'text',
-                    placeholder: 'e.g., FullAdder, Multiplexer'
+                    placeholder: msg.namePlaceholder
                 },
                 {
                     id: 'componentDescription',
-                    label: 'Description (optional):',
+                    label: msg.descriptionLabel,
                     type: 'textarea',
                     rows: 3,
-                    placeholder: 'Brief description of what this component does'
+                    placeholder: msg.descriptionPlaceholder
                 }
             ],
-            infoBox: `
-                <strong>Requirements:</strong>
-                <ul style="margin: 5px 0; padding-left: 20px;">
-                    <li>At least one INPUT component</li>
-                    <li>At least one OUTPUT component</li>
-                </ul>
-            `,
+            infoBox: msg.infoBox,
             buttons: [
                 {
                     id: 'confirmSave',
-                    label: 'Save Component',
+                    label: msg.confirmButton,
                     className: 'action-btn primary-btn',
                     onClick: async () => await this.saveCurrentCircuitAsComponent()
                 },
                 {
                     id: 'cancelSave',
-                    label: 'Cancel',
+                    label: msg.cancelButton,
                     className: 'action-btn',
                     onClick: () => DialogFactory.hideDialog(this.dialogs.saveComponent)
                 }
@@ -129,7 +124,7 @@ export class DialogManager {
 
         return DialogFactory.createDialog({
             id: 'saveComponentDialog',
-            title: 'Save as Component',
+            title: msg.title,
             size: 'default',
             content: content,
             closeButtonId: 'closeSaveDialog',
@@ -144,7 +139,10 @@ export class DialogManager {
         const circuitData = this.callbacks.getCircuitData();
 
         if (circuitData.components.length === 0) {
-            alert('Please create a circuit before saving it as a component.');
+            DialogFactory.showAlert({
+                message: messages.alerts.emptyCircuit,
+                type: 'warning'
+            });
             return;
         }
 
@@ -152,7 +150,10 @@ export class DialogManager {
         const outputs = circuitData.components.filter(c => c.type === 'OUTPUT');
 
         if (inputs.length === 0 || outputs.length === 0) {
-            alert('Your circuit must have at least one INPUT and one OUTPUT to be saved as a component.');
+            DialogFactory.showAlert({
+                message: messages.alerts.missingInputsOutputs,
+                type: 'warning'
+            });
             return;
         }
 
@@ -198,7 +199,10 @@ export class DialogManager {
         const description = descInput.value.trim();
 
         if (!name) {
-            alert('Please enter a component name.');
+            DialogFactory.showAlert({
+                message: messages.alerts.componentNameRequired,
+                type: 'warning'
+            });
             return;
         }
 
@@ -206,9 +210,20 @@ export class DialogManager {
         const componentLibrary = this.callbacks.getComponentLibrary();
         const exists = await componentLibrary.componentExists(name);
         if (exists) {
-            if (!confirm(`A component named "${name}" already exists. Overwrite it?`)) {
-                return;
-            }
+            const confirmConfig = messages.confirms.overwriteComponent;
+            DialogFactory.showConfirm({
+                message: formatMessage(confirmConfig.message, name),
+                title: confirmConfig.title,
+                confirmLabel: confirmConfig.confirmLabel,
+                cancelLabel: confirmConfig.cancelLabel,
+                onConfirm: async () => {
+                    // Callback to save component
+                    await this.callbacks.onSaveComponent(name, description);
+                    // Close dialog
+                    DialogFactory.hideDialog(this.dialogs.saveComponent);
+                }
+            });
+            return;
         }
 
         // Callback to save component
@@ -223,10 +238,11 @@ export class DialogManager {
      * @returns {HTMLElement} Export component dialog element
      */
     _createExportComponentDialog() {
+        const msg = messages.dialogs.exportComponent;
         const container = document.createElement('div');
 
         const p = document.createElement('p');
-        p.textContent = 'Select a component to export:';
+        p.textContent = msg.description;
         container.appendChild(p);
 
         const list = document.createElement('div');
@@ -236,7 +252,7 @@ export class DialogManager {
 
         return DialogFactory.createDialog({
             id: 'exportComponentDialog',
-            title: 'Export Component',
+            title: msg.title,
             size: 'default',
             content: container,
             closeButtonId: 'closeExportDialog'
@@ -248,10 +264,11 @@ export class DialogManager {
      * @returns {HTMLElement} Manage components dialog element
      */
     _createManageComponentsDialog() {
+        const msg = messages.dialogs.manageComponents;
         const container = document.createElement('div');
 
         const p = document.createElement('p');
-        p.textContent = 'Manage your saved custom components.';
+        p.textContent = msg.description;
         container.appendChild(p);
 
         const list = document.createElement('div');
@@ -260,7 +277,7 @@ export class DialogManager {
 
         return DialogFactory.createDialog({
             id: 'manageComponentsDialog',
-            title: 'Component Library',
+            title: msg.title,
             size: 'default',
             content: container,
             closeButtonId: 'closeManageDialog'
@@ -290,10 +307,11 @@ export class DialogManager {
         const componentNames = Object.keys(customComponents);
 
         if (componentNames.length === 0) {
+            const msg = messages.dialogs.manageComponents;
             list.innerHTML = `
                 <div class="empty-library">
-                    <div class="empty-library-icon">📦</div>
-                    <p>No custom components saved yet.</p>
+                    <div class="empty-library-icon">${msg.emptyIcon}</div>
+                    <p>${msg.emptyMessage}</p>
                     <p style="font-size: 0.9em;">Create a circuit and click "Save as Component" to get started.</p>
                 </div>
             `;
@@ -353,23 +371,24 @@ export class DialogManager {
      * @returns {HTMLElement} Rename dialog element
      */
     _createRenameDialog() {
+        const msg = messages.dialogs.rename;
         const content = DialogFactory.createFormContent({
             fields: [{
                 id: 'newComponentLabel',
-                label: 'New Label:',
+                label: msg.label,
                 type: 'text',
-                placeholder: 'Enter new label'
+                placeholder: msg.placeholder
             }],
             buttons: [
                 {
                     id: 'confirmRename',
-                    label: 'Rename',
+                    label: msg.confirmButton,
                     className: 'action-btn primary-btn',
                     onClick: () => this.confirmRename()
                 },
                 {
                     id: 'cancelRename',
-                    label: 'Cancel',
+                    label: msg.cancelButton,
                     className: 'action-btn',
                     onClick: () => DialogFactory.hideDialog(this.dialogs.rename)
                 }
@@ -378,7 +397,7 @@ export class DialogManager {
 
         return DialogFactory.createDialog({
             id: 'renameDialog',
-            title: 'Rename Component',
+            title: msg.title,
             size: 'small',
             content: content,
             closeButtonId: 'closeRenameDialog',
@@ -423,7 +442,10 @@ export class DialogManager {
         const newLabel = input.value.trim();
 
         if (!newLabel) {
-            alert('Please enter a label.');
+            DialogFactory.showAlert({
+                message: messages.alerts.labelRequired,
+                type: 'warning'
+            });
             return;
         }
 
@@ -446,36 +468,37 @@ export class DialogManager {
         const container = document.createElement('div');
 
         const p = document.createElement('p');
-        p.textContent = 'You have unsaved changes. How would you like to save your work?';
+        p.textContent = messages.dialogs.saveOptions.description;
         container.appendChild(p);
 
         const optionsDiv = document.createElement('div');
         optionsDiv.className = 'save-options';
 
         // Create 4 option buttons
+        const opts = messages.dialogs.saveOptions;
         const options = [
             {
                 id: 'saveAsCurrentBoard',
-                title: '💾 Update Current Board',
-                desc: 'Save changes to <strong id="currentBoardNameInDialog"></strong>',
+                title: opts.updateCurrentBoard.title,
+                desc: opts.updateCurrentBoard.desc,
                 class: ''
             },
             {
                 id: 'saveAsNewBoard',
-                title: '📋 Save as New Board',
-                desc: 'Create a new work-in-progress board',
+                title: opts.saveAsNewBoard.title,
+                desc: opts.saveAsNewBoard.desc,
                 class: ''
             },
             {
                 id: 'saveAsNewComponent',
-                title: '🔧 Save as Component',
-                desc: 'Finalize as a reusable component',
+                title: opts.saveAsComponent.title,
+                desc: opts.saveAsComponent.desc,
                 class: ''
             },
             {
                 id: 'discardChanges',
-                title: '🗑️ Discard Changes',
-                desc: "Don't save, just proceed",
+                title: opts.discardChanges.title,
+                desc: opts.discardChanges.desc,
                 class: 'discard-btn'
             }
         ];
@@ -495,7 +518,7 @@ export class DialogManager {
 
         return DialogFactory.createDialog({
             id: 'saveOptionsDialog',
-            title: 'Save Current Work',
+            title: messages.dialogs.saveOptions.title,
             size: 'default',
             content: container,
             closeButtonId: 'closeSaveOptions',
@@ -511,23 +534,24 @@ export class DialogManager {
      * @returns {HTMLElement} Board name dialog element
      */
     _createBoardNameDialog() {
+        const msg = messages.dialogs.boardName;
         const content = DialogFactory.createFormContent({
             fields: [{
                 id: 'boardNameInput',
-                label: 'Board Name:',
+                label: msg.label,
                 type: 'text',
-                placeholder: 'Enter board name'
+                placeholder: msg.placeholder
             }],
             buttons: [
                 {
                     id: 'confirmBoardName',
-                    label: 'Save',
+                    label: msg.confirmButton,
                     className: 'action-btn primary-btn',
                     onClick: () => {} // Will be set dynamically in promptForBoardName
                 },
                 {
                     id: 'cancelBoardName',
-                    label: 'Cancel',
+                    label: msg.cancelButton,
                     className: 'action-btn',
                     onClick: () => DialogFactory.hideDialog(this.dialogs.boardName)
                 }
@@ -536,7 +560,7 @@ export class DialogManager {
 
         return DialogFactory.createDialog({
             id: 'boardNameDialog',
-            title: 'Save Board',
+            title: msg.title,
             size: 'small',
             content: content,
             closeButtonId: 'closeBoardNameDialog',
@@ -668,22 +692,37 @@ export class DialogManager {
         confirmBtn.onclick = () => {
             const boardName = input.value.trim();
             if (!boardName) {
-                alert('Please enter a board name.');
+                DialogFactory.showAlert({
+                    message: messages.alerts.boardNameRequired,
+                    type: 'warning'
+                });
                 return;
             }
 
             const customComponents = this.callbacks.getCustomComponents();
             if (customComponents[boardName]) {
-                alert(`A component with name "${boardName}" already exists. Please choose a different name.`);
+                DialogFactory.showAlert({
+                    message: formatMessage(messages.alerts.componentNameConflict, boardName),
+                    type: 'error'
+                });
                 return;
             }
 
             const savedBoards = this.callbacks.getSavedBoards();
             const currentBoardName = this.callbacks.getCurrentBoardName();
             if (savedBoards[boardName] && boardName !== currentBoardName) {
-                if (!confirm(`Board "${boardName}" already exists. Overwrite?`)) {
-                    return;
-                }
+                const confirmConfig = messages.confirms.overwriteBoard;
+                DialogFactory.showConfirm({
+                    message: formatMessage(confirmConfig.message, boardName),
+                    title: confirmConfig.title,
+                    confirmLabel: confirmConfig.confirmLabel,
+                    cancelLabel: confirmConfig.cancelLabel,
+                    onConfirm: () => {
+                        DialogFactory.hideDialog(this.dialogs.boardName);
+                        onSave(boardName);
+                    }
+                });
+                return;
             }
 
             DialogFactory.hideDialog(this.dialogs.boardName);
@@ -710,7 +749,10 @@ export class DialogManager {
         const componentNames = Object.keys(customComponents);
 
         if (componentNames.length === 0) {
-            alert('No custom components available to export.');
+            DialogFactory.showAlert({
+                message: messages.alerts.noComponentsToExport,
+                type: 'info'
+            });
             return;
         }
 
@@ -849,7 +891,7 @@ export class DialogManager {
 
         const dialog = DialogFactory.createDialog({
             id: 'helpDialog',
-            title: '📖 Help & Instructions',
+            title: messages.dialogs.help.title,
             size: 'large',
             content: content,
             closeButtonId: 'closeHelp'

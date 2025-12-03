@@ -177,17 +177,6 @@ export class DialogFactory {
         if (!backdrop) {
             backdrop = document.createElement('div');
             backdrop.className = 'dialog-backdrop';
-            backdrop.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0, 0, 0, 0.5);
-                z-index: 999;
-                opacity: 0;
-                transition: opacity 0.2s ease;
-            `;
 
             // Click backdrop to close
             backdrop.addEventListener('click', () => {
@@ -324,5 +313,214 @@ export class DialogFactory {
         }
 
         return container;
+    }
+
+    /**
+     * Show alert dialog - Replaces browser alert() with styled dialog
+     * @param {Object} config - Alert configuration
+     * @param {string} config.message - Alert message
+     * @param {string} config.type - 'success' | 'error' | 'warning' | 'info' (default: 'info')
+     * @param {string} config.title - Optional title (auto-generated if not provided)
+     * @param {Function} config.onClose - Optional callback when alert is dismissed
+     */
+    static showAlert(config) {
+        const type = config.type || 'info';
+
+        // Auto-generate title if not provided (no icons in title text)
+        const titleMap = {
+            success: 'Success',
+            error: 'Error',
+            warning: 'Warning',
+            info: 'Information'
+        };
+        const title = config.title || titleMap[type];
+
+        // Create alert content (just message, no icon)
+        const content = document.createElement('div');
+        content.className = 'alert-content';
+
+        // Message container
+        const messageContainer = document.createElement('div');
+        messageContainer.className = 'alert-message';
+        messageContainer.textContent = config.message;
+
+        content.appendChild(messageContainer);
+
+        // OK button
+        const okButton = {
+            id: 'alertOkBtn',
+            label: 'OK',
+            className: 'primary-btn',
+            onClick: () => {
+                this.hideDialog(alertDialog);
+                if (config.onClose) config.onClose();
+            }
+        };
+
+        const buttonsContainer = this.createActionButtons([okButton]);
+
+        const container = document.createElement('div');
+        container.appendChild(content);
+        container.appendChild(buttonsContainer);
+
+        // Create dialog
+        const alertDialog = this.createDialog({
+            id: `alertDialog_${Date.now()}`,
+            title: title,
+            size: 'small',
+            content: container,
+            closeButtonId: `closeAlert_${Date.now()}`,
+            showCloseButton: true,
+            backdrop: true,
+            onClose: config.onClose
+        });
+
+        // Apply alert-specific class for styling
+        alertDialog.classList.add('alert-dialog', `alert-${type}`);
+
+        // Add icon to header via data attribute
+        const iconMap = {
+            success: '✓',
+            error: '✗',
+            warning: '⚠',
+            info: 'ℹ'
+        };
+        const header = alertDialog.querySelector('.panel-header');
+        if (header && iconMap[type]) {
+            header.setAttribute('data-icon', iconMap[type]);
+        }
+
+        // Auto-remove dialog from DOM after it's hidden
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+                    if (alertDialog.style.display === 'none') {
+                        setTimeout(() => {
+                            alertDialog.remove();
+                            observer.disconnect();
+                        }, 100);
+                    }
+                }
+            });
+        });
+        observer.observe(alertDialog, { attributes: true });
+
+        // Add to DOM and show
+        document.body.appendChild(alertDialog);
+        this.showDialog(alertDialog);
+
+        // Auto-focus OK button for keyboard accessibility
+        setTimeout(() => {
+            const okBtn = alertDialog.querySelector('#alertOkBtn');
+            if (okBtn) okBtn.focus();
+        }, 300);
+
+        return alertDialog;
+    }
+
+    /**
+     * Show confirm dialog - Replaces browser confirm() with styled dialog
+     * @param {Object} config - Confirm configuration
+     * @param {string} config.message - Confirm message
+     * @param {string} config.title - Optional title (default: 'Confirm')
+     * @param {Function} config.onConfirm - Callback when user clicks Yes/OK
+     * @param {Function} config.onCancel - Optional callback when user clicks No/Cancel
+     * @param {string} config.confirmLabel - Label for confirm button (default: 'Yes')
+     * @param {string} config.cancelLabel - Label for cancel button (default: 'No')
+     * @param {string} config.type - 'warning' | 'info' (default: 'warning')
+     */
+    static showConfirm(config) {
+        const type = config.type || 'warning';
+        const title = config.title || 'Confirm';
+
+        // Create confirm content (just message, no icon)
+        const content = document.createElement('div');
+        content.className = 'confirm-content';
+
+        // Message container
+        const messageContainer = document.createElement('div');
+        messageContainer.className = 'confirm-message';
+        messageContainer.textContent = config.message;
+
+        content.appendChild(messageContainer);
+
+        // Buttons
+        const confirmButton = {
+            id: 'confirmYesBtn',
+            label: config.confirmLabel || 'Yes',
+            className: 'primary-btn',
+            onClick: () => {
+                this.hideDialog(confirmDialog);
+                if (config.onConfirm) config.onConfirm();
+            }
+        };
+
+        const cancelButton = {
+            id: 'confirmNoBtn',
+            label: config.cancelLabel || 'No',
+            className: 'secondary-btn',
+            onClick: () => {
+                this.hideDialog(confirmDialog);
+                if (config.onCancel) config.onCancel();
+            }
+        };
+
+        const buttonsContainer = this.createActionButtons([cancelButton, confirmButton]);
+
+        const container = document.createElement('div');
+        container.appendChild(content);
+        container.appendChild(buttonsContainer);
+
+        // Create dialog
+        const confirmDialog = this.createDialog({
+            id: `confirmDialog_${Date.now()}`,
+            title: title,
+            size: 'small',
+            content: container,
+            closeButtonId: `closeConfirm_${Date.now()}`,
+            showCloseButton: true,
+            backdrop: true,
+            onClose: config.onCancel
+        });
+
+        // Apply confirm-specific class for styling
+        confirmDialog.classList.add('confirm-dialog', `confirm-${type}`);
+
+        // Add icon to header via data attribute
+        const iconMap = {
+            warning: '⚠',
+            info: 'ℹ'
+        };
+        const header = confirmDialog.querySelector('.panel-header');
+        if (header && iconMap[type]) {
+            header.setAttribute('data-icon', iconMap[type]);
+        }
+
+        // Auto-remove dialog from DOM after it's hidden
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+                    if (confirmDialog.style.display === 'none') {
+                        setTimeout(() => {
+                            confirmDialog.remove();
+                            observer.disconnect();
+                        }, 100);
+                    }
+                }
+            });
+        });
+        observer.observe(confirmDialog, { attributes: true });
+
+        // Add to DOM and show
+        document.body.appendChild(confirmDialog);
+        this.showDialog(confirmDialog);
+
+        // Auto-focus No button for safety (prevents accidental confirms)
+        setTimeout(() => {
+            const noBtn = confirmDialog.querySelector('#confirmNoBtn');
+            if (noBtn) noBtn.focus();
+        }, 300);
+
+        return confirmDialog;
     }
 }

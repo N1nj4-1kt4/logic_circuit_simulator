@@ -60,6 +60,7 @@ import { CanvasRenderer } from './src/rendering/CanvasRenderer.js';
 import { TruthTablePanel } from './src/ui/TruthTablePanel.js';
 import { Toolbar } from './src/ui/Toolbar.js';
 import { DialogManager } from './src/ui/DialogManager.js';
+import { DialogFactory } from './src/ui/DialogFactory.js';
 
 class CircuitSimulator {
     constructor() {
@@ -412,7 +413,10 @@ class CircuitSimulator {
             actualType = 'CUSTOM';
 
             if (!this.customComponents[customName]) {
-                alert('Custom component not found!');
+                DialogFactory.showAlert({
+                    message: 'Custom component not found!',
+                    type: 'error'
+                });
                 return;
             }
         }
@@ -740,13 +744,19 @@ class CircuitSimulator {
             a.label.localeCompare(b.label));
 
         if (inputs.length === 0) {
-            alert('Please add at least one input to simulate.');
+            DialogFactory.showAlert({
+                message: 'Please add at least one input to simulate.',
+                type: 'warning'
+            });
             return;
         }
 
         const outputs = this.components.filter(c => c.type === 'OUTPUT');
         if (outputs.length === 0) {
-            alert('Please add at least one output to simulate.');
+            DialogFactory.showAlert({
+                message: 'Please add at least one output to simulate.',
+                type: 'warning'
+            });
             return;
         }
 
@@ -852,9 +862,15 @@ class CircuitSimulator {
             this.lastSavedState = JSON.stringify(this.getCurrentState());
             this.toolbar.updateCircuitNameDisplay(this.currentComponentName || this.currentBoardName, !!this.currentComponentName);
 
-            alert(`Component "${name}" saved successfully!`);
+            DialogFactory.showAlert({
+                message: `Component "${name}" saved successfully!`,
+                type: 'success'
+            });
         } else {
-            alert(`Failed to save component "${name}"`);
+            DialogFactory.showAlert({
+                message: `Failed to save component "${name}"`,
+                type: 'error'
+            });
         }
     }
 
@@ -867,7 +883,10 @@ class CircuitSimulator {
             await this.loadCustomComponents(); // Refresh local copy
             this.toolbar.updateCustomComponentsList(this.customComponents);
         } else {
-            alert(`Failed to delete component "${name}"`);
+            DialogFactory.showAlert({
+                message: `Failed to delete component "${name}"`,
+                type: 'error'
+            });
         }
     }
 
@@ -880,9 +899,15 @@ class CircuitSimulator {
     async downloadComponent(name) {
         const success = await this.componentLibrary.exportComponent(name);
         if (success) {
-            alert(`Component "${name}" exported successfully!`);
+            DialogFactory.showAlert({
+                message: `Component "${name}" exported successfully!`,
+                type: 'success'
+            });
         } else {
-            alert(`Failed to export component "${name}"`);
+            DialogFactory.showAlert({
+                message: `Failed to export component "${name}"`,
+                type: 'error'
+            });
         }
     }
 
@@ -896,10 +921,16 @@ class CircuitSimulator {
             if (componentData) {
                 await this.loadCustomComponents(); // Refresh local copy
                 this.toolbar.updateCustomComponentsList(this.customComponents);
-                alert(`Component "${componentData.name}" imported successfully!`);
+                DialogFactory.showAlert({
+                    message: `Component "${componentData.name}" imported successfully!`,
+                    type: 'success'
+                });
             }
         } catch (error) {
-            alert('Failed to import component: ' + error.message);
+            DialogFactory.showAlert({
+                message: 'Failed to import component: ' + error.message,
+                type: 'error'
+            });
         }
 
         // Reset file input
@@ -909,7 +940,10 @@ class CircuitSimulator {
     // Edit Component Method
     loadComponentForEditing(name) {
         if (!this.customComponents[name]) {
-            alert('Component not found.');
+            DialogFactory.showAlert({
+                message: 'Component not found.',
+                type: 'error'
+            });
             return;
         }
 
@@ -949,7 +983,10 @@ class CircuitSimulator {
             this.redraw();
             this.toolbar.updateCircuitNameDisplay(this.currentComponentName || this.currentBoardName, !!this.currentComponentName);
             document.getElementById('manageComponentsDialog').style.display = 'none';
-            alert(`Component "${name}" loaded for editing. Make your changes and save it again.`);
+            DialogFactory.showAlert({
+                message: `Component "${name}" loaded for editing. Make your changes and save it again.`,
+                type: 'info'
+            });
         };
 
         if (this.hasUnsavedChanges()) {
@@ -965,7 +1002,10 @@ class CircuitSimulator {
             a.label.localeCompare(b.label));
 
         if (inputs.length === 0) {
-            alert('Please add at least one input to simulate.');
+            DialogFactory.showAlert({
+                message: 'Please add at least one input to simulate.',
+                type: 'warning'
+            });
             return;
         }
 
@@ -1007,7 +1047,10 @@ class CircuitSimulator {
         const inputs = this.components.filter(c => c.type === 'INPUT');
 
         if (inputs.length === 0) {
-            alert('No inputs to reset.');
+            DialogFactory.showAlert({
+                message: 'No inputs to reset.',
+                type: 'warning'
+            });
             return;
         }
 
@@ -1192,7 +1235,10 @@ class CircuitSimulator {
             this.toolbar.updateBoardsList(this.savedBoards, this.currentBoardName);
             console.log(`Board saved: ${boardName}`);
         } else {
-            alert(`Failed to save board "${boardName}"`);
+            DialogFactory.showAlert({
+                message: `Failed to save board "${boardName}"`,
+                type: 'error'
+            });
         }
     }
 
@@ -1200,7 +1246,10 @@ class CircuitSimulator {
         const board = await this.boardManager.loadBoard(boardName);
 
         if (!board) {
-            alert(`Board "${boardName}" not found.`);
+            DialogFactory.showAlert({
+                message: `Board "${boardName}" not found.`,
+                type: 'error'
+            });
             return;
         }
 
@@ -1268,21 +1317,31 @@ class CircuitSimulator {
     }
 
     async deleteBoard(boardName) {
-        if (confirm(`Are you sure you want to delete board "${boardName}"?`)) {
-            const success = await this.boardManager.deleteBoard(boardName);
+        DialogFactory.showConfirm({
+            message: `Are you sure you want to delete board "${boardName}"?`,
+            title: 'Delete Board',
+            confirmLabel: 'Delete',
+            cancelLabel: 'Cancel',
+            type: 'warning',
+            onConfirm: async () => {
+                const success = await this.boardManager.deleteBoard(boardName);
 
-            if (success) {
-                await this.loadSavedBoards(); // Refresh local copy
-                if (this.currentBoardName === boardName) {
-                    this.currentBoardName = null;
+                if (success) {
+                    await this.loadSavedBoards(); // Refresh local copy
+                    if (this.currentBoardName === boardName) {
+                        this.currentBoardName = null;
+                    }
+                    this.toolbar.updateBoardsList(this.savedBoards, this.currentBoardName);
+                    this.toolbar.updateCircuitNameDisplay(this.currentComponentName || this.currentBoardName, !!this.currentComponentName);
+                    console.log(`Board deleted: ${boardName}`);
+                } else {
+                    DialogFactory.showAlert({
+                        message: `Failed to delete board "${boardName}"`,
+                        type: 'error'
+                    });
                 }
-                this.toolbar.updateBoardsList(this.savedBoards, this.currentBoardName);
-                this.toolbar.updateCircuitNameDisplay(this.currentComponentName || this.currentBoardName, !!this.currentComponentName);
-                console.log(`Board deleted: ${boardName}`);
-            } else {
-                alert(`Failed to delete board "${boardName}"`);
             }
-        }
+        });
     }
 }
 

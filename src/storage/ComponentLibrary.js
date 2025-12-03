@@ -4,6 +4,7 @@
  */
 import { STORAGE_KEYS } from '../constants.js';
 import { exportToJSON, importFromJSON, validateComponentData } from '../utils/serialization.js';
+import { DialogFactory } from '../ui/DialogFactory.js';
 
 export class ComponentLibrary {
     /**
@@ -159,7 +160,10 @@ export class ComponentLibrary {
             return true;
         } catch (error) {
             console.error(`Failed to export component "${name}":`, error);
-            alert(`Failed to export component: ${error.message}`);
+            DialogFactory.showAlert({
+                message: `Failed to export component: ${error.message}`,
+                type: 'error'
+            });
             return false;
         }
     }
@@ -184,13 +188,29 @@ export class ComponentLibrary {
             const exists = await this.componentExists(name);
 
             if (exists && !overwrite) {
-                const shouldOverwrite = confirm(
-                    `Component "${name}" already exists. Overwrite it?`
-                );
+                return new Promise((resolve) => {
+                    DialogFactory.showConfirm({
+                        message: `Component "${name}" already exists. Overwrite it?`,
+                        title: 'Overwrite Component',
+                        confirmLabel: 'Overwrite',
+                        cancelLabel: 'Cancel',
+                        type: 'warning',
+                        onConfirm: async () => {
+                            // Save the component
+                            const success = await this.saveComponent(name, componentData);
 
-                if (!shouldOverwrite) {
-                    return null;
-                }
+                            if (success) {
+                                console.log(`Component "${name}" imported successfully`);
+                                resolve(componentData);
+                            } else {
+                                resolve(null);
+                            }
+                        },
+                        onCancel: () => {
+                            resolve(null);
+                        }
+                    });
+                });
             }
 
             // Save the component
@@ -204,7 +224,10 @@ export class ComponentLibrary {
             return null;
         } catch (error) {
             console.error('Failed to import component:', error);
-            alert(`Failed to import component: ${error.message}`);
+            DialogFactory.showAlert({
+                message: `Failed to import component: ${error.message}`,
+                type: 'error'
+            });
             return null;
         }
     }

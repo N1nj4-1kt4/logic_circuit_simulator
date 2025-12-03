@@ -4,6 +4,7 @@
  */
 
 import { STORAGE_KEYS } from '../constants.js';
+import { DialogFactory } from '../ui/DialogFactory.js';
 
 /**
  * Generic localStorage getter with JSON parsing
@@ -95,7 +96,10 @@ export function getCustomComponents() {
 export function setCustomComponents(components) {
     const success = setItem(STORAGE_KEYS.CUSTOM_COMPONENTS, components);
     if (!success) {
-        alert('Failed to save components to storage.');
+        DialogFactory.showAlert({
+            message: 'Failed to save components to storage.',
+            type: 'error'
+        });
     }
     return success;
 }

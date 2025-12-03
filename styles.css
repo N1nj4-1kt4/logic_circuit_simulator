@@ -1380,3 +1380,241 @@ body.dark-mode .save-option-btn.discard-btn .option-title {
 body.dark-mode .option-desc {
     color: #b3b3b3;
 }
+
+/* ===== Alert & Confirm Dialogs ===== */
+
+/* Dialog backdrop */
+.dialog-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+/* Alert/Confirm dialog - much narrower */
+.alert-dialog,
+.confirm-dialog {
+    min-width: 350px !important;
+    max-width: 400px !important;
+}
+
+/* Alert/Confirm header with colored background and icon - full width */
+.alert-dialog .panel-header,
+.confirm-dialog .panel-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px;
+    color: #333;
+    border-radius: 8px 8px 0 0;
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Icon in header - bigger */
+.alert-dialog .panel-header::before,
+.confirm-dialog .panel-header::before {
+    content: attr(data-icon);
+    font-size: 28px;
+    font-weight: bold;
+    line-height: 1;
+}
+
+/* Header title - smaller */
+.alert-dialog .panel-header h3,
+.confirm-dialog .panel-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+}
+
+/* Close button for alert/confirm dialogs - dark for pastel backgrounds */
+.alert-dialog .dialog-close-btn,
+.confirm-dialog .dialog-close-btn {
+    color: #333;
+    opacity: 0.7;
+    background: transparent;
+    border: none;
+    font-size: 24px;
+}
+
+.alert-dialog .dialog-close-btn:hover,
+.confirm-dialog .dialog-close-btn:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.1);
+}
+
+/* Alert/Confirm content container */
+.alert-content,
+.confirm-content {
+    padding: 24px 0 12px 0;
+}
+
+/* Alert/Confirm message text - larger font */
+.alert-message,
+.confirm-message {
+    font-size: 16px;
+    line-height: 1.5;
+    color: #333;
+    font-weight: 400;
+    max-width: 100%;
+}
+
+/* Alert type styling - Success (pastel green) */
+.alert-dialog.alert-success {
+    border-top: 3px solid #66bb6a;
+    background: white;
+}
+
+.alert-dialog.alert-success .panel-header {
+    background: #a5d6a7;
+}
+
+/* Alert type styling - Error (pastel red) */
+.alert-dialog.alert-error {
+    border-top: 3px solid #ef5350;
+    background: white;
+}
+
+.alert-dialog.alert-error .panel-header {
+    background: #ef9a9a;
+}
+
+/* Alert type styling - Warning (pastel orange) */
+.alert-dialog.alert-warning {
+    border-top: 3px solid #ffa726;
+    background: white;
+}
+
+.alert-dialog.alert-warning .panel-header {
+    background: #ffcc80;
+}
+
+/* Alert type styling - Info (pastel blue) */
+.alert-dialog.alert-info {
+    border-top: 3px solid #42a5f5;
+    background: white;
+}
+
+.alert-dialog.alert-info .panel-header {
+    background: #90caf9;
+}
+
+/* Confirm dialog styling */
+.confirm-dialog.confirm-warning {
+    border-top: 3px solid #ffa726;
+    background: white;
+}
+
+.confirm-dialog.confirm-warning .panel-header {
+    background: #ffcc80;
+}
+
+.confirm-dialog.confirm-info {
+    border-top: 3px solid #42a5f5;
+    background: white;
+}
+
+.confirm-dialog.confirm-info .panel-header {
+    background: #90caf9;
+}
+
+.confirm-dialog.confirm-info {
+    border-left: 4px solid #2196f3;
+    background: white;
+}
+
+.confirm-dialog.confirm-info .confirm-icon {
+    background: #2196f3;
+}
+
+/* Alert/Confirm dialog content padding - reduced side margins */
+.alert-dialog .dialog-content,
+.confirm-dialog .dialog-content {
+    padding: 20px;
+}
+
+/* Primary button for alerts/confirms */
+.primary-btn {
+    padding: 12px 32px;
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    min-width: 120px;
+}
+
+.primary-btn:hover {
+    background: #5568d3;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.primary-btn:active {
+    transform: translateY(0);
+}
+
+/* Secondary button for confirms */
+.secondary-btn {
+    padding: 12px 32px;
+    background: #f5f5f5;
+    color: #666;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    min-width: 120px;
+}
+
+.secondary-btn:hover {
+    background: #e0e0e0;
+    border-color: #bbb;
+    transform: translateY(-1px);
+}
+
+.secondary-btn:active {
+    transform: translateY(0);
+}
+
+/* Alert/Confirm button containers */
+.alert-dialog .dialog-actions,
+.confirm-dialog .dialog-actions {
+    margin-top: 20px;
+    justify-content: center;
+    gap: 12px;
+}
+
+/* Dark mode support for alerts/confirms */
+body.dark-mode .alert-message,
+body.dark-mode .confirm-message {
+    color: #e9e9e9;
+}
+
+body.dark-mode .alert-dialog,
+body.dark-mode .confirm-dialog {
+    background: #0f3460;
+}
+
+body.dark-mode .secondary-btn {
+    background: #1a1a2e;
+    color: #e9e9e9;
+    border-color: #53a8f4;
+}
+
+body.dark-mode .secondary-btn:hover {
+    background: #16213e;
+    border-color: #667eea;
+}
