@@ -40,7 +40,6 @@ import {
 import { LocalStorageAdapter } from './src/storage/LocalStorageAdapter.js';
 import { BoardManager } from './src/storage/BoardManager.js';
 import { ComponentLibrary } from './src/storage/ComponentLibrary.js';
-import { getDarkMode, setDarkMode } from './src/storage/localStorage.js';
 
 import { evaluateGate } from './src/core/gateLogic.js';
 
@@ -61,6 +60,7 @@ import { TruthTablePanel } from './src/ui/TruthTablePanel.js';
 import { Toolbar } from './src/ui/Toolbar.js';
 import { DialogManager } from './src/ui/DialogManager.js';
 import { DialogFactory } from './src/ui/DialogFactory.js';
+import { ThemeManager } from './src/ui/ThemeManager.js';
 
 class CircuitSimulator {
     constructor() {
@@ -76,8 +76,6 @@ class CircuitSimulator {
         this.autoCycleTimeout = null;
         this.currentCycleIndex = 0;
         this.customComponents = {};
-        // Default to dark mode if no preference is saved
-        this.darkMode = getDarkMode();
         this.isDraggingComponent = false;
         this.draggedComponent = null;
         this.dragOffset = { x: 0, y: 0 };
@@ -98,8 +96,16 @@ class CircuitSimulator {
         this.boardManager = new BoardManager(this.storageAdapter);
         this.componentLibrary = new ComponentLibrary(this.storageAdapter);
 
+        // Initialize theme manager (must be before renderer)
+        this.themeManager = new ThemeManager({
+            onThemeChange: (isDarkMode) => {
+                this.canvasRenderer.setDarkMode(isDarkMode);
+                this.redraw();
+            }
+        });
+
         // Initialize renderer (will be updated after components/connections are loaded)
-        this.canvasRenderer = new CanvasRenderer(this.canvas, this.components, this.connections, this.darkMode);
+        this.canvasRenderer = new CanvasRenderer(this.canvas, this.components, this.connections, this.themeManager.isDark());
 
         // Initialize truth table panel
         this.truthTablePanel = null;
@@ -168,7 +174,7 @@ class CircuitSimulator {
             !!this.currentComponentName
         );
 
-        this.applyTheme();
+        // Theme already applied by ThemeManager in constructor
     }
 
     getScaledCoordinates(e) {
@@ -280,10 +286,7 @@ class CircuitSimulator {
             return false;
         });
 
-        // Theme Toggle
-        document.getElementById('themeToggle').addEventListener('click', () => {
-            this.toggleTheme();
-        });
+        // NOTE: Theme toggle now handled by ThemeManager class
 
         // Canvas click
         this.canvas.addEventListener('click', (e) => {
@@ -1083,23 +1086,7 @@ class CircuitSimulator {
     }
 
     // Theme Management Methods
-    applyTheme() {
-        if (this.darkMode) {
-            document.body.classList.add('dark-mode');
-            document.getElementById('themeToggle').textContent = '☀️';
-        } else {
-            document.body.classList.remove('dark-mode');
-            document.getElementById('themeToggle').textContent = '🌙';
-        }
-        this.redraw();
-    }
-
-    toggleTheme() {
-        this.darkMode = !this.darkMode;
-        setDarkMode(this.darkMode);
-        this.canvasRenderer.setDarkMode(this.darkMode);
-        this.applyTheme();
-    }
+    // Theme management methods removed - now handled by ThemeManager class
 
     // Draggable Truth Table
     // setupDraggableTruthTable removed - now handled by TruthTablePanel + Interact.js
