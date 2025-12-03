@@ -54,10 +54,12 @@ logic_circuit_simulator/
 │   │   └── ComponentDragger.js  # Drag-and-drop logic
 │   │
 │   ├── ui/                    # Non-canvas UI components
-│   │   ├── TruthTablePanel.js # Truth table management
-│   │   ├── DialogManager.js   # All dialog boxes
-│   │   ├── Toolbar.js         # Toolbar state and interactions
-│   │   └── ThemeManager.js    # Dark mode toggle
+│   │   ├── TruthTablePanel.js # Truth table management ✅
+│   │   ├── Toolbar.js         # Toolbar state and interactions ✅
+│   │   ├── DialogManager.js   # All dialog boxes ✅
+│   │   ├── DialogFactory.js   # Programmatic dialog creation ✅
+│   │   ├── messages.js        # Centralized message strings ✅
+│   │   └── ThemeManager.js    # Dark mode toggle ⏸️
 │   │
 │   ├── storage/               # Persistence layer
 │   │   ├── StorageAdapter.js  # Abstract storage interface
@@ -262,25 +264,40 @@ See detailed implementation in PROGRESS.md
 
 ---
 
-### Phase 5: Extract UI Components (Week 5)
+### Phase 5: Extract UI Components (Week 5) ⏳ In Progress
 
 **Goal:** Modularize non-canvas UI, integrate libraries
 
 See detailed implementation in PROGRESS.md
 
-**Key Files to Create:**
-- `src/ui/TruthTablePanel.js` (uses Tabulator + Interact.js)
-- `src/ui/DialogManager.js`
-- `src/ui/Toolbar.js`
-- `src/ui/ThemeManager.js`
+**Key Files Created:**
+- `src/ui/TruthTablePanel.js` ✅ (uses Tabulator + Interact.js)
+- `src/ui/Toolbar.js` ✅
+- `src/ui/DialogManager.js` ✅
+- `src/ui/DialogFactory.js` ✅ (programmatic dialog creation)
+- `src/ui/messages.js` ✅ (centralized message strings for localization)
+- `src/ui/ThemeManager.js` ⏸️ (pending)
 
 **Libraries Integrated:**
-- Tabulator (truth table)
-- Interact.js (drag/resize)
+- Tabulator (truth table) ✅
+- Interact.js (drag/resize) ✅
 
-**Deliverable:** UI modularized, ~400 lines extracted, better UX
+**Sub-Phases Completed:**
+- **5.1:** Truth Table Panel ✅ (~200 lines)
+- **5.2.1:** Toolbar ✅ (~300 lines)
+- **5.2.2:** DialogManager ✅ (~400 lines)
+- **5.2.3:** Alert Dialog System Modernization ✅
+  - DialogFactory for DRY dialog creation
+  - Message centralization in messages.js
+  - Alert dialog redesign (pastel colors, better UX)
+  - All inline styles moved to CSS
+- **5.3:** ThemeManager ⏸️ (pending, ~20 lines)
 
-**Risk:** Medium (library integration)
+**Status:** 4/5 sub-phases complete
+
+**Deliverable:** UI modularized, ~1,000+ lines extracted/improved, better UX, localization-ready
+
+**Risk:** Medium (library integration) - Mitigated successfully
 
 ---
 

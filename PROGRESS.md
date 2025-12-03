@@ -6,12 +6,12 @@ Track your progress through the refactoring phases here.
 
 ## Overall Status
 
-**Current Phase:** Phase 5.2.2 Complete (DialogManager extracted)
+**Current Phase:** Phase 5.2.3 Complete (Alert Dialog System Modernized)
 **Branch:** `refactor/modernization`
 **Started:** 2025-11-27
-**Last Updated:** 2025-12-02
+**Last Updated:** 2025-12-03
 **Approach:** Hybrid approach - OOP for storage layer, functional for core logic, rendering layer extracted, UI components being modularized
-**Next Step:** Phase 5.2.3 - Extract ThemeManager (final UI component)
+**Next Step:** Phase 5.3 - Extract ThemeManager (final UI component)
 
 ### Recent Accomplishments
 - ✅ Phase 2 fully integrated with comprehensive tests (60/60 passing)
@@ -20,10 +20,12 @@ Track your progress through the refactoring phases here.
 - ✅ Phase 5.1 Truth Table Panel extracted with Tabulator + Interact.js
 - ✅ Phase 5.2.1 Toolbar extracted (~300 lines removed from main file)
 - ✅ Phase 5.2.2 DialogManager extracted (~400 lines removed from main file)
+- ✅ Phase 5.2.3 Alert Dialog System modernized (DialogFactory + message centralization)
 - ✅ All 148 tests passing
 - ✅ Dev server running successfully at http://localhost:3002/
 - ✅ Application fully functional with new architecture
 - ✅ circuit-simulator.js reduced from ~2,900 to ~1,300 lines
+- ✅ All user-facing messages centralized in src/ui/messages.js for easy localization
 
 ---
 
@@ -295,13 +297,35 @@ Track your progress through the refactoring phases here.
 **Deliverable:** ~400 lines removed from circuit-simulator.js, all dialog logic centralized
 **Files:** [src/ui/DialogManager.js](src/ui/DialogManager.js), [circuit-simulator.js](circuit-simulator.js)
 
-#### 5.2.3: ThemeManager ⏸️ Not Started
+#### 5.2.3: Alert Dialog System Modernization ✅ COMPLETE
+- [x] Create `src/ui/DialogFactory.js` - Programmatic dialog creation system
+- [x] Extract all inline styles from DialogFactory to styles.css
+- [x] Create `src/ui/messages.js` - Centralized message strings for localization
+- [x] Implement `showAlert()` and `showConfirm()` with type-based styling
+- [x] Update alert dialog design: landscape, narrower, pastel headers, bigger icons
+- [x] Migrate DialogManager dialogs to use centralized messages
+- [x] Update all alert/confirm calls to use messages.js
+- [x] Test: All alert/confirm dialogs work with new design
+
+**Status:** ✅ Alert dialog system modernized and fully functional
+**Deliverable:** DRY dialog creation, centralized messages for easy localization, improved UX
+**Files:**
+- [src/ui/DialogFactory.js](src/ui/DialogFactory.js) - 500+ lines
+- [src/ui/messages.js](src/ui/messages.js) - 133 lines
+- [styles.css](styles.css) - Alert dialog styling section
+**Benefits:**
+- Single source of truth for dialog structure
+- All user-facing text centralized for easy localization
+- Improved visual design with pastel colors, better contrast
+- Icons in header, narrower dialogs, better mobile support
+
+#### 5.3: ThemeManager ⏸️ Not Started
 - [ ] Create `src/ui/ThemeManager.js`
 - [ ] Extract theme toggle and apply methods
 - [ ] Update `circuit-simulator.js` to use ThemeManager
 - [ ] Test: Dark mode toggle works
 
-**Overall Phase 5 Deliverable:** ⏳ UI components modularized, Tabulator + Interact.js integrated (3/4 components done - only ThemeManager remaining)
+**Overall Phase 5 Deliverable:** ⏳ UI components modularized, Tabulator + Interact.js integrated (4/5 sub-phases done - only ThemeManager remaining)
 
 ---
 
@@ -613,3 +637,159 @@ git push origin v2.0.0
 - **Solution:** Now edit once in [src/ui/DialogFactory.js:87](src/ui/DialogFactory.js#L87)
 - Affects all DialogFactory dialogs immediately
 - HTML dialogs already have × for visual consistency
+
+---
+
+### Session 2025-12-03 Part 2 (VSCode) - Phase 5.2.3 Alert Dialog System Complete
+**Completed:** Message Centralization + Alert Dialog Redesign
+
+#### Problem Context:
+User wanted to:
+1. Separate alert dialog styling from inline JavaScript to CSS
+2. Improve alert dialog design (transparency, button styling, message text)
+3. Centralize all message strings for easy editing and future localization
+
+#### Accomplishments:
+
+**1. Message Centralization System ✅**
+- ✅ **Created `src/ui/messages.js` (133 lines):**
+  - Centralized all user-facing strings in one file
+  - Organized by category: alerts, confirms, dialogs
+  - Function-based messages for dynamic content: `(name) => \`Message ${name}\``
+  - Static strings for simple messages
+  - Added `formatMessage()` helper for unified handling
+
+- ✅ **Updated DialogManager.js to use messages.js:**
+  - Migrated all hardcoded strings to centralized messages
+  - Updated 7 dialog creation methods to use `messages.dialogs.*`
+  - Updated all alert/confirm calls to use `messages.alerts.*` and `messages.confirms.*`
+  - Clean import: `import { messages, formatMessage } from './messages.js'`
+
+**2. Alert Dialog System Overhaul ✅**
+- ✅ **Moved all inline styles from DialogFactory.js to styles.css:**
+  - Extracted ~150 lines of inline CSS from JavaScript
+  - Created comprehensive CSS classes for all dialog types
+  - Separate styling for: success, error, warning, info
+  - Consistent styling across all alert/confirm dialogs
+
+- ✅ **Complete Alert Dialog Redesign (5 iterations):**
+
+  **Iteration 1 - Initial Cleanup:**
+  - Moved icons from message body to header
+  - Removed icon characters from title text (no more "ℹ Information")
+  - Landscape aspect ratio (450-550px width)
+  - Border changed from left to top
+
+  **Iteration 2 - User Feedback Round 1:**
+  - Reduced header height (16px → 12px padding)
+  - Made dialog even narrower (400-480px)
+  - Increased message font size (15px → 16px)
+  - Toned down header colors (darker shades)
+  - Fixed close button contrast
+
+  **Iteration 3 - User Feedback Round 2:**
+  - Made much narrower (350-400px) - ignored landscape requirement
+  - Added info icon (was missing: ℹ)
+  - Bigger icons (20px → 28px)
+  - **Pastel header backgrounds** for better contrast:
+    - Success: `#a5d6a7` (pastel green)
+    - Error: `#ef9a9a` (pastel red)
+    - Warning: `#ffcc80` (pastel orange)
+    - Info: `#90caf9` (pastel blue)
+
+  **Iteration 4 - Header Width Fix:**
+  - Fixed header width to match dialog width (no gaps)
+  - Changed header `margin: -1px` to `margin: 0`
+  - Added `width: 100%` and `box-sizing: border-box`
+
+  **Iteration 5 - Close Button Contrast:**
+  - Changed close button color to dark `#333` (from white)
+  - Works perfectly against pastel backgrounds
+  - Increased font size to 24px
+  - Added hover state with dark background
+
+**3. CSS Architecture Improvements ✅**
+- ✅ **Alert Dialog Styling (styles.css:1384-1575):**
+  - Full-width headers with pastel backgrounds
+  - Icons via CSS `::before` with `data-icon` attribute
+  - Dark text on pastel backgrounds for readability
+  - Narrower dialogs (350-400px) for better mobile support
+  - Consistent 3px top border for all types
+  - Clean separation from other dialog styles
+
+**4. DialogFactory Enhancement ✅**
+- ✅ **Alert/Confirm Methods Updated:**
+  - Icons now passed via `data-icon` attribute
+  - Auto-generated titles without icon characters
+  - Type-based styling (success, error, warning, info)
+  - Pastel color support built-in
+  - All icons visible including info (ℹ)
+
+#### Technical Details:
+
+**Message Centralization:**
+```javascript
+// Before: Hardcoded strings everywhere
+DialogFactory.showAlert({
+    message: 'Please create a circuit before saving it as a component.',
+    type: 'warning'
+});
+
+// After: Centralized messages
+DialogFactory.showAlert({
+    message: messages.alerts.emptyCircuit,
+    type: 'warning'
+});
+```
+
+**Alert Dialog Design Changes:**
+| Aspect | Before | After | Benefit |
+|--------|--------|-------|---------|
+| **Width** | 450-550px | 350-400px | Better mobile UX |
+| **Header Colors** | Bright (#4caf50, #f44336) | Pastel (#a5d6a7, #ef9a9a) | Better contrast |
+| **Icon Size** | None/20px | 28px | More visible |
+| **Icon Location** | Next to text | In header | Cleaner layout |
+| **Close Button** | White on bright | Dark on pastel | High contrast |
+| **Header Width** | Gaps on sides | Full width | Professional look |
+| **Message Font** | 15px | 16px | Better readability |
+
+**Files Modified:**
+- **Created:** `src/ui/messages.js` (133 lines)
+- **Modified:** `src/ui/DialogFactory.js` (~50 lines changed)
+- **Modified:** `src/ui/DialogManager.js` (~40 lines changed)
+- **Modified:** `styles.css` (~200 lines in alert section)
+
+**Localization Ready:**
+- All user-facing text in one file
+- Easy to create translations: `messages_es.js`, `messages_fr.js`
+- Function-based messages support dynamic content
+- Single source of truth for all strings
+
+#### Testing:
+- ✅ All alert types tested: success, error, warning, info
+- ✅ All confirm dialogs working
+- ✅ Message centralization verified across all dialogs
+- ✅ Icons visible in all alert types (including info)
+- ✅ Pastel colors provide good contrast
+- ✅ Close button clearly visible on all backgrounds
+- ✅ Header spans full width (no gaps)
+- ✅ Narrower dialogs work well on mobile
+- ✅ All existing functionality preserved
+- ✅ No compilation errors
+- ✅ Dev server running successfully at http://localhost:3002/
+
+#### Benefits Achieved:
+1. **Easy Localization:** All strings in one file, ready for translation
+2. **Easy Editing:** Change any message in one place
+3. **Better UX:** Improved visual design with pastel colors, bigger icons
+4. **Better Contrast:** Dark text/buttons on pastel backgrounds
+5. **Mobile-Friendly:** Narrower dialogs (350-400px)
+6. **Professional Look:** Full-width headers, clean layout
+7. **Maintainable:** Separated concerns (CSS vs JS)
+
+#### Next Steps:
+- Phase 5.3: Extract ThemeManager (~20 lines, simple theme toggle)
+- Then Phase 5 is complete!
+- Total Phase 5 achievement: ~1,000+ lines extracted/improved
+
+---
