@@ -303,37 +303,208 @@ See detailed implementation in PROGRESS.md
 
 ---
 
-### Phase 6: Extract Interaction Layer (Week 6)
+### Phase 6: Extract Interaction Layer ~~⏸️ SKIPPED~~
 
-**Goal:** Handle canvas mouse/keyboard events
+**Decision:** Skip Phase 6 and go directly to Enhanced Phase 7
 
-See detailed implementation in PROGRESS.md
+**Reason:** Avoid callback hell and touching code twice. Enhanced Phase 7 creates final architecture in one step using event bus instead of callbacks.
 
-**Key Files to Create:**
-- `src/interaction/CanvasInteraction.js`
-- `src/interaction/ComponentDragger.js`
-
-**Deliverable:** Canvas interactions isolated, ~300 lines extracted
-
-**Risk:** Low
+**See:** [PHASE_6_RISK_ANALYSIS.md](PHASE_6_RISK_ANALYSIS.md) for detailed rationale
 
 ---
 
-### Phase 7: Main Application Wiring (Week 7)
+### Phase 7: Complete Modularization (Enhanced) (Week 6-7)
 
-**Goal:** Create main entry point, delete monolith
+**Goal:** Create final modular architecture - state container, interaction layer, business logic, and main coordinator
 
-See detailed implementation in PROGRESS.md
+**Timeline:** 12-16 hours (2-3 days)
+
+**Approach:** Event bus-driven architecture (no callback hell)
+
+**Why Enhanced:** Instead of extracting interaction in Phase 6 then re-wiring in Phase 7, we do everything in one well-planned step.
+
+#### Sub-Phase 7.1: Create State Container (3 hours)
+
+**Goal:** Extract all state into a pure state container
+
+**Key File to Create:**
+- `src/core/CircuitState.js` (~200 lines)
+
+**What to Extract:**
+- State properties: `components`, `connections`, `mode`, `selectedTool`, `customComponents`
+- State getters: `getComponents()`, `getConnections()`, `getMode()`, etc.
+- State setters with event emission
+- Component ID generation
+- Board state properties
+
+**Pattern:** Single source of truth, emits events on changes
+
+**Testing:**
+- `tests/unit/core/CircuitState.test.js`
+
+**Deliverable:** Pure state container, no DOM dependencies
+
+---
+
+#### Sub-Phase 7.2: Create Interaction Layer (3 hours)
+
+**Goal:** Extract all canvas event handling into dedicated classes
 
 **Key Files to Create:**
-- `src/main.js` (application coordinator)
+- `src/interaction/ComponentDragger.js` (~100 lines)
+- `src/interaction/CanvasInteraction.js` (~200 lines)
 
-**Key Files to Delete:**
-- `circuit-simulator.js` (old 2,973-line monolith) ✨
+**What to Extract from circuit-simulator.js:**
+- All event listeners (click, mousedown, mousemove, mouseup, dblclick, keydown, contextmenu)
+- Drag state and logic
+- Hit detection: `findComponent()`, `findPort()`, `findConnection()`
+- Coordinate conversion: `getScaledCoordinates()`
+- Cursor management
 
-**Deliverable:** New architecture fully functional, monolith deleted
+**Pattern:** Event bus for communication, no direct method calls
 
-**Risk:** Medium (integration testing critical)
+**Events Emitted:**
+- `COMPONENT_PLACE`, `COMPONENT_DELETE`, `COMPONENT_MOVED`
+- `CONNECTION_START`, `CONNECTION_COMPLETE`, `CONNECTION_DELETE`
+- `INPUT_TOGGLE`, `COMPONENT_RENAME`, `MODE_EXIT`, `SHOW_HELP`
+
+**Testing:**
+- `tests/unit/interaction/ComponentDragger.test.js`
+- `tests/unit/interaction/CanvasInteraction.test.js`
+
+**Deliverable:** Interaction layer using event bus, ~300 lines extracted
+
+---
+
+#### Sub-Phase 7.3: Create Business Logic Module (4 hours)
+
+**Goal:** Extract business logic into dedicated operations module
+
+**Key File to Create:**
+- `src/core/CircuitOperations.js` (~400 lines)
+
+**What to Extract from circuit-simulator.js:**
+- Component placement logic: `placeComponent()`, `defineComponentPorts()`
+- Simulation orchestration: `simulate()`, `startAutoCycle()`, `stopAutoCycle()`, `autoCycleStep()`
+- Truth table: `generateTruthTable()`, `updateTruthTableHighlight()`
+- Board management: `saveBoard()`, `loadBoard()`, `deleteBoard()`, `clearBoard()`
+- Auto-save: `setupAutoSave()`, `saveBoardState()`, `loadBoardState()`
+- Component management: `handleSaveComponent()`, `handleDeleteComponent()`
+
+**Pattern:** Pure functions where possible, use CircuitState for state access
+
+**Events Consumed:**
+- `COMPONENT_PLACE`, `COMPONENT_DELETE`, `INPUT_TOGGLE`, etc.
+
+**Events Emitted:**
+- `BOARD_SAVED`, `BOARD_LOADED`, `SIMULATION_COMPLETE`, etc.
+
+**Deliverable:** Business logic isolated, testable, ~400 lines extracted
+
+---
+
+#### Sub-Phase 7.4: Create Main Application Coordinator (3 hours)
+
+**Goal:** Wire all modules together via event bus
+
+**Key File to Create:**
+- `src/main.js` (~300 lines)
+
+**Responsibilities:**
+1. Initialize all modules (storage, state, rendering, UI, interaction, operations)
+2. Wire event bus connections
+3. Handle application lifecycle (init, cleanup)
+4. Coordinate cross-module communication
+
+**Structure:**
+```javascript
+// Initialize modules
+const circuitState = new CircuitState();
+const canvasInteraction = new CanvasInteraction(canvas, eventBus, circuitState);
+const circuitOps = new CircuitOperations(circuitState, boardManager, eventBus);
+// ... etc
+
+// Wire event bus
+eventBus.on(EVENT_TYPES.COMPONENT_PLACE, (data) => {
+    circuitOps.placeComponent(data.x, data.y, data.type);
+});
+// ... etc
+
+// Initialize app
+async function init() {
+    await circuitOps.loadCustomComponents();
+    await circuitOps.loadSavedBoards();
+    // ... etc
+}
+```
+
+**Deliverable:** Application coordinator, all modules wired
+
+---
+
+#### Sub-Phase 7.5: Integration & Testing (3 hours)
+
+**Goal:** Test everything, fix issues, verify no regressions
+
+**Tasks:**
+1. Update `index.html` to load `src/main.js` instead of `circuit-simulator.js`
+2. Keep `circuit-simulator.js` as backup (don't delete yet)
+3. Full manual testing of all features
+4. Verify all 148 tests still pass
+5. Fix any integration issues
+6. Performance testing
+7. Once verified, delete `circuit-simulator.js`
+
+**Testing Checklist:**
+- [ ] Place all gate types
+- [ ] Drag components
+- [ ] Connect components (output → input)
+- [ ] Delete components and connections
+- [ ] Toggle INPUT values
+- [ ] Rename INPUT/OUTPUT (double-click)
+- [ ] Simulate circuit
+- [ ] Auto-cycle through inputs
+- [ ] Generate truth table (with drag/resize)
+- [ ] Save/load boards
+- [ ] Create/use custom components
+- [ ] Export/import components
+- [ ] Dark mode toggle
+- [ ] All keyboard shortcuts (Escape, ?)
+- [ ] Right-click to exit mode
+- [ ] All toolbar buttons
+- [ ] All dialog workflows
+- [ ] Auto-save functionality
+- [ ] Verify no console errors
+- [ ] Check dev server runs
+- [ ] Run all tests: `npm test`
+
+**Deliverable:** Fully functional modular architecture, old monolith deleted
+
+---
+
+**Phase 7 Summary:**
+
+**Total Files Created:** 4 new modules
+- `src/core/CircuitState.js` (200 lines)
+- `src/interaction/ComponentDragger.js` (100 lines)
+- `src/interaction/CanvasInteraction.js` (200 lines)
+- `src/core/CircuitOperations.js` (400 lines)
+- `src/main.js` (300 lines)
+
+**Total Lines:** ~1,200 new lines (cleaner, more modular)
+
+**Files Deleted:**
+- `circuit-simulator.js` (1,338 lines) ✨
+
+**Architecture:** Event bus-driven, single source of truth for state
+
+**Risk:** Medium (big change, but well-planned with sub-phases)
+
+**Mitigation:**
+- Incremental commits after each sub-phase
+- Keep old file as backup until fully verified
+- Comprehensive testing checklist
+- All sub-phases are independent and testable
 
 ---
 
@@ -341,23 +512,25 @@ See detailed implementation in PROGRESS.md
 
 **Goal:** Split CSS into modular files
 
-See detailed implementation in PROGRESS.md
+**Timeline:** 4-6 hours
 
 **Key Files to Create:**
-- `styles/variables.css`
-- `styles/toolbar.css`
-- `styles/canvas.css`
-- `styles/dialogs.css`
-- `styles/truth-table.css`
-- `styles/dark-mode.css`
-- `styles/main.css`
+- `styles/variables.css` (CSS custom properties)
+- `styles/toolbar.css` (Toolbar styling)
+- `styles/canvas.css` (Canvas and breadboard)
+- `styles/dialogs.css` (Dialog boxes)
+- `styles/truth-table.css` (Truth table panel)
+- `styles/dark-mode.css` (Dark theme)
+- `styles/main.css` (Import all, base styles)
 
 **Key Files to Delete:**
-- `styles.css` (old monolithic CSS)
+- `styles.css` (old monolithic CSS - 1,600+ lines)
 
-**Deliverable:** CSS modularized with variables
+**Pattern:** CSS modules with variables for theming
 
-**Risk:** Very Low
+**Deliverable:** CSS modularized with variables, easy to maintain
+
+**Risk:** Very Low (CSS is independent of JS)
 
 ---
 
@@ -383,11 +556,13 @@ See detailed implementation in PROGRESS.md
 
 | Metric | Before | After | Improvement |
 |--------|--------|-------|-------------|
-| **Files** | 3 | 30+ | +900% modularity |
-| **Largest File** | 2,973 lines | ~200 lines | -93% |
+| **Files** | 3 | 35+ | +1,000%+ modularity |
+| **Largest File** | 2,973 lines | ~400 lines | -87% |
 | **Custom Code** | ~3,000 lines | ~1,800 lines | -40% |
 | **Test Coverage** | 0% | 80%+ | +80% |
 | **Context Tokens (bug fix)** | ~29,000 | ~1,200 | -96% |
+| **Architecture** | Monolithic | Event-driven modular | Clean separation |
+| **State Management** | Scattered | Single source of truth | No duplication |
 
 ---
 

@@ -62,34 +62,15 @@ import { DialogManager } from './src/ui/DialogManager.js';
 import { DialogFactory } from './src/ui/DialogFactory.js';
 import { ThemeManager } from './src/ui/ThemeManager.js';
 
+import { CircuitState } from './src/core/CircuitState.js';
+
 class CircuitSimulator {
     constructor() {
         this.canvas = document.getElementById('breadboard');
         this.ctx = this.canvas.getContext('2d');
-        this.components = [];
-        this.connections = [];
-        this.selectedTool = null;
-        this.mode = 'place'; // place, connect, delete
-        this.connectStart = null;
-        this.nextId = 1;
-        this.isAutoCycling = false;
-        this.autoCycleTimeout = null;
-        this.currentCycleIndex = 0;
-        this.customComponents = {};
-        this.isDraggingComponent = false;
-        this.draggedComponent = null;
-        this.dragOffset = { x: 0, y: 0 };
-        this.dragStartPos = null;
-        this.hasMoved = false;
 
-        // Board management
-        this.currentBoardName = null; // null means unsaved board
-        this.currentComponentName = null; // null means not a saved component
-        this.savedBoards = {};
-        this.lastSavedState = null; // To track if board has been modified
-        this.truthTableData = null; // Store truth table data for highlighting
-        this.truthTableColumnOrder = null; // Store column order for drag-and-drop
-        this.truthTableState = null; // Store truth table customization (size, column order)
+        // Initialize centralized state container
+        this.state = new CircuitState();
 
         // Initialize storage system
         this.storageAdapter = new LocalStorageAdapter();
@@ -105,7 +86,7 @@ class CircuitSimulator {
         });
 
         // Initialize renderer (will be updated after components/connections are loaded)
-        this.canvasRenderer = new CanvasRenderer(this.canvas, this.components, this.connections, this.themeManager.isDark());
+        this.canvasRenderer = new CanvasRenderer(this.canvas, this.state.getComponents(), this.state.getConnections(), this.themeManager.isDark());
 
         // Initialize truth table panel
         this.truthTablePanel = null;
@@ -138,11 +119,11 @@ class CircuitSimulator {
             onImportComponent: async (e) => await this.importComponentFromFile(e),
             getComponentLibrary: () => this.componentLibrary,
             getBoardManager: () => this.boardManager,
-            getCurrentBoardName: () => this.currentBoardName,
-            getCurrentComponentName: () => this.currentComponentName,
-            getCustomComponents: () => this.customComponents,
-            getSavedBoards: () => this.savedBoards,
-            getCircuitData: () => ({ components: this.components, connections: this.connections })
+            getCurrentBoardName: () => this.state.getCurrentBoardName(),
+            getCurrentComponentName: () => this.state.getCurrentComponentName(),
+            getCustomComponents: () => this.state.getCustomComponents(),
+            getSavedBoards: () => this.state.getSavedBoards(),
+            getCircuitData: () => ({ components: this.state.getComponents(), connections: this.state.getConnections() })
         });
 
         this.init();
@@ -156,8 +137,8 @@ class CircuitSimulator {
         this.setupAutoSave();
         await this.loadBoardState();
         // Update renderer with loaded components and connections
-        this.canvasRenderer.updateComponents(this.components);
-        this.canvasRenderer.updateConnections(this.connections);
+        this.canvasRenderer.updateComponents(this.state.getComponents());
+        this.canvasRenderer.updateConnections(this.state.getConnections());
         this.canvasRenderer.render();
 
         // Initialize toolbar (after DOM is ready)
@@ -167,11 +148,11 @@ class CircuitSimulator {
         this.dialogManager.init();
 
         // Update toolbar displays
-        this.toolbar.updateCustomComponentsList(this.customComponents);
-        this.toolbar.updateBoardsList(this.savedBoards, this.currentBoardName);
+        this.toolbar.updateCustomComponentsList(this.state.getCustomComponents());
+        this.toolbar.updateBoardsList(this.state.getSavedBoards(), this.state.getCurrentBoardName());
         this.toolbar.updateCircuitNameDisplay(
-            this.currentComponentName || this.currentBoardName,
-            !!this.currentComponentName
+            this.state.getCurrentComponentName() || this.state.getCurrentBoardName(),
+            !!this.state.getCurrentComponentName()
         );
 
         // Theme already applied by ThemeManager in constructor
@@ -192,23 +173,21 @@ class CircuitSimulator {
     // ====================================
 
     handleToolSelect(tool) {
-        this.selectedTool = tool;
+        this.state.setSelectedTool(tool);
     }
 
     handleModeChange(mode) {
-        this.mode = mode;
-        this.connectStart = null;
+        this.state.setMode(mode);
+        this.state.setConnectStart(null);
         this.toolbar.setConnectionStart(false);
         this.redraw();
     }
 
     handleClearBoard() {
         this.dialogManager.showSaveOptionsDialog(() => {
-            this.components = [];
-            this.connections = [];
-            this.nextId = 1;
-            this.currentBoardName = null;
-            this.currentComponentName = null;
+            this.state.clearComponents();
+            this.state.setCurrentBoardName(null);
+            this.state.setCurrentComponentName(null);
             this.toolbar.updateCircuitNameDisplay(null, false);
             this.redraw();
         });
@@ -252,7 +231,7 @@ class CircuitSimulator {
     }
 
     toggleSimulation() {
-        if (this.isAutoCycling) {
+        if (this.state.isAutoCyclingActive()) {
             this.stopAutoCycle();
         } else {
             this.startAutoCycle();
@@ -303,19 +282,21 @@ class CircuitSimulator {
             const { x, y } = this.getScaledCoordinates(e);
 
             // Reset hasMoved flag for all clicks
-            this.hasMoved = false;
+            this.state.setHasMoved(false);
 
             // Only allow dragging if not in special modes and no tool selected for placement
-            const isPlacementMode = this.mode === 'place' && this.selectedTool;
-            if (this.mode !== 'connect' && this.mode !== 'delete' && !isPlacementMode) {
+            const isPlacementMode = this.state.getMode() === 'place' && this.state.getSelectedTool();
+            if (this.state.getMode() !== 'connect' && this.state.getMode() !== 'delete' && !isPlacementMode) {
                 const component = this.findComponent(x, y);
                 if (component) {
                     // If a component is clicked, prepare for potential drag
-                    this.isDraggingComponent = false; // Don't set true yet
-                    this.draggedComponent = component;
-                    this.dragStartPos = { x, y };
-                    this.dragOffset.x = x - component.x;
-                    this.dragOffset.y = y - component.y;
+                    this.state.setDraggingState(false); // Don't set true yet
+                    this.state.setDraggedComponent(component);
+                    this.state.setDragStartPos({ x, y });
+                    const dragOffset = this.state.getDragOffset();
+                    dragOffset.x = x - component.x;
+                    dragOffset.y = y - component.y;
+                    this.state.setDragOffset(dragOffset);
                 }
             }
         });
@@ -325,32 +306,36 @@ class CircuitSimulator {
             const { x, y } = this.getScaledCoordinates(e);
 
             // Check if we should start dragging (movement threshold)
-            if (this.draggedComponent && !this.isDraggingComponent && this.dragStartPos) {
-                const dx = Math.abs(x - this.dragStartPos.x);
-                const dy = Math.abs(y - this.dragStartPos.y);
+            const draggedComponent = this.state.getDraggedComponent();
+            const dragStartPos = this.state.getDragStartPos();
+            if (draggedComponent && !this.state.isDragging() && dragStartPos) {
+                const dx = Math.abs(x - dragStartPos.x);
+                const dy = Math.abs(y - dragStartPos.y);
                 if (dx > 3 || dy > 3) { // 3px movement threshold
-                    this.isDraggingComponent = true;
-                    this.hasMoved = true;
+                    this.state.setDraggingState(true);
+                    this.state.setHasMoved(true);
                     this.canvas.style.cursor = 'grabbing';
                 }
             }
 
             // Handle component dragging
-            if (this.isDraggingComponent && this.draggedComponent) {
-                const newX = x - this.dragOffset.x;
-                const newY = y - this.dragOffset.y;
-                this.moveComponent(this.draggedComponent, newX, newY);
+            if (this.state.isDragging() && draggedComponent) {
+                const dragOffset = this.state.getDragOffset();
+                const newX = x - dragOffset.x;
+                const newY = y - dragOffset.y;
+                this.moveComponent(draggedComponent, newX, newY);
                 this.redraw();
                 e.preventDefault();
             }
             // Handle connection preview
-            else if (this.mode === 'connect' && this.connectStart) {
+            else if (this.state.getMode() === 'connect' && this.state.getConnectStart()) {
                 this.redraw();
-                this.canvasRenderer.drawConnectionPreview(this.connectStart.x, this.connectStart.y, x, y);
+                const connectStart = this.state.getConnectStart();
+                this.canvasRenderer.drawConnectionPreview(connectStart.x, connectStart.y, x, y);
             }
             // Update cursor based on hover
-            else if (this.mode !== 'connect' && this.mode !== 'delete') {
-                const isPlacementMode = this.mode === 'place' && this.selectedTool;
+            else if (this.state.getMode() !== 'connect' && this.state.getMode() !== 'delete') {
+                const isPlacementMode = this.state.getMode() === 'place' && this.state.getSelectedTool();
                 if (!isPlacementMode) {
                     const component = this.findComponent(x, y);
                     this.canvas.style.cursor = component ? 'grab' : 'crosshair';
@@ -363,18 +348,18 @@ class CircuitSimulator {
         // Canvas mouseup to stop dragging
         this.canvas.addEventListener('mouseup', () => {
             // Reset drag state
-            this.isDraggingComponent = false;
-            this.draggedComponent = null;
-            this.dragStartPos = null;
+            this.state.setDraggingState(false);
+            this.state.setDraggedComponent(null);
+            this.state.setDragStartPos(null);
             this.canvas.style.cursor = 'crosshair';
         });
 
         // Also handle mouseup outside canvas
         document.addEventListener('mouseup', () => {
-            if (this.isDraggingComponent) {
-                this.isDraggingComponent = false;
-                this.draggedComponent = null;
-                this.dragStartPos = null;
+            if (this.state.isDragging()) {
+                this.state.setDraggingState(false);
+                this.state.setDraggedComponent(null);
+                this.state.setDragStartPos(null);
                 this.canvas.style.cursor = 'crosshair';
             }
         });
@@ -382,22 +367,22 @@ class CircuitSimulator {
 
     handleCanvasClick(e) {
         // Don't process click if it was actually a drag
-        if (this.hasMoved) {
-            this.hasMoved = false;
+        if (this.state.getHasMoved()) {
+            this.state.setHasMoved(false);
             return;
         }
 
         const { x, y } = this.getScaledCoordinates(e);
 
-        console.log('Canvas click - Mode:', this.mode, 'SelectedTool:', this.selectedTool);
+        console.log('Canvas click - Mode:', this.state.getMode(), 'SelectedTool:', this.state.getSelectedTool());
         console.log('Scaled coords:', x.toFixed(0), y.toFixed(0));
 
-        if (this.mode === 'place' && this.selectedTool) {
-            this.placeComponent(x, y, this.selectedTool);
-        } else if (this.mode === 'connect') {
+        if (this.state.getMode() === 'place' && this.state.getSelectedTool()) {
+            this.placeComponent(x, y, this.state.getSelectedTool());
+        } else if (this.state.getMode() === 'connect') {
             console.log('Calling handleConnect');
             this.handleConnect(x, y);
-        } else if (this.mode === 'delete') {
+        } else if (this.state.getMode() === 'delete') {
             console.log('Calling handleDelete');
             this.handleDelete(x, y);
         } else {
@@ -415,7 +400,8 @@ class CircuitSimulator {
             customName = type.substring(7);
             actualType = 'CUSTOM';
 
-            if (!this.customComponents[customName]) {
+            const customComponents = this.state.getCustomComponents();
+            if (!customComponents[customName]) {
                 DialogFactory.showAlert({
                     message: 'Custom component not found!',
                     type: 'error'
@@ -424,25 +410,28 @@ class CircuitSimulator {
             }
         }
 
+        const components = this.state.getComponents();
+        const customComponents = this.state.getCustomComponents();
+
         const component = {
-            id: this.nextId++,
+            id: this.state.generateNextId(),
             type: actualType,
             x: Math.round(x / 50) * 50,
             y: Math.round(y / 50) * 50,
             value: actualType === 'INPUT' ? 0 : null,
             inputs: [],
             outputs: [],
-            label: actualType === 'INPUT' ? `I${getInputCount(this.components) + 1}` :
-                   actualType === 'OUTPUT' ? `O${getOutputCount(this.components) + 1}` :
+            label: actualType === 'INPUT' ? `I${getInputCount(components) + 1}` :
+                   actualType === 'OUTPUT' ? `O${getOutputCount(components) + 1}` :
                    actualType === 'CUSTOM' ? customName : null,
             customName: customName,
-            customDefinition: customName ? this.customComponents[customName] : null
+            customDefinition: customName ? customComponents[customName] : null
         };
 
         // Define input/output ports
         this.defineComponentPorts(component);
 
-        this.components.push(component);
+        this.state.addComponent(component);
         this.redraw();
     }
 
@@ -513,16 +502,17 @@ class CircuitSimulator {
             return;
         }
 
-        if (!this.connectStart) {
+        const connectStart = this.state.getConnectStart();
+        if (!connectStart) {
             // Start connection from output port only
             if (port.isOutput) {
                 console.log('Starting connection from output port');
-                this.connectStart = {
+                this.state.setConnectStart({
                     component: port.component,
                     portIndex: port.portIndex,
                     x: port.x,
                     y: port.y
-                };
+                });
                 this.toolbar.setConnectionStart(true);
             } else {
                 console.log('Clicked port is not an output port');
@@ -531,13 +521,13 @@ class CircuitSimulator {
             // End connection at input port only
             if (!port.isOutput) {
                 console.log('Completing connection to input port');
-                this.connections.push({
-                    from: this.connectStart.component,
-                    fromPort: this.connectStart.portIndex,
+                this.state.addConnection({
+                    from: connectStart.component,
+                    fromPort: connectStart.portIndex,
                     to: port.component,
                     toPort: port.portIndex
                 });
-                this.connectStart = null;
+                this.state.setConnectStart(null);
                 this.toolbar.setConnectionStart(false);
                 this.redraw();
             } else {
@@ -547,8 +537,9 @@ class CircuitSimulator {
     }
 
     handleDelete(x, y) {
-        console.log('Total components on board:', this.components.length);
-        console.log('Components:', this.components.map(c => ({type: c.type, x: c.x, y: c.y, id: c.id})));
+        const components = this.state.getComponents();
+        console.log('Total components on board:', components.length);
+        console.log('Components:', components.map(c => ({type: c.type, x: c.x, y: c.y, id: c.id})));
 
         // Delete component
         const component = this.findComponent(x, y);
@@ -557,10 +548,7 @@ class CircuitSimulator {
 
         if (component) {
             console.log('Deleting component:', component.type, component.id);
-            this.components = this.components.filter(c => c.id !== component.id);
-            this.connections = this.connections.filter(
-                conn => conn.from !== component.id && conn.to !== component.id
-            );
+            this.state.removeComponent(component.id);
             this.redraw();
             return;
         } else {
@@ -570,7 +558,7 @@ class CircuitSimulator {
         // Delete connection
         const connection = this.findConnection(x, y);
         if (connection) {
-            this.connections = this.connections.filter(c => c !== connection);
+            this.state.removeConnection(connection);
             this.redraw();
         }
     }
@@ -586,7 +574,8 @@ class CircuitSimulator {
     }
 
     findComponent(x, y) {
-        return this.components.find(c => {
+        const components = this.state.getComponents();
+        return components.find(c => {
             let size = 50; // Increased default size for better detection
             if (c.type === 'INPUT' || c.type === 'OUTPUT') {
                 size = 40; // Increased from 30 to cover full circle
@@ -615,13 +604,15 @@ class CircuitSimulator {
 
     // Migrate all components in a board to use current port positions
     migrateComponentPorts() {
-        this.components.forEach(component => {
+        const components = this.state.getComponents();
+        components.forEach(component => {
             this.recalculateComponentPorts(component);
         });
     }
 
     findPort(x, y) {
-        for (let component of this.components) {
+        const components = this.state.getComponents();
+        for (let component of components) {
             // Check output ports
             for (let i = 0; i < component.outputs.length; i++) {
                 const port = component.outputs[i];
@@ -644,9 +635,11 @@ class CircuitSimulator {
     }
 
     findConnection(x, y) {
-        for (let conn of this.connections) {
-            const from = this.components.find(c => c.id === conn.from);
-            const to = this.components.find(c => c.id === conn.to);
+        const components = this.state.getComponents();
+        const connections = this.state.getConnections();
+        for (let conn of connections) {
+            const from = components.find(c => c.id === conn.from);
+            const to = components.find(c => c.id === conn.to);
             if (!from || !to) continue;
 
             const fromPort = from.outputs[conn.fromPort];
@@ -663,13 +656,13 @@ class CircuitSimulator {
 
     redraw() {
         // Update renderer with current components and connections
-        this.canvasRenderer.updateComponents(this.components);
-        this.canvasRenderer.updateConnections(this.connections);
+        this.canvasRenderer.updateComponents(this.state.getComponents());
+        this.canvasRenderer.updateConnections(this.state.getConnections());
         this.canvasRenderer.render();
     }
 
     simulate() {
-        simulateCircuit(this.components, this.connections);
+        simulateCircuit(this.state.getComponents(), this.state.getConnections());
         this.redraw();
         this.updateTruthTableHighlight(); // Update truth table highlighting after simulation
     }
@@ -679,20 +672,21 @@ class CircuitSimulator {
         if (!this.truthTablePanel) {
             this.truthTablePanel = new TruthTablePanel(
                 this.canvas,
-                this.components,
-                this.connections,
+                this.state.getComponents(),
+                this.state.getConnections(),
                 this.simulate.bind(this)
             );
 
             // Hook up state persistence
             this.truthTablePanel.onStateChange = (state) => {
-                this.truthTableState = state;
+                this.state.setTruthTableState(state);
                 this.saveBoardState();
             };
 
             // Restore saved state if available
-            if (this.truthTableState) {
-                this.truthTablePanel.setState(this.truthTableState);
+            const truthTableState = this.state.getTruthTableState();
+            if (truthTableState) {
+                this.truthTablePanel.setState(truthTableState);
             }
         }
 
@@ -702,7 +696,7 @@ class CircuitSimulator {
             this.truthTablePanel.display();
 
             // Store reference for backward compatibility
-            this.truthTableData = this.truthTablePanel.truthTableData;
+            this.state.setTruthTableData(this.truthTablePanel.truthTableData);
         }
     }
 
@@ -711,7 +705,8 @@ class CircuitSimulator {
 
     getCurrentInputState() {
         // Get current input values sorted by label (same order as truth table)
-        const inputs = this.components
+        const components = this.state.getComponents();
+        const inputs = components
             .filter(c => c.type === 'INPUT')
             .sort((a, b) => a.label.localeCompare(b.label));
 
@@ -719,7 +714,8 @@ class CircuitSimulator {
     }
 
     findMatchingTruthTableRow() {
-        if (!this.truthTableData) {
+        const truthTableData = this.state.getTruthTableData();
+        if (!truthTableData) {
             return -1; // No truth table generated yet
         }
 
@@ -731,7 +727,7 @@ class CircuitSimulator {
         }
 
         // Find the row that matches current input state
-        return this.truthTableData.table.findIndex(row => {
+        return truthTableData.table.findIndex(row => {
             return row.inputs.every((val, index) => val === currentState[index]);
         });
     }
@@ -743,7 +739,8 @@ class CircuitSimulator {
     }
 
     startAutoCycle() {
-        const inputs = this.components.filter(c => c.type === 'INPUT').sort((a, b) =>
+        const components = this.state.getComponents();
+        const inputs = components.filter(c => c.type === 'INPUT').sort((a, b) =>
             a.label.localeCompare(b.label));
 
         if (inputs.length === 0) {
@@ -754,7 +751,7 @@ class CircuitSimulator {
             return;
         }
 
-        const outputs = this.components.filter(c => c.type === 'OUTPUT');
+        const outputs = components.filter(c => c.type === 'OUTPUT');
         if (outputs.length === 0) {
             DialogFactory.showAlert({
                 message: 'Please add at least one output to simulate.',
@@ -763,21 +760,23 @@ class CircuitSimulator {
             return;
         }
 
-        this.isAutoCycling = true;
-        this.currentCycleIndex = 0;
-        this.totalCombinations = Math.pow(2, inputs.length);
+        this.state.setAutoCycling(true);
+        this.state.setCurrentCycleIndex(0);
+        const totalCombinations = Math.pow(2, inputs.length);
+        this.state.setTotalCombinations(totalCombinations);
 
         // Update toolbar simulation state
-        this.toolbar.setSimulationState(true, this.currentCycleIndex, this.totalCombinations);
+        this.toolbar.setSimulationState(true, 0, totalCombinations);
 
         this.autoCycleStep();
     }
 
     stopAutoCycle() {
-        this.isAutoCycling = false;
-        if (this.autoCycleTimeout) {
-            clearTimeout(this.autoCycleTimeout);
-            this.autoCycleTimeout = null;
+        this.state.setAutoCycling(false);
+        const autoCycleTimeout = this.state.getAutoCycleTimeout();
+        if (autoCycleTimeout) {
+            clearTimeout(autoCycleTimeout);
+            this.state.setAutoCycleTimeout(null);
         }
 
         // Reset toolbar simulation state
@@ -785,19 +784,24 @@ class CircuitSimulator {
     }
 
     autoCycleStep() {
-        if (!this.isAutoCycling) return;
+        if (!this.state.isAutoCyclingActive()) return;
 
-        const inputs = this.components.filter(c => c.type === 'INPUT').sort((a, b) =>
+        const components = this.state.getComponents();
+        const inputs = components.filter(c => c.type === 'INPUT').sort((a, b) =>
             a.label.localeCompare(b.label));
 
-        if (this.currentCycleIndex >= this.totalCombinations) {
+        let currentCycleIndex = this.state.getCurrentCycleIndex();
+        const totalCombinations = this.state.getTotalCombinations();
+
+        if (currentCycleIndex >= totalCombinations) {
             // Finished all combinations, restart
-            this.currentCycleIndex = 0;
+            currentCycleIndex = 0;
+            this.state.setCurrentCycleIndex(0);
         }
 
         // Set input values for current combination
         inputs.forEach((input, index) => {
-            const bitValue = (this.currentCycleIndex >> (inputs.length - 1 - index)) & 1;
+            const bitValue = (currentCycleIndex >> (inputs.length - 1 - index)) & 1;
             input.value = bitValue;
         });
 
@@ -806,23 +810,25 @@ class CircuitSimulator {
 
         // Update display
         document.getElementById('selectedComponent').textContent =
-            `Combination ${this.currentCycleIndex + 1} / ${this.totalCombinations}`;
+            `Combination ${currentCycleIndex + 1} / ${totalCombinations}`;
 
         // Update truth table highlighting
         this.updateTruthTableHighlight();
 
         // Move to next combination
-        this.currentCycleIndex++;
+        this.state.setCurrentCycleIndex(currentCycleIndex + 1);
 
         // Schedule next cycle
-        this.autoCycleTimeout = setTimeout(() => {
+        const timeout = setTimeout(() => {
             this.autoCycleStep();
         }, 800); // 800ms delay between combinations
+        this.state.setAutoCycleTimeout(timeout);
     }
 
     // Custom Component Management Methods
     async loadCustomComponents() {
-        this.customComponents = await this.componentLibrary.getAllComponents();
+        const customComponents = await this.componentLibrary.getAllComponents();
+        this.state.setCustomComponents(customComponents);
     }
 
     async saveCustomComponentsToStorage() {
@@ -836,20 +842,24 @@ class CircuitSimulator {
      */
     async handleSaveComponent(name, description) {
         // Prepare component data
-        const inputs = this.components.filter(c => c.type === 'INPUT').sort((a, b) =>
+        const components = this.state.getComponents();
+        const connections = this.state.getConnections();
+        const inputs = components.filter(c => c.type === 'INPUT').sort((a, b) =>
             a.label.localeCompare(b.label));
-        const outputs = this.components.filter(c => c.type === 'OUTPUT').sort((a, b) =>
+        const outputs = components.filter(c => c.type === 'OUTPUT').sort((a, b) =>
             a.label.localeCompare(b.label));
+
+        const truthTableState = this.state.getTruthTableState();
 
         // Deep clone components and connections
         const componentData = {
             name: name,
             description: description,
-            components: JSON.parse(JSON.stringify(this.components)),
-            connections: JSON.parse(JSON.stringify(this.connections)),
+            components: JSON.parse(JSON.stringify(components)),
+            connections: JSON.parse(JSON.stringify(connections)),
             inputPorts: inputs.map(i => ({ id: i.id, label: i.label })),
             outputPorts: outputs.map(o => ({ id: o.id, label: o.label })),
-            truthTableState: this.truthTableState ? JSON.parse(JSON.stringify(this.truthTableState)) : null,
+            truthTableState: truthTableState ? JSON.parse(JSON.stringify(truthTableState)) : null,
             created: new Date().toISOString()
         };
 
@@ -857,13 +867,15 @@ class CircuitSimulator {
 
         if (success) {
             await this.loadCustomComponents(); // Refresh local copy
-            this.toolbar.updateCustomComponentsList(this.customComponents);
+            this.toolbar.updateCustomComponentsList(this.state.getCustomComponents());
 
             // Update current circuit name to reflect it's now a saved component
-            this.currentComponentName = name;
-            this.currentBoardName = null; // Clear board name when saving as component
-            this.lastSavedState = JSON.stringify(this.getCurrentState());
-            this.toolbar.updateCircuitNameDisplay(this.currentComponentName || this.currentBoardName, !!this.currentComponentName);
+            this.state.setCurrentComponentName(name);
+            this.state.setLastSavedState(JSON.stringify(this.state.getCurrentState()));
+            this.toolbar.updateCircuitNameDisplay(
+                this.state.getCurrentComponentName() || this.state.getCurrentBoardName(),
+                !!this.state.getCurrentComponentName()
+            );
 
             DialogFactory.showAlert({
                 message: `Component "${name}" saved successfully!`,
@@ -884,7 +896,7 @@ class CircuitSimulator {
         const success = await this.componentLibrary.deleteComponent(name);
         if (success) {
             await this.loadCustomComponents(); // Refresh local copy
-            this.toolbar.updateCustomComponentsList(this.customComponents);
+            this.toolbar.updateCustomComponentsList(this.state.getCustomComponents());
         } else {
             DialogFactory.showAlert({
                 message: `Failed to delete component "${name}"`,
@@ -923,7 +935,7 @@ class CircuitSimulator {
 
             if (componentData) {
                 await this.loadCustomComponents(); // Refresh local copy
-                this.toolbar.updateCustomComponentsList(this.customComponents);
+                this.toolbar.updateCustomComponentsList(this.state.getCustomComponents());
                 DialogFactory.showAlert({
                     message: `Component "${componentData.name}" imported successfully!`,
                     type: 'success'
@@ -942,7 +954,8 @@ class CircuitSimulator {
 
     // Edit Component Method
     loadComponentForEditing(name) {
-        if (!this.customComponents[name]) {
+        const customComponents = this.state.getCustomComponents();
+        if (!customComponents[name]) {
             DialogFactory.showAlert({
                 message: 'Component not found.',
                 type: 'error'
@@ -959,32 +972,41 @@ class CircuitSimulator {
                 truthTablePanel.style.display = 'none';
             }
 
-            const componentData = this.customComponents[name];
+            const componentData = customComponents[name];
 
-            // Deep clone the component data
-            this.components = JSON.parse(JSON.stringify(componentData.components));
-            this.connections = JSON.parse(JSON.stringify(componentData.connections));
+            // Deep clone the component data and load into state
+            const loadedState = {
+                components: JSON.parse(JSON.stringify(componentData.components)),
+                connections: JSON.parse(JSON.stringify(componentData.connections)),
+                currentComponentName: name,
+                currentBoardName: null,
+                truthTableState: componentData.truthTableState ? JSON.parse(JSON.stringify(componentData.truthTableState)) : null
+            };
+
+            // Load the state
+            this.state.loadState(loadedState);
 
             // Update nextId to avoid conflicts
-            const maxId = Math.max(...this.components.map(c => c.id), 0);
-            this.nextId = maxId + 1;
+            const components = this.state.getComponents();
+            const maxId = Math.max(...components.map(c => c.id), 0);
+            this.state.setNextId(maxId + 1);
 
-            // Track that this is loaded from a component (not a board)
-            this.currentBoardName = null;
-            this.currentComponentName = name; // Set component name
-            this.lastSavedState = null;
+            // Clear last saved state (mark as modified)
+            this.state.setLastSavedState(null);
 
             // Restore Truth Table state if saved
-            this.truthTableState = componentData.truthTableState ? JSON.parse(JSON.stringify(componentData.truthTableState)) : null;
             if (this.truthTablePanel) {
-                this.truthTablePanel.setState(this.truthTableState);
+                this.truthTablePanel.setState(this.state.getTruthTableState());
             }
 
             // Recalculate port positions for all components (migrate old components to new port positions)
             this.migrateComponentPorts();
 
             this.redraw();
-            this.toolbar.updateCircuitNameDisplay(this.currentComponentName || this.currentBoardName, !!this.currentComponentName);
+            this.toolbar.updateCircuitNameDisplay(
+                this.state.getCurrentComponentName() || this.state.getCurrentBoardName(),
+                !!this.state.getCurrentComponentName()
+            );
             document.getElementById('manageComponentsDialog').style.display = 'none';
             DialogFactory.showAlert({
                 message: `Component "${name}" loaded for editing. Make your changes and save it again.`,
@@ -992,7 +1014,7 @@ class CircuitSimulator {
             });
         };
 
-        if (this.hasUnsavedChanges()) {
+        if (this.state.hasUnsavedChanges()) {
             this.dialogManager.showSaveOptionsDialog(doLoad);
         } else {
             doLoad();
@@ -1001,7 +1023,8 @@ class CircuitSimulator {
 
     // Manual Simulation Step Controls
     stepSimulation(direction) {
-        const inputs = this.components.filter(c => c.type === 'INPUT').sort((a, b) =>
+        const components = this.state.getComponents();
+        const inputs = components.filter(c => c.type === 'INPUT').sort((a, b) =>
             a.label.localeCompare(b.label));
 
         if (inputs.length === 0) {
@@ -1015,23 +1038,26 @@ class CircuitSimulator {
         const totalCombinations = Math.pow(2, inputs.length);
 
         // If no current index, start from 0
-        if (this.currentCycleIndex === undefined || this.currentCycleIndex === null) {
-            this.currentCycleIndex = 0;
+        let currentCycleIndex = this.state.getCurrentCycleIndex();
+        if (currentCycleIndex === undefined || currentCycleIndex === null) {
+            currentCycleIndex = 0;
         }
 
         // Calculate new index
-        this.currentCycleIndex += direction;
+        currentCycleIndex += direction;
 
         // Wrap around
-        if (this.currentCycleIndex < 0) {
-            this.currentCycleIndex = totalCombinations - 1;
-        } else if (this.currentCycleIndex >= totalCombinations) {
-            this.currentCycleIndex = 0;
+        if (currentCycleIndex < 0) {
+            currentCycleIndex = totalCombinations - 1;
+        } else if (currentCycleIndex >= totalCombinations) {
+            currentCycleIndex = 0;
         }
+
+        this.state.setCurrentCycleIndex(currentCycleIndex);
 
         // Set input values
         inputs.forEach((input, index) => {
-            const bitValue = (this.currentCycleIndex >> (inputs.length - 1 - index)) & 1;
+            const bitValue = (currentCycleIndex >> (inputs.length - 1 - index)) & 1;
             input.value = bitValue;
         });
 
@@ -1040,14 +1066,15 @@ class CircuitSimulator {
 
         // Update display
         document.getElementById('selectedComponent').textContent =
-            `Combination ${this.currentCycleIndex + 1} / ${totalCombinations}`;
+            `Combination ${currentCycleIndex + 1} / ${totalCombinations}`;
 
         // Update truth table highlighting
         this.updateTruthTableHighlight();
     }
 
     resetSimulation() {
-        const inputs = this.components.filter(c => c.type === 'INPUT');
+        const components = this.state.getComponents();
+        const inputs = components.filter(c => c.type === 'INPUT');
 
         if (inputs.length === 0) {
             DialogFactory.showAlert({
@@ -1057,7 +1084,7 @@ class CircuitSimulator {
             return;
         }
 
-        this.currentCycleIndex = 0;
+        this.state.setCurrentCycleIndex(0);
 
         // Set all inputs to 0
         inputs.forEach(input => {
@@ -1102,7 +1129,7 @@ class CircuitSimulator {
 
         // Warn before leaving page if there are unsaved changes
         window.addEventListener('beforeunload', (e) => {
-            if (this.components.length > 0) {
+            if (this.state.getComponents().length > 0) {
                 e.preventDefault();
                 e.returnValue = 'You have unsaved work. Are you sure you want to leave?';
                 return e.returnValue;
@@ -1113,38 +1140,34 @@ class CircuitSimulator {
     async saveBoardState() {
         const truthTablePanel = document.getElementById('truthTablePanel');
         const state = {
-            components: this.components,
-            connections: this.connections,
-            nextId: this.nextId,
-            currentComponentName: this.currentComponentName,
-            currentBoardName: this.currentBoardName,
-            truthTableState: this.truthTableState,
+            components: this.state.getComponents(),
+            connections: this.state.getConnections(),
+            nextId: this.state.generateNextId(), // This will get the current nextId
+            currentComponentName: this.state.getCurrentComponentName(),
+            currentBoardName: this.state.getCurrentBoardName(),
+            truthTableState: this.state.getTruthTableState(),
             truthTableVisible: truthTablePanel ? truthTablePanel.style.display !== 'none' : false
         };
+        // Decrement nextId back since we just called generateNextId for reading
+        this.state.setNextId(state.nextId);
         await this.storageAdapter.setItem('circuitBoardState', state);
     }
 
     async loadBoardState() {
         const state = await this.storageAdapter.getItem('circuitBoardState');
         if (state) {
-            this.components = state.components || [];
-            this.connections = state.connections || [];
-            this.nextId = state.nextId || 1;
-
-            // Restore component/board name
-            this.currentComponentName = state.currentComponentName || null;
-            this.currentBoardName = state.currentBoardName || null;
-
-            // Restore truth table state
-            this.truthTableState = state.truthTableState || null;
-
-            // Restore truth table column order if saved
-            if (this.truthTableState && this.truthTableState.columnOrder) {
-                this.truthTableColumnOrder = [...this.truthTableState.columnOrder];
-            }
+            // Load into CircuitState
+            this.state.loadState({
+                components: state.components || [],
+                connections: state.connections || [],
+                nextId: state.nextId || 1,
+                currentComponentName: state.currentComponentName || null,
+                currentBoardName: state.currentBoardName || null,
+                truthTableState: state.truthTableState || null
+            });
 
             // Recalculate port positions for auto-saved state (migrate to new positions)
-            if (this.components.length > 0) {
+            if (this.state.getComponents().length > 0) {
                 this.migrateComponentPorts();
             }
 
@@ -1165,7 +1188,8 @@ class CircuitSimulator {
     // ===== BOARD MANAGEMENT METHODS =====
 
     async loadSavedBoards() {
-        this.savedBoards = await this.boardManager.getAllBoards();
+        const savedBoards = await this.boardManager.getAllBoards();
+        this.state.setSavedBoards(savedBoards);
     }
 
     async saveBoardsToStorage() {
@@ -1177,49 +1201,44 @@ class CircuitSimulator {
     getNextBoardName() {
         let counter = 1;
         let name;
+        const savedBoards = this.state.getSavedBoards();
+        const customComponents = this.state.getCustomComponents();
         do {
             name = `Board${String(counter).padStart(2, '0')}`;
             counter++;
-        } while (this.savedBoards[name] || this.customComponents[name]);
+        } while (savedBoards[name] || customComponents[name]);
         return name;
     }
 
     getCurrentState() {
-        return {
-            components: JSON.parse(JSON.stringify(this.components)),
-            connections: JSON.parse(JSON.stringify(this.connections)),
-            nextId: this.nextId,
-            truthTableState: this.truthTableState ? JSON.parse(JSON.stringify(this.truthTableState)) : null
-        };
+        return this.state.getCurrentState();
     }
 
     hasUnsavedChanges() {
-        if (this.components.length === 0 && !this.currentBoardName) {
-            return false; // Empty unsaved board
-        }
-
-        const currentState = JSON.stringify(this.getCurrentState());
-        return currentState !== this.lastSavedState;
+        return this.state.hasUnsavedChanges();
     }
 
     async saveCurrentBoard(boardName) {
         const state = this.getCurrentState();
+        const currentBoardName = this.state.getCurrentBoardName();
         const boardData = {
             ...state,
             savedAt: Date.now(),
-            createdFrom: this.currentBoardName ?
-                { type: 'board', name: this.currentBoardName } : null
+            createdFrom: currentBoardName ?
+                { type: 'board', name: currentBoardName } : null
         };
 
         const success = await this.boardManager.saveBoard(boardName, boardData);
 
         if (success) {
             await this.loadSavedBoards(); // Refresh local copy
-            this.currentBoardName = boardName;
-            this.currentComponentName = null; // Clear component name when saving as board
-            this.lastSavedState = JSON.stringify(state);
-            this.toolbar.updateCircuitNameDisplay(this.currentComponentName || this.currentBoardName, !!this.currentComponentName);
-            this.toolbar.updateBoardsList(this.savedBoards, this.currentBoardName);
+            this.state.setCurrentBoardName(boardName);
+            this.state.setLastSavedState(JSON.stringify(state));
+            this.toolbar.updateCircuitNameDisplay(
+                this.state.getCurrentComponentName() || this.state.getCurrentBoardName(),
+                !!this.state.getCurrentComponentName()
+            );
+            this.toolbar.updateBoardsList(this.state.getSavedBoards(), this.state.getCurrentBoardName());
             console.log(`Board saved: ${boardName}`);
         } else {
             DialogFactory.showAlert({
@@ -1251,24 +1270,28 @@ class CircuitSimulator {
             this.truthTablePanel.hide();
         }
         this.truthTablePanel = null;
-        this.truthTableData = null;
+        this.state.setTruthTableData(null);
 
-        this.components = JSON.parse(JSON.stringify(board.components || []));
-        this.connections = JSON.parse(JSON.stringify(board.connections || []));
-        this.nextId = board.nextId || 1;
-        this.currentBoardName = boardName;
-        this.currentComponentName = null; // Clear component name when loading board
-
-        // Restore Truth Table state if saved (will be applied when truth table is next generated)
-        this.truthTableState = board.truthTableState ? JSON.parse(JSON.stringify(board.truthTableState)) : null;
+        // Load board state
+        this.state.loadState({
+            components: JSON.parse(JSON.stringify(board.components || [])),
+            connections: JSON.parse(JSON.stringify(board.connections || [])),
+            nextId: board.nextId || 1,
+            currentBoardName: boardName,
+            currentComponentName: null,
+            truthTableState: board.truthTableState ? JSON.parse(JSON.stringify(board.truthTableState)) : null
+        });
 
         // Recalculate port positions for all components (migrate old boards to new port positions)
         this.migrateComponentPorts();
 
-        this.lastSavedState = JSON.stringify(this.getCurrentState());
+        this.state.setLastSavedState(JSON.stringify(this.getCurrentState()));
         this.redraw();
-        this.toolbar.updateCircuitNameDisplay(this.currentComponentName || this.currentBoardName, !!this.currentComponentName);
-        this.toolbar.updateBoardsList(this.savedBoards, this.currentBoardName); // Update dropdown to reflect current board
+        this.toolbar.updateCircuitNameDisplay(
+            this.state.getCurrentComponentName() || this.state.getCurrentBoardName(),
+            !!this.state.getCurrentComponentName()
+        );
+        this.toolbar.updateBoardsList(this.state.getSavedBoards(), this.state.getCurrentBoardName());
         console.log(`Board loaded: ${boardName}`);
     }
 
@@ -1285,21 +1308,15 @@ class CircuitSimulator {
         }
         this.truthTablePanel = null;
 
-        this.components = [];
-        this.connections = [];
-        this.nextId = 1;
-        this.currentBoardName = null;
-        this.currentComponentName = null; // Clear both names
-        this.lastSavedState = null;
-
-        // Reset Truth Table state for new board
-        this.truthTableState = null;
-        this.truthTableColumnOrder = null;
-        this.truthTableData = null;
+        // Reset state
+        this.state.reset();
 
         this.redraw();
-        this.toolbar.updateCircuitNameDisplay(this.currentComponentName || this.currentBoardName, !!this.currentComponentName);
-        this.toolbar.updateBoardsList(this.savedBoards, this.currentBoardName); // Update dropdown to remove (current) marker
+        this.toolbar.updateCircuitNameDisplay(
+            this.state.getCurrentComponentName() || this.state.getCurrentBoardName(),
+            !!this.state.getCurrentComponentName()
+        );
+        this.toolbar.updateBoardsList(this.state.getSavedBoards(), this.state.getCurrentBoardName());
         console.log('New board created');
     }
 
@@ -1315,11 +1332,15 @@ class CircuitSimulator {
 
                 if (success) {
                     await this.loadSavedBoards(); // Refresh local copy
-                    if (this.currentBoardName === boardName) {
-                        this.currentBoardName = null;
+                    const currentBoardName = this.state.getCurrentBoardName();
+                    if (currentBoardName === boardName) {
+                        this.state.setCurrentBoardName(null);
                     }
-                    this.toolbar.updateBoardsList(this.savedBoards, this.currentBoardName);
-                    this.toolbar.updateCircuitNameDisplay(this.currentComponentName || this.currentBoardName, !!this.currentComponentName);
+                    this.toolbar.updateBoardsList(this.state.getSavedBoards(), this.state.getCurrentBoardName());
+                    this.toolbar.updateCircuitNameDisplay(
+                        this.state.getCurrentComponentName() || this.state.getCurrentBoardName(),
+                        !!this.state.getCurrentComponentName()
+                    );
                     console.log(`Board deleted: ${boardName}`);
                 } else {
                     DialogFactory.showAlert({
