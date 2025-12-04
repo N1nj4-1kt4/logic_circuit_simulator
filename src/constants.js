@@ -96,7 +96,8 @@ export const TRUTH_TABLE = {
 export const TIMING = {
     AUTO_CYCLE_DELAY: 750, // ms
     AUTO_SAVE_DEBOUNCE: 1000, // ms
-    ANIMATION_DURATION: 300 // ms
+    ANIMATION_DURATION: 300, // ms
+    TRUTH_TABLE_DEBOUNCE: 150 // ms - debounce before recomputing truth table
 };
 
 // ==================== STORAGE KEYS ====================

@@ -34,6 +34,9 @@ export class CircuitState {
         this.truthTableColumnOrder = null; // Store column order for drag-and-drop
         this.truthTableState = null; // Store truth table customization (size, column order)
 
+        // Pre-computed truth table cache
+        this.truthTableCache = null; // { inputs, outputs, table, isValid, reason }
+
         // Simulation state
         this.isAutoCycling = false;
         this.autoCycleTimeout = null;
@@ -422,6 +425,22 @@ export class CircuitState {
         return this.truthTableState;
     }
 
+    /**
+     * Set pre-computed truth table cache
+     * @param {Object|null} cache - Pre-computed truth table { inputs, outputs, table, isValid, reason }
+     */
+    setTruthTableCache(cache) {
+        this.truthTableCache = cache;
+    }
+
+    /**
+     * Get pre-computed truth table cache
+     * @returns {Object|null} Truth table cache
+     */
+    getTruthTableCache() {
+        return this.truthTableCache;
+    }
+
     // ====================================
     // Simulation State
     // ====================================
@@ -615,6 +634,7 @@ export class CircuitState {
         this.truthTableData = null;
         this.truthTableColumnOrder = null;
         this.truthTableState = null;
+        this.truthTableCache = null;
         this.isAutoCycling = false;
         this.autoCycleTimeout = null;
         this.currentCycleIndex = 0;

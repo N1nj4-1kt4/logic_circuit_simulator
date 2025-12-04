@@ -115,6 +115,7 @@ export const EVENT_TYPES = {
     TRUTH_TABLE_HIDDEN: 'truthTable:hidden',
     TRUTH_TABLE_STATE_CHANGED: 'truthTable:stateChanged',
     TRUTH_TABLE_UPDATE_HIGHLIGHT: 'truthTable:updateHighlight',
+    TRUTH_TABLE_COMPUTED: 'truthTable:computed',
 
     // Theme events
     THEME_CHANGED: 'theme:changed',

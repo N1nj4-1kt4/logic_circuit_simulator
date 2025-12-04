@@ -22,6 +22,7 @@ import {
     getInputCount,
     getOutputCount
 } from './circuitEvaluator.js';
+import { computeTruthTable } from './TruthTableComputer.js';
 import { deepClone } from '../utils/serialization.js';
 import { TIMING } from '../constants.js';
 
@@ -46,6 +47,59 @@ export class CircuitOperations {
         // Auto-save debounce timer reference
         this.autoSaveTimer = null;
         this.autoSaveDelay = 1000; // 1 second debounce delay
+
+        // Truth table recomputation debounce timer
+        this.truthTableDebounceTimer = null;
+
+        // Subscribe to circuit changes for truth table recomputation
+        this._setupTruthTableRecomputation();
+    }
+
+    /**
+     * Setup event listeners for truth table recomputation
+     * @private
+     */
+    _setupTruthTableRecomputation() {
+        // Recompute truth table on any circuit topology change
+        eventBus.on(EVENT_TYPES.BOARD_CHANGED, () => {
+            this._debouncedRecomputeTruthTable();
+        });
+
+        // Clear cache on board cleared
+        eventBus.on(EVENT_TYPES.BOARD_CLEARED, () => {
+            this.state.setTruthTableCache(null);
+        });
+    }
+
+    /**
+     * Debounced recomputation of truth table
+     * @private
+     */
+    _debouncedRecomputeTruthTable() {
+        if (this.truthTableDebounceTimer) {
+            clearTimeout(this.truthTableDebounceTimer);
+        }
+        this.truthTableDebounceTimer = setTimeout(() => {
+            this.recomputeTruthTable();
+        }, TIMING.TRUTH_TABLE_DEBOUNCE);
+    }
+
+    /**
+     * Recompute truth table and store in cache
+     */
+    recomputeTruthTable() {
+        const components = this.state.getComponents();
+        const connections = this.state.getConnections();
+
+        const result = computeTruthTable(components, connections);
+        this.state.setTruthTableCache(result);
+
+        // Also update the truthTableData for backwards compatibility
+        if (result.isValid) {
+            this.state.setTruthTableData(result);
+        }
+
+        eventBus.emit(EVENT_TYPES.TRUTH_TABLE_COMPUTED, result);
     }
 
     // ====================================
@@ -276,6 +330,8 @@ export class CircuitOperations {
         const components = this.state.getComponents();
         const inputs = components.filter(c => c.type === 'INPUT').sort((a, b) =>
             a.label.localeCompare(b.label));
+        const outputs = components.filter(c => c.type === 'OUTPUT').sort((a, b) =>
+            a.label.localeCompare(b.label));
 
         let currentCycleIndex = this.state.getCurrentCycleIndex();
         const totalCombinations = this.state.getTotalCombinations();
@@ -292,8 +348,21 @@ export class CircuitOperations {
             input.value = bitValue;
         });
 
-        // Simulate circuit
-        this.simulate();
+        // Try to use cached truth table for output lookup
+        const cache = this.state.getTruthTableCache();
+        if (cache && cache.isValid && cache.table && cache.table[currentCycleIndex]) {
+            // Use cached output values
+            const row = cache.table[currentCycleIndex];
+            outputs.forEach((output, index) => {
+                const cachedValue = row[`output${index}`];
+                output.value = cachedValue === '?' ? null : cachedValue;
+            });
+            eventBus.emit(EVENT_TYPES.CANVAS_REDRAW);
+            eventBus.emit(EVENT_TYPES.TRUTH_TABLE_UPDATE_HIGHLIGHT);
+        } else {
+            // Fallback to full simulation if cache not available
+            this.simulate();
+        }
 
         // Update cycle index
         currentCycleIndex++;
@@ -372,8 +441,22 @@ export class CircuitOperations {
             input.value = bitValue;
         });
 
-        // Simulate circuit
-        this.simulate();
+        // Try to use cached truth table for output lookup
+        const cache = this.state.getTruthTableCache();
+        if (cache && cache.isValid && cache.table && cache.table[currentCycleIndex]) {
+            // Use cached output values
+            const row = cache.table[currentCycleIndex];
+            const sortedOutputs = outputs.sort((a, b) => a.label.localeCompare(b.label));
+            sortedOutputs.forEach((output, index) => {
+                const cachedValue = row[`output${index}`];
+                output.value = cachedValue === '?' ? null : cachedValue;
+            });
+            eventBus.emit(EVENT_TYPES.CANVAS_REDRAW);
+            eventBus.emit(EVENT_TYPES.TRUTH_TABLE_UPDATE_HIGHLIGHT);
+        } else {
+            // Fallback to full simulation if cache not available
+            this.simulate();
+        }
 
         // Emit simulation state change with current progress
         eventBus.emit(EVENT_TYPES.SIMULATION_STATE_CHANGED, {
@@ -869,6 +952,10 @@ export class CircuitOperations {
         // Load truth table state for this context (or clear if none saved)
         this.state.setTruthTableState(circuitData.truthTableState || null);
 
+        // Clear and recompute truth table cache for the new circuit
+        this.state.setTruthTableCache(null);
+        this.recomputeTruthTable();
+
         // Update last saved state
         this.state.setLastSavedState(deepClone(this.state.getCurrentState()));
 
@@ -983,6 +1070,9 @@ export class CircuitOperations {
                 if (boardData.truthTableState) {
                     this.state.setTruthTableState(boardData.truthTableState);
                 }
+
+                // Compute truth table cache for the restored circuit
+                this.recomputeTruthTable();
 
                 // Update last saved state
                 this.state.setLastSavedState(deepClone(this.state.getCurrentState()));

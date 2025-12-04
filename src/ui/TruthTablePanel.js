@@ -8,8 +8,7 @@ import { positionPanelSmartly } from '../utils/positioning.js';
  * TruthTablePanel - Manages the truth table UI using Tabulator.js
  *
  * Responsibilities:
- * - Generate truth table data from circuit components
- * - Display truth table using Tabulator library
+ * - Display pre-computed truth table from cache
  * - Handle column reordering (inputs and outputs separately)
  * - Highlight rows matching current circuit state
  * - Provide drag/resize functionality via Interact.js
@@ -20,13 +19,13 @@ export class TruthTablePanel {
      * @param {HTMLCanvasElement} canvas - Main canvas element
      * @param {Array} components - Circuit components array
      * @param {Array} connections - Circuit connections array
-     * @param {Function} simulateFn - Function to simulate circuit
+     * @param {Object} circuitState - CircuitState instance for accessing cache
      */
-    constructor(canvas, components, connections, simulateFn) {
+    constructor(canvas, components, connections, circuitState) {
         this.canvas = canvas;
         this.components = components;
         this.connections = connections;
-        this.simulateFn = simulateFn;
+        this.circuitState = circuitState;
 
         this.table = null;
         this.panel = null;
@@ -47,54 +46,30 @@ export class TruthTablePanel {
     }
 
     /**
-     * Generate and display the truth table
+     * Generate and display the truth table from pre-computed cache
      */
     generate() {
         console.log('=== TruthTablePanel.generate() START ===');
-        const inputs = this.components
-            .filter(c => c.type === 'INPUT')
-            .sort((a, b) => a.label.localeCompare(b.label));
 
-        const outputs = this.components
-            .filter(c => c.type === 'OUTPUT')
-            .sort((a, b) => a.label.localeCompare(b.label));
+        // Read from pre-computed cache
+        const cache = this.circuitState.getTruthTableCache();
 
-        if (inputs.length === 0) {
-            alert('Please add at least one input to generate a truth table.');
+        if (!cache) {
+            // Cache not available yet - this shouldn't normally happen
+            // as cache is computed on circuit changes
+            alert('Truth table is being computed. Please try again.');
             return false;
         }
 
-        if (outputs.length === 0) {
-            alert('Please add at least one output to generate a truth table.');
+        if (!cache.isValid) {
+            // Circuit is incomplete or invalid
+            alert(cache.reason || 'Circuit is incomplete. Please connect all components.');
             return false;
         }
 
-        // Generate all input combinations
-        const numCombinations = Math.pow(2, inputs.length);
-        const table = [];
+        const { inputs, outputs, table } = cache;
 
-        for (let i = 0; i < numCombinations; i++) {
-            const row = {};
-
-            // Set input values
-            inputs.forEach((input, index) => {
-                const bitValue = (i >> (inputs.length - 1 - index)) & 1;
-                input.value = bitValue;
-                row[`input${index}`] = bitValue;
-            });
-
-            // Simulate circuit
-            this.simulateFn();
-
-            // Record output values
-            outputs.forEach((output, index) => {
-                row[`output${index}`] = output.value !== null ? output.value : '?';
-            });
-
-            table.push(row);
-        }
-
-        // Store truth table data
+        // Store truth table data from cache
         this.truthTableData = {
             inputs: inputs,
             outputs: outputs,

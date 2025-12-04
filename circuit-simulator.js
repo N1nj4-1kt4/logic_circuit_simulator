@@ -553,7 +553,7 @@ class CircuitSimulator {
                 this.canvas,
                 this.state.getComponents(),
                 this.state.getConnections(),
-                this.simulate.bind(this)
+                this.state
             );
             console.log('TruthTablePanel created:', this.truthTablePanel);
 
