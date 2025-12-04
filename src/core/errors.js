@@ -139,3 +139,15 @@ export class ComponentExistsError extends CircuitError {
         this.componentName = name;
     }
 }
+
+/**
+ * Invalid circuit error for simulation
+ * Used when the circuit doesn't meet the requirements for simulation
+ * (e.g., no gate with all inputs and outputs connected)
+ */
+export class InvalidCircuitError extends ValidationError {
+    constructor(reason) {
+        super(reason || 'Circuit is not valid for simulation');
+        this.name = 'InvalidCircuitError';
+    }
+}

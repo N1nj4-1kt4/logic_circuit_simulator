@@ -134,6 +134,15 @@ const createValidCache = (numInputs = 2, numOutputs = 1) => {
     return { inputs, outputs, table, isValid: true };
 };
 
+// Create invalid cache
+const createInvalidCache = (reason = 'Circuit incomplete') => ({
+    inputs: [],
+    outputs: [],
+    table: [],
+    isValid: false,
+    reason
+});
+
 describe('TruthTablePanel', () => {
     let mockDOM;
 
@@ -177,8 +186,9 @@ describe('TruthTablePanel', () => {
             expect(circuitState.getTruthTableCache).not.toHaveBeenCalled();
         });
 
-        it('should not refresh if table is not initialized', () => {
-            const circuitState = createMockCircuitState(createValidCache());
+        it('should attempt rebuild when table is not initialized but panel is visible', () => {
+            const validCache = createValidCache();
+            const circuitState = createMockCircuitState(validCache);
             const panel = new TruthTablePanel(
                 mockDOM.canvasEl,
                 [],
@@ -186,13 +196,21 @@ describe('TruthTablePanel', () => {
                 circuitState
             );
 
-            // Simulate panel exists but table is null
+            // Simulate panel exists but table is null (e.g., after displayInvalidMessage)
             panel.panel = mockDOM.panelEl;
             panel.table = null;
+            panel.truthTableData = null; // No previous data
+
+            // Mock display to prevent actual table creation
+            const displaySpy = vi.spyOn(panel, 'display').mockImplementation(() => {});
+            vi.spyOn(panel, 'saveState').mockImplementation(() => {});
 
             panel.refresh();
 
-            expect(circuitState.getTruthTableCache).not.toHaveBeenCalled();
+            // Should read cache and attempt to rebuild
+            expect(circuitState.getTruthTableCache).toHaveBeenCalled();
+            // Since truthTableData was null, it should trigger rebuild
+            expect(displaySpy).toHaveBeenCalled();
         });
 
         it('should not refresh if panel is hidden', () => {
@@ -218,8 +236,9 @@ describe('TruthTablePanel', () => {
             expect(circuitState.getTruthTableCache).not.toHaveBeenCalled();
         });
 
-        it('should hide panel when cache becomes invalid', () => {
-            const circuitState = createMockCircuitState({ isValid: false, reason: 'No outputs' });
+        it('should show invalid message when cache becomes invalid (not hide)', () => {
+            const invalidCache = createInvalidCache('No outputs');
+            const circuitState = createMockCircuitState(invalidCache);
             const panel = new TruthTablePanel(
                 mockDOM.canvasEl,
                 [],
@@ -231,16 +250,21 @@ describe('TruthTablePanel', () => {
             panel.panel = mockDOM.panelEl;
             panel.table = {
                 replaceData: vi.fn(),
-                getColumns: vi.fn().mockReturnValue([])
+                getColumns: vi.fn().mockReturnValue([]),
+                destroy: vi.fn()
             };
             panel.truthTableData = createValidCache();
 
-            // Spy on hide method
-            const hideSpy = vi.spyOn(panel, 'hide');
+            // Spy on displayInvalidMessage method
+            const displayInvalidMessageSpy = vi.spyOn(panel, 'displayInvalidMessage').mockImplementation(() => {});
 
             panel.refresh();
 
-            expect(hideSpy).toHaveBeenCalled();
+            // Should call displayInvalidMessage instead of hide
+            expect(displayInvalidMessageSpy).toHaveBeenCalledWith(true);
+            // Verify truthTableData was updated with invalid state
+            expect(panel.truthTableData.isValid).toBe(false);
+            expect(panel.truthTableData.reason).toBe('No outputs');
         });
 
         it('should hide panel when cache is null', () => {
@@ -601,6 +625,147 @@ describe('TruthTablePanel', () => {
             // Should use inline style values
             expect(panel.state.width).toBe('500px');
             expect(panel.state.height).toBe('400px');
+        });
+    });
+
+    describe('Invalid Circuit Handling', () => {
+        it('generate() should return true and store data for invalid circuit cache', () => {
+            const invalidCache = createInvalidCache('Please add at least one gate');
+            const circuitState = createMockCircuitState(invalidCache);
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            const result = panel.generate();
+
+            expect(result).toBe(true);
+            expect(panel.truthTableData).not.toBeNull();
+            expect(panel.truthTableData.isValid).toBe(false);
+            expect(panel.truthTableData.reason).toBe('Please add at least one gate');
+            expect(panel.truthTableData.table).toEqual([]);
+        });
+
+        it('generate() should return false only when cache is null', () => {
+            const circuitState = createMockCircuitState(null);
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            const result = panel.generate();
+
+            expect(result).toBe(false);
+        });
+
+        it('updateHighlight() should return early when table has no data', () => {
+            const circuitState = createMockCircuitState(createValidCache());
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            const mockTable = {
+                deselectRow: vi.fn(),
+                getRows: vi.fn().mockReturnValue([])
+            };
+
+            panel.panel = mockDOM.panelEl;
+            panel.table = mockTable;
+            panel.truthTableData = {
+                inputs: [],
+                outputs: [],
+                table: [], // Empty table - no data to highlight
+                isValid: false,
+                reason: 'No gates'
+            };
+
+            panel.updateHighlight();
+
+            // Should not call any table methods when table is empty
+            expect(mockTable.deselectRow).not.toHaveBeenCalled();
+            expect(mockTable.getRows).not.toHaveBeenCalled();
+        });
+
+        it('refresh() should transition from empty table to having data correctly', () => {
+            const validCache = createValidCache(2, 1);
+            const circuitState = createMockCircuitState(validCache);
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            const mockTable = {
+                replaceData: vi.fn(),
+                destroy: vi.fn(),
+                on: vi.fn(),
+                getColumns: vi.fn().mockReturnValue([]),
+                getRows: vi.fn().mockReturnValue([]),
+                getData: vi.fn().mockReturnValue([]),
+                deselectRow: vi.fn()
+            };
+
+            panel.panel = mockDOM.panelEl;
+            panel.table = mockTable;
+            // Start with empty table (e.g., no inputs or outputs before)
+            panel.truthTableData = {
+                inputs: [],
+                outputs: [],
+                table: [], // Empty table
+                isValid: false,
+                reason: 'No gates'
+            };
+
+            const displaySpy = vi.spyOn(panel, 'display').mockImplementation(() => {});
+            vi.spyOn(panel, 'saveState').mockImplementation(() => {});
+
+            panel.refresh();
+
+            // Should trigger full rebuild (hadNoTable is true)
+            expect(displaySpy).toHaveBeenCalled();
+            // truthTableData should be updated with new table data
+            expect(panel.truthTableData.table.length).toBeGreaterThan(0);
+        });
+
+        it('displayInvalidMessage() should destroy existing table', () => {
+            const circuitState = createMockCircuitState(createInvalidCache());
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            const mockTable = {
+                destroy: vi.fn()
+            };
+
+            // Setup innerHTML mock
+            mockDOM.contentEl.innerHTML = '';
+
+            panel.panel = mockDOM.panelEl;
+            panel.table = mockTable;
+            panel.truthTableData = {
+                inputs: [],
+                outputs: [],
+                table: [],
+                isValid: false,
+                reason: 'Test reason'
+            };
+            panel.interactionsSetup = true; // Skip interaction setup
+
+            panel.displayInvalidMessage(true);
+
+            expect(mockTable.destroy).toHaveBeenCalled();
+            expect(panel.table).toBeNull();
         });
     });
 });

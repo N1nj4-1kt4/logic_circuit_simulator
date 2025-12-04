@@ -94,6 +94,89 @@ export function validateCircuitForTruthTable(components, connections) {
 }
 
 /**
+ * Generate a truth table for an invalid circuit
+ * Shows current input values and simulates to get output values (which may be null/?)
+ * @param {Array} components - Circuit components
+ * @param {Array} connections - Circuit connections
+ * @param {Object} validation - Validation result from validateCircuitForTruthTable
+ * @returns {{ inputs: Array, outputs: Array, table: Array, isValid: boolean, reason: string|null }}
+ */
+function generateInvalidCircuitTable(components, connections, validation) {
+    const { inputs, outputs, reason } = validation;
+
+    // If no inputs or no outputs, return empty table
+    if (inputs.length === 0 || outputs.length === 0) {
+        return {
+            inputs,
+            outputs,
+            table: [],
+            isValid: false,
+            reason
+        };
+    }
+
+    // Generate table with all input combinations
+    const numCombinations = Math.pow(2, inputs.length);
+    const table = [];
+
+    for (let i = 0; i < numCombinations; i++) {
+        // Deep clone components for this simulation run
+        const clonedComponents = JSON.parse(JSON.stringify(components));
+
+        // Find cloned inputs and set their values
+        const clonedInputs = clonedComponents
+            .filter(c => c.type === 'INPUT')
+            .sort((a, b) => (a.label || '').localeCompare(b.label || ''));
+
+        const row = {};
+
+        // Set input values on cloned components
+        clonedInputs.forEach((input, index) => {
+            const bitValue = (i >> (inputs.length - 1 - index)) & 1;
+            input.value = bitValue;
+            row[`input${index}`] = bitValue;
+        });
+
+        // Simulate circuit on cloned components (partial simulation)
+        // This may leave some outputs as null if circuit is incomplete
+        try {
+            simulateCircuit(clonedComponents, connections);
+        } catch {
+            // Simulation may fail for very incomplete circuits - that's okay
+            // Outputs will remain null (displayed as '?')
+        }
+
+        // Store component values for wire rendering
+        row.componentValues = {};
+        clonedComponents.forEach(comp => {
+            row.componentValues[comp.id] = {
+                value: comp.value,
+                outputValues: comp.outputValues ? [...comp.outputValues] : null
+            };
+        });
+
+        // Record output values - may be null (displayed as '?') for incomplete circuits
+        const clonedOutputs = clonedComponents
+            .filter(c => c.type === 'OUTPUT')
+            .sort((a, b) => (a.label || '').localeCompare(b.label || ''));
+
+        clonedOutputs.forEach((output, index) => {
+            row[`output${index}`] = output.value !== null ? output.value : '?';
+        });
+
+        table.push(row);
+    }
+
+    return {
+        inputs,
+        outputs,
+        table,
+        isValid: false,
+        reason
+    };
+}
+
+/**
  * Compute truth table for a circuit without modifying the original components
  * @param {Array} components - Circuit components (will NOT be modified)
  * @param {Array} connections - Circuit connections
@@ -104,13 +187,9 @@ export function computeTruthTable(components, connections) {
     const validation = validateCircuitForTruthTable(components, connections);
 
     if (!validation.isValid) {
-        return {
-            inputs: validation.inputs,
-            outputs: validation.outputs,
-            table: [],
-            isValid: false,
-            reason: validation.reason
-        };
+        // For invalid circuits, still generate a table reflecting current state
+        // This allows Truth Table to display even when circuit is incomplete
+        return generateInvalidCircuitTable(components, connections, validation);
     }
 
     const { inputs, outputs } = validation;

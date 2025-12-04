@@ -70,7 +70,15 @@ export const messages = {
         },
 
         // Board deletion
-        deleteBoard: (name) => `Are you sure you want to delete board "${name}"? This action cannot be undone.`
+        deleteBoard: (name) => `Are you sure you want to delete board "${name}"? This action cannot be undone.`,
+
+        // Deletion during simulation
+        deletionWillStopSimulation: {
+            message: 'Deleting this will invalidate the circuit and stop the simulation. All inputs will be reset to 0. Continue?',
+            title: 'Stop Simulation?',
+            confirmLabel: 'Delete Anyway',
+            cancelLabel: 'Cancel'
+        }
     },
 
     // ==================== Dialog Content ====================

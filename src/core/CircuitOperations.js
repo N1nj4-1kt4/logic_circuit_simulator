@@ -20,7 +20,7 @@ import {
     getInputCount,
     getOutputCount
 } from './circuitEvaluator.js';
-import { computeTruthTable } from './TruthTableComputer.js';
+import { computeTruthTable, validateCircuitForTruthTable } from './TruthTableComputer.js';
 import { deepClone } from '../utils/serialization.js';
 import { snapToGrid } from '../utils/hitDetection.js';
 import { TIMING } from '../constants.js';
@@ -33,7 +33,8 @@ import {
     BoardSaveError,
     BoardLoadError,
     InvalidComponentFileError,
-    ComponentSaveError
+    ComponentSaveError,
+    InvalidCircuitError
 } from './errors.js';
 
 export class CircuitOperations {
@@ -208,6 +209,50 @@ export class CircuitOperations {
     }
 
     /**
+     * Check if deleting a component/connection would invalidate the circuit during active simulation
+     * @param {number} x - X coordinate
+     * @param {number} y - Y coordinate
+     * @param {Function} findConnection - Function to find connection at coordinates
+     * @returns {{ willInvalidate: boolean, component: Object|null, connection: Object|null }}
+     */
+    checkDeletionImpact(x, y, findConnection) {
+        const component = this.callbacks.findComponent(x, y);
+        const connection = component ? null : findConnection(x, y);
+
+        // Nothing to delete at this position
+        if (!component && !connection) {
+            return { willInvalidate: false, component: null, connection: null };
+        }
+
+        // Only check during active simulation
+        if (!this.state.isAutoCyclingActive()) {
+            return { willInvalidate: false, component, connection };
+        }
+
+        // Clone current circuit state to simulate deletion
+        const clonedComponents = JSON.parse(JSON.stringify(this.state.getComponents()));
+        const clonedConnections = JSON.parse(JSON.stringify(this.state.getConnections()));
+
+        if (component) {
+            // Simulate removing component and its connections
+            const filteredComponents = clonedComponents.filter(c => c.id !== component.id);
+            const filteredConnections = clonedConnections.filter(
+                conn => conn.from !== component.id && conn.to !== component.id
+            );
+            const validation = validateCircuitForTruthTable(filteredComponents, filteredConnections);
+            return { willInvalidate: !validation.isValid, component, connection: null };
+        } else {
+            // Simulate removing just the connection
+            const filteredConnections = clonedConnections.filter(conn =>
+                !(conn.from === connection.from && conn.to === connection.to &&
+                  conn.fromPort === connection.fromPort && conn.toPort === connection.toPort)
+            );
+            const validation = validateCircuitForTruthTable(clonedComponents, filteredConnections);
+            return { willInvalidate: !validation.isValid, component: null, connection };
+        }
+    }
+
+    /**
      * Handle deletion of components or connections
      * @param {number} x - X coordinate
      * @param {number} y - Y coordinate
@@ -250,17 +295,15 @@ export class CircuitOperations {
      */
     startAutoCycle() {
         const components = this.state.getComponents();
-        const inputs = components.filter(c => c.type === 'INPUT').sort((a, b) =>
-            a.label.localeCompare(b.label));
+        const connections = this.state.getConnections();
 
-        if (inputs.length === 0) {
-            throw new NoInputsError();
+        // Use comprehensive validation to ensure circuit is valid for simulation
+        const validation = validateCircuitForTruthTable(components, connections);
+        if (!validation.isValid) {
+            throw new InvalidCircuitError(validation.reason);
         }
 
-        const outputs = components.filter(c => c.type === 'OUTPUT');
-        if (outputs.length === 0) {
-            throw new NoOutputsError();
-        }
+        const inputs = validation.inputs;
 
         this.state.setAutoCycling(true);
         const totalCombinations = Math.pow(2, inputs.length);
@@ -353,6 +396,7 @@ export class CircuitOperations {
 
             // Restore ALL component values from cache (not just inputs/outputs)
             // This ensures wire colors are correct for all connections
+            // For invalid circuits, disconnected components will have null values (gray)
             if (row.componentValues) {
                 components.forEach(comp => {
                     const cached = row.componentValues[comp.id];
@@ -396,18 +440,15 @@ export class CircuitOperations {
      */
     stepSimulation(direction) {
         const components = this.state.getComponents();
-        const inputs = components.filter(c => c.type === 'INPUT').sort((a, b) =>
-            a.label.localeCompare(b.label));
+        const connections = this.state.getConnections();
 
-        if (inputs.length === 0) {
-            throw new NoInputsError();
+        // Use comprehensive validation to ensure circuit is valid for simulation
+        const validation = validateCircuitForTruthTable(components, connections);
+        if (!validation.isValid) {
+            throw new InvalidCircuitError(validation.reason);
         }
 
-        const outputs = components.filter(c => c.type === 'OUTPUT');
-        if (outputs.length === 0) {
-            throw new NoOutputsError();
-        }
-
+        const inputs = validation.inputs;
         const totalCombinations = Math.pow(2, inputs.length);
 
         // If not auto-cycling, initialize cycle state
@@ -505,6 +546,42 @@ export class CircuitOperations {
         this.simulate();
 
         // Emit simulation state change
+        eventBus.emit(EVENT_TYPES.SIMULATION_STATE_CHANGED, {
+            isRunning: false,
+            currentIndex: 0,
+            totalCombinations: totalCombinations
+        });
+    }
+
+    /**
+     * Stop simulation and reset inputs to 0, but don't re-simulate.
+     * Used when we need to delete a component after stopping simulation,
+     * then simulate once after the deletion.
+     */
+    stopAndResetSimulation() {
+        const components = this.state.getComponents();
+        const inputs = components.filter(c => c.type === 'INPUT');
+
+        // Stop auto-cycle if running
+        if (this.state.isAutoCyclingActive()) {
+            this.stopAutoCycle();
+        }
+
+        if (inputs.length === 0) {
+            return;
+        }
+
+        // Reset all inputs to 0
+        inputs.forEach(input => {
+            input.value = 0;
+        });
+
+        // Reset cycle index
+        this.state.setCurrentCycleIndex(0);
+        const totalCombinations = Math.pow(2, inputs.length);
+        this.state.setTotalCombinations(totalCombinations);
+
+        // Emit simulation state change (but don't simulate - caller will do that after modifications)
         eventBus.emit(EVENT_TYPES.SIMULATION_STATE_CHANGED, {
             isRunning: false,
             currentIndex: 0,

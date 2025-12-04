@@ -398,7 +398,29 @@ class CircuitSimulator {
                 this.operations.handleConnect(x, y);
             } else if (this.state.getMode() === 'delete') {
                 console.log('Calling handleDelete');
-                this.operations.handleDelete(x, y, (x, y) => this.findConnection(x, y));
+                const impact = this.operations.checkDeletionImpact(x, y, (x, y) => this.findConnection(x, y));
+
+                if (impact.willInvalidate) {
+                    // Show warning dialog before deleting
+                    DialogFactory.showConfirm({
+                        message: messages.confirms.deletionWillStopSimulation.message,
+                        title: messages.confirms.deletionWillStopSimulation.title,
+                        confirmLabel: messages.confirms.deletionWillStopSimulation.confirmLabel,
+                        cancelLabel: messages.confirms.deletionWillStopSimulation.cancelLabel,
+                        type: 'warning',
+                        onConfirm: () => {
+                            // Stop simulation and reset inputs (but don't simulate yet)
+                            this.operations.stopAndResetSimulation();
+                            // Delete the component
+                            this.operations.handleDelete(x, y, (x, y) => this.findConnection(x, y));
+                            // Now simulate to update component values after deletion
+                            // This ensures disconnected outputs and their wires turn gray
+                            this.operations.simulate();
+                        }
+                    });
+                } else {
+                    this.operations.handleDelete(x, y, (x, y) => this.findConnection(x, y));
+                }
             } else {
                 // Check if clicking on an input to toggle
                 this.toggleInput(x, y);

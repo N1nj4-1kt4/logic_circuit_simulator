@@ -14,7 +14,8 @@ import {
     ComponentNotFoundError,
     BoardSaveError,
     BoardLoadError,
-    ComponentSaveError
+    ComponentSaveError,
+    InvalidCircuitError
 } from '../../../src/core/errors.js';
 
 // Mock dependencies
@@ -429,6 +430,168 @@ describe('CircuitOperations', () => {
     });
 
     // ====================================
+    // Check Deletion Impact Tests
+    // ====================================
+
+    describe('checkDeletionImpact', () => {
+        let input1, input2, output1, gate;
+
+        beforeEach(() => {
+            // Create a valid circuit: 2 inputs -> AND gate -> 1 output
+            operations.placeComponent(100, 100, 'INPUT');
+            operations.placeComponent(100, 200, 'INPUT');
+            operations.placeComponent(200, 150, 'AND');
+            operations.placeComponent(300, 150, 'OUTPUT');
+
+            const components = state.getComponents();
+            input1 = components[0];
+            input2 = components[1];
+            gate = components[2];
+            output1 = components[3];
+
+            // Connect input1 -> gate port 0
+            state.addConnection({
+                from: input1.id,
+                fromPort: 0,
+                to: gate.id,
+                toPort: 0
+            });
+
+            // Connect input2 -> gate port 1
+            state.addConnection({
+                from: input2.id,
+                fromPort: 0,
+                to: gate.id,
+                toPort: 1
+            });
+
+            // Connect gate -> output
+            state.addConnection({
+                from: gate.id,
+                fromPort: 0,
+                to: output1.id,
+                toPort: 0
+            });
+        });
+
+        it('returns willInvalidate: false when simulation is not running', () => {
+            mockCallbacks.findComponent.mockReturnValueOnce(input1);
+
+            const result = operations.checkDeletionImpact(100, 100, vi.fn());
+
+            expect(result.willInvalidate).toBe(false);
+            expect(result.component).toBe(input1);
+        });
+
+        it('returns willInvalidate: false when nothing found at coordinates', () => {
+            mockCallbacks.findComponent.mockReturnValueOnce(null);
+            const findConnection = vi.fn().mockReturnValueOnce(null);
+
+            const result = operations.checkDeletionImpact(500, 500, findConnection);
+
+            expect(result.willInvalidate).toBe(false);
+            expect(result.component).toBeNull();
+            expect(result.connection).toBeNull();
+        });
+
+        it('returns willInvalidate: true when deleting input during simulation would invalidate circuit', () => {
+            // Start simulation
+            state.setAutoCycling(true);
+
+            mockCallbacks.findComponent.mockReturnValueOnce(input1);
+
+            const result = operations.checkDeletionImpact(100, 100, vi.fn());
+
+            // Deleting input1 would leave gate with only 1 input connected
+            expect(result.willInvalidate).toBe(true);
+            expect(result.component).toBe(input1);
+        });
+
+        it('returns willInvalidate: true when deleting critical connection during simulation', () => {
+            // Start simulation
+            state.setAutoCycling(true);
+
+            const connection = state.getConnections()[0]; // input1 -> gate connection
+            mockCallbacks.findComponent.mockReturnValueOnce(null);
+            const findConnection = vi.fn().mockReturnValueOnce(connection);
+
+            const result = operations.checkDeletionImpact(150, 100, findConnection);
+
+            // Deleting this connection would leave gate with only 1 input connected
+            expect(result.willInvalidate).toBe(true);
+            expect(result.connection).toBe(connection);
+        });
+
+        it('returns willInvalidate: false when circuit remains valid after deletion', () => {
+            // Add a second AND gate that's also fully connected
+            operations.placeComponent(200, 250, 'AND');
+            const components = state.getComponents();
+            const gate2 = components[4];
+
+            // Connect both inputs to gate2 as well
+            state.addConnection({
+                from: input1.id,
+                fromPort: 0,
+                to: gate2.id,
+                toPort: 0
+            });
+            state.addConnection({
+                from: input2.id,
+                fromPort: 0,
+                to: gate2.id,
+                toPort: 1
+            });
+
+            // Add second output for gate2
+            operations.placeComponent(300, 250, 'OUTPUT');
+            const output2 = state.getComponents()[5];
+            state.addConnection({
+                from: gate2.id,
+                fromPort: 0,
+                to: output2.id,
+                toPort: 0
+            });
+
+            // Start simulation
+            state.setAutoCycling(true);
+
+            // Delete the first gate - circuit should still be valid because gate2 is fully connected
+            mockCallbacks.findComponent.mockReturnValueOnce(gate);
+
+            const result = operations.checkDeletionImpact(200, 150, vi.fn());
+
+            expect(result.willInvalidate).toBe(false);
+            expect(result.component).toBe(gate);
+        });
+
+        it('returns willInvalidate: true when deleting the only gate during simulation', () => {
+            // Start simulation
+            state.setAutoCycling(true);
+
+            mockCallbacks.findComponent.mockReturnValueOnce(gate);
+
+            const result = operations.checkDeletionImpact(200, 150, vi.fn());
+
+            // Deleting the only gate would leave no valid circuits
+            expect(result.willInvalidate).toBe(true);
+            expect(result.component).toBe(gate);
+        });
+
+        it('returns willInvalidate: true when deleting the only output during simulation', () => {
+            // Start simulation
+            state.setAutoCycling(true);
+
+            mockCallbacks.findComponent.mockReturnValueOnce(output1);
+
+            const result = operations.checkDeletionImpact(300, 150, vi.fn());
+
+            // Deleting the only output would invalidate the circuit
+            expect(result.willInvalidate).toBe(true);
+            expect(result.component).toBe(output1);
+        });
+    });
+
+    // ====================================
     // Simulation Tests
     // ====================================
 
@@ -449,26 +612,76 @@ describe('CircuitOperations', () => {
         });
 
         describe('Auto Cycle', () => {
-            beforeEach(() => {
+            // Helper to create a valid circuit with 2 inputs -> AND gate -> 1 output
+            const createValidCircuit = () => {
                 operations.placeComponent(100, 100, 'INPUT');
                 operations.placeComponent(100, 200, 'INPUT');
-                operations.placeComponent(300, 100, 'OUTPUT');
+                operations.placeComponent(200, 150, 'AND');
+                operations.placeComponent(300, 150, 'OUTPUT');
+
+                const components = state.getComponents();
+                const input1 = components[0];
+                const input2 = components[1];
+                const gate = components[2];
+                const output1 = components[3];
+
+                // Connect inputs to gate
+                state.addConnection({ from: input1.id, fromPort: 0, to: gate.id, toPort: 0 });
+                state.addConnection({ from: input2.id, fromPort: 0, to: gate.id, toPort: 1 });
+                // Connect gate to output
+                state.addConnection({ from: gate.id, fromPort: 0, to: output1.id, toPort: 0 });
+
+                return { input1, input2, gate, output1 };
+            };
+
+            beforeEach(() => {
+                createValidCircuit();
             });
 
-            it('throws NoInputsError when no inputs', () => {
+            it('throws InvalidCircuitError when no inputs', () => {
                 // Clear state and add only output
                 state.clearComponents();
                 operations.placeComponent(300, 100, 'OUTPUT');
 
-                expect(() => operations.startAutoCycle()).toThrow(NoInputsError);
+                expect(() => operations.startAutoCycle()).toThrow(InvalidCircuitError);
             });
 
-            it('throws NoOutputsError when no outputs', () => {
+            it('throws InvalidCircuitError when no outputs', () => {
                 // Clear state and add only input
                 state.clearComponents();
                 operations.placeComponent(100, 100, 'INPUT');
 
-                expect(() => operations.startAutoCycle()).toThrow(NoOutputsError);
+                expect(() => operations.startAutoCycle()).toThrow(InvalidCircuitError);
+            });
+
+            it('throws InvalidCircuitError when gate has no connections', () => {
+                // Clear state and create circuit without connections
+                state.clearComponents();
+                operations.placeComponent(100, 100, 'INPUT');
+                operations.placeComponent(200, 150, 'AND');
+                operations.placeComponent(300, 150, 'OUTPUT');
+
+                expect(() => operations.startAutoCycle()).toThrow(InvalidCircuitError);
+            });
+
+            it('throws InvalidCircuitError when gate output is not connected', () => {
+                // Clear state and create circuit with only input connections
+                state.clearComponents();
+                operations.placeComponent(100, 100, 'INPUT');
+                operations.placeComponent(100, 200, 'INPUT');
+                operations.placeComponent(200, 150, 'AND');
+                operations.placeComponent(300, 150, 'OUTPUT');
+
+                const components = state.getComponents();
+                const input1 = components[0];
+                const input2 = components[1];
+                const gate = components[2];
+
+                // Connect inputs to gate but NOT gate to output
+                state.addConnection({ from: input1.id, fromPort: 0, to: gate.id, toPort: 0 });
+                state.addConnection({ from: input2.id, fromPort: 0, to: gate.id, toPort: 1 });
+
+                expect(() => operations.startAutoCycle()).toThrow(InvalidCircuitError);
             });
 
             it('starts auto-cycling with correct state', () => {
@@ -599,23 +812,51 @@ describe('CircuitOperations', () => {
         });
 
         describe('Step Simulation', () => {
+            // Helper to create a valid circuit with 1 input -> NOT gate -> 1 output
+            const createValidCircuitForStep = () => {
+                operations.placeComponent(100, 100, 'INPUT');
+                operations.placeComponent(200, 100, 'NOT');
+                operations.placeComponent(300, 100, 'OUTPUT');
+
+                const components = state.getComponents();
+                const input1 = components[0];
+                const gate = components[1];
+                const output1 = components[2];
+
+                // Connect input to gate
+                state.addConnection({ from: input1.id, fromPort: 0, to: gate.id, toPort: 0 });
+                // Connect gate to output
+                state.addConnection({ from: gate.id, fromPort: 0, to: output1.id, toPort: 0 });
+
+                return { input1, gate, output1 };
+            };
+
             beforeEach(() => {
-                operations.placeComponent(100, 100, 'INPUT');
-                operations.placeComponent(300, 100, 'OUTPUT');
+                createValidCircuitForStep();
             });
 
-            it('throws NoInputsError when no inputs', () => {
+            it('throws InvalidCircuitError when no inputs', () => {
                 state.clearComponents();
                 operations.placeComponent(300, 100, 'OUTPUT');
 
-                expect(() => operations.stepSimulation(1)).toThrow(NoInputsError);
+                expect(() => operations.stepSimulation(1)).toThrow(InvalidCircuitError);
             });
 
-            it('throws NoOutputsError when no outputs', () => {
+            it('throws InvalidCircuitError when no outputs', () => {
                 state.clearComponents();
                 operations.placeComponent(100, 100, 'INPUT');
 
-                expect(() => operations.stepSimulation(1)).toThrow(NoOutputsError);
+                expect(() => operations.stepSimulation(1)).toThrow(InvalidCircuitError);
+            });
+
+            it('throws InvalidCircuitError when gate not fully connected', () => {
+                state.clearComponents();
+                operations.placeComponent(100, 100, 'INPUT');
+                operations.placeComponent(200, 100, 'NOT');
+                operations.placeComponent(300, 100, 'OUTPUT');
+
+                // No connections - should throw
+                expect(() => operations.stepSimulation(1)).toThrow(InvalidCircuitError);
             });
 
             it('steps forward through combinations', () => {
@@ -658,10 +899,30 @@ describe('CircuitOperations', () => {
         });
 
         describe('Reset Simulation', () => {
-            beforeEach(() => {
+            // Helper to create a valid circuit with 2 inputs -> AND gate -> 1 output
+            const createValidCircuitForReset = () => {
                 operations.placeComponent(100, 100, 'INPUT');
                 operations.placeComponent(100, 200, 'INPUT');
-                operations.placeComponent(300, 100, 'OUTPUT');
+                operations.placeComponent(200, 150, 'AND');
+                operations.placeComponent(300, 150, 'OUTPUT');
+
+                const components = state.getComponents();
+                const input1 = components[0];
+                const input2 = components[1];
+                const gate = components[2];
+                const output1 = components[3];
+
+                // Connect inputs to gate
+                state.addConnection({ from: input1.id, fromPort: 0, to: gate.id, toPort: 0 });
+                state.addConnection({ from: input2.id, fromPort: 0, to: gate.id, toPort: 1 });
+                // Connect gate to output
+                state.addConnection({ from: gate.id, fromPort: 0, to: output1.id, toPort: 0 });
+
+                return { input1, input2, gate, output1 };
+            };
+
+            beforeEach(() => {
+                createValidCircuitForReset();
             });
 
             it('resets all inputs to 0', () => {

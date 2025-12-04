@@ -4,6 +4,8 @@ import 'tabulator-tables/dist/css/tabulator_midnight.min.css';
 import interact from 'interactjs';
 import { positionPanelSmartly } from '../utils/positioning.js';
 import { DialogFactory } from './DialogFactory.js';
+import { UI } from '../constants.js';
+import { eventBus, EVENT_TYPES } from '../utils/eventBus.js';
 
 /**
  * TruthTablePanel - Manages the truth table UI using Tabulator.js
@@ -63,28 +65,22 @@ export class TruthTablePanel {
             return false;
         }
 
-        if (!cache.isValid) {
-            // Circuit is incomplete or invalid
-            DialogFactory.showAlert({
-                message: cache.reason || 'Circuit is incomplete. Please connect all components.',
-                type: 'warning'
-            });
-            return false;
-        }
+        const { inputs, outputs, table, isValid, reason } = cache;
 
-        const { inputs, outputs, table } = cache;
-
-        // Store truth table data from cache
+        // Store truth table data from cache (including invalid circuits)
         this.truthTableData = {
-            inputs: inputs,
-            outputs: outputs,
-            table: table
+            inputs: inputs || [],
+            outputs: outputs || [],
+            table: table || [],
+            isValid: isValid,
+            reason: reason
         };
 
-        // Initialize column order if not set
-        if (!this.columnOrder) {
+        // Initialize column order if not set (only for valid circuits with columns)
+        const columnCount = (inputs || []).length + (outputs || []).length;
+        if (!this.columnOrder && columnCount > 0) {
             this.columnOrder = [];
-            for (let i = 0; i < inputs.length + outputs.length; i++) {
+            for (let i = 0; i < columnCount; i++) {
                 this.columnOrder.push(i);
             }
         }
@@ -161,6 +157,13 @@ export class TruthTablePanel {
         // Show panel first (remove hidden class and ensure display is block)
         this.panel.classList.remove('hidden');
         this.panel.style.display = 'block';
+
+        // Handle cases with no table data (no inputs or no outputs)
+        // If table has data, display it normally even for invalid circuits
+        if (this.truthTableData.table.length === 0) {
+            this.displayInvalidMessage(wasVisible);
+            return;
+        }
 
         // Panel in layout but invisible during construction (Tabulator can measure)
         this.panel.style.opacity = '0';
@@ -257,6 +260,55 @@ export class TruthTablePanel {
     }
 
     /**
+     * Display an invalid circuit message instead of the truth table
+     * @param {boolean} wasVisible - Whether panel was already visible before this call
+     */
+    displayInvalidMessage(wasVisible) {
+        const content = document.getElementById('truthTableContent');
+        if (!content) return;
+
+        // Destroy existing table if any
+        if (this.table) {
+            this.table.destroy();
+            this.table = null;
+        }
+
+        // Clear content and show invalid message
+        content.innerHTML = `
+            <div class="truth-table-invalid-message">
+                <div class="icon">${UI.ICONS.WARNING}</div>
+                <div class="message">${this.truthTableData.reason || 'Circuit incomplete'}</div>
+            </div>
+        `;
+
+        // Position panel on first open
+        if (!wasVisible) {
+            const hasValidSavedPosition = this.state &&
+                this.state.x !== undefined &&
+                this.state.y !== undefined &&
+                (this.state.x !== 0 || this.state.y !== 0);
+
+            if (!hasValidSavedPosition) {
+                positionPanelSmartly(this.panel, this.canvas, this.components);
+            } else {
+                this.restoreState(this.state);
+            }
+        }
+
+        // Setup interactions if not already setup
+        if (!this.interactionsSetup) {
+            this.setupInteractions();
+            this.interactionsSetup = true;
+        }
+
+        // Show panel
+        this.panel.style.opacity = '1';
+        this.panel.style.pointerEvents = 'auto';
+
+        eventBus.emit(EVENT_TYPES.TRUTH_TABLE_SHOWN);
+    }
+
+    /**
      * Generate Tabulator column definitions with groups
      */
     generateColumns() {
@@ -339,6 +391,11 @@ export class TruthTablePanel {
      */
     updateHighlight() {
         if (!this.table || !this.truthTableData) return;
+
+        // No highlighting if there's no table data
+        if (!this.truthTableData.table || this.truthTableData.table.length === 0) {
+            return;
+        }
 
         const { inputs } = this.truthTableData;
 
@@ -719,8 +776,8 @@ export class TruthTablePanel {
      * Called when TRUTH_TABLE_COMPUTED event fires
      */
     refresh() {
-        // Don't refresh if panel doesn't exist or table not initialized
-        if (!this.panel || !this.table) {
+        // Don't refresh if panel doesn't exist
+        if (!this.panel) {
             return;
         }
 
@@ -731,16 +788,33 @@ export class TruthTablePanel {
 
         const cache = this.circuitState.getTruthTableCache();
 
-        // Hide panel if cache is invalid (circuit became incomplete)
-        if (!cache || !cache.isValid) {
+        // Hide panel only if no cache at all
+        if (!cache) {
             this.hide();
             return;
         }
 
-        const { inputs, outputs, table } = cache;
+        const { inputs, outputs, table, isValid, reason } = cache;
+
+        // If no table data (no inputs or no outputs), show invalid message
+        if (!table || table.length === 0) {
+            this.truthTableData = {
+                inputs: inputs || [],
+                outputs: outputs || [],
+                table: [],
+                isValid: false,
+                reason: reason
+            };
+            this.displayInvalidMessage(true); // true = panel was already visible
+            return;
+        }
+
+        // Check if we're transitioning from no-table state to having table
+        const hadNoTable = this.truthTableData && this.truthTableData.table.length === 0;
 
         // Check if column structure changed (inputs/outputs added/removed)
         const structureChanged =
+            hadNoTable ||
             !this.truthTableData ||
             inputs.length !== this.truthTableData.inputs.length ||
             outputs.length !== this.truthTableData.outputs.length;
@@ -763,14 +837,14 @@ export class TruthTablePanel {
             this.panel.style.height = '';
 
             // Update data and reset column order for new structure
-            this.truthTableData = { inputs, outputs, table };
+            this.truthTableData = { inputs, outputs, table, isValid };
             this.columnOrder = null;
 
             // Rebuild table with new columns (display() will restore position from state)
             this.display();
         } else {
             // Same structure - just update data in place (fast path)
-            this.truthTableData = { inputs, outputs, table };
+            this.truthTableData = { inputs, outputs, table, isValid };
             this.table.replaceData(table);
 
             // Re-apply row heights after replaceData since Tabulator resets styles
