@@ -279,8 +279,7 @@ export class TruthTablePanel {
             this.updateHighlight();
             console.log('✅ Highlight updated');
 
-            // Apply saved height to Tabulator after table is built
-            // This ensures the table fills the panel on reload/regeneration
+            // Apply height to Tabulator after table is built
             // Calculate from panel dimensions for accuracy
             const panelHeader = this.panel.querySelector('.panel-header');
             const headerHeight = panelHeader ? panelHeader.offsetHeight : 0;
@@ -290,9 +289,14 @@ export class TruthTablePanel {
             const panelHeight = this.panel.offsetHeight;
             const availableHeight = panelHeight - headerHeight - paddingTop - paddingBottom;
 
+            // Determine if we should fit the panel to content
+            // Fit panel when: no saved height state (new board or first open)
+            const hasValidSavedHeight = this.state && this.state.height && this.state.height !== '';
+            const shouldFitPanel = !hasValidSavedHeight;
+
             if (availableHeight > 0) {
-                console.log('📐 Setting table height to:', availableHeight);
-                this.applyTableHeight(availableHeight);
+                console.log('📐 Setting table height to:', availableHeight, 'fitPanel:', shouldFitPanel);
+                this.applyTableHeight(availableHeight, { fitPanel: shouldFitPanel });
             }
 
             // Reveal panel with instant transition (table is fully constructed)
@@ -443,19 +447,16 @@ export class TruthTablePanel {
     /**
      * Apply height to table, distributing space across rows
      * Similar to fitColumns but for row heights
+     * @param {number} availableHeight - Maximum available height for the table content
+     * @param {Object} options - Options object
+     * @param {boolean} options.fitPanel - If true, resize the panel to fit content
+     * @returns {number} The actual height used
      */
-    applyTableHeight(availableHeight) {
-        if (!this.table) return;
+    applyTableHeight(availableHeight, { fitPanel = false } = {}) {
+        if (!this.table) return availableHeight;
 
         const content = document.getElementById('truthTableContent');
-        if (!content) return;
-
-        // Set container heights
-        content.style.height = availableHeight + 'px';
-        const tabulatorEl = content.querySelector('.tabulator');
-        if (tabulatorEl) {
-            tabulatorEl.style.height = availableHeight + 'px';
-        }
+        if (!content) return availableHeight;
 
         // Get the header height to calculate available space for rows
         const headerEl = content.querySelector('.tabulator-header');
@@ -464,28 +465,28 @@ export class TruthTablePanel {
         // Calculate available height for rows
         const rowAreaHeight = availableHeight - headerHeight;
 
-        // Set the tableholder and table heights explicitly
-        const tableholder = content.querySelector('.tabulator-tableholder');
-        if (tableholder) {
-            tableholder.style.height = rowAreaHeight + 'px';
-        }
-
-        const tableEl = content.querySelector('.tabulator-table');
-        if (tableEl) {
-            tableEl.style.height = rowAreaHeight + 'px';
-            // Don't change display - Tabulator handles row layout
-        }
-
         // Get number of rows
         const rows = this.table.getRows();
         const rowCount = rows.length;
 
-        if (rowCount > 0 && rowAreaHeight > 0) {
-            // Calculate height per row (minimum 25px)
-            const minRowHeight = 25;
-            const rowHeight = Math.max(minRowHeight, Math.floor(rowAreaHeight / rowCount));
+        // Calculate the actual content height based on row count and appropriate row height
+        let actualRowAreaHeight = rowAreaHeight;
+        let rowHeight = 36; // default
 
-            console.log('📊 Row calculation:', { availableHeight, headerHeight, rowAreaHeight, rowCount, rowHeight });
+        if (rowCount > 0 && rowAreaHeight > 0) {
+            // Calculate height per row
+            // - Minimum 25px to ensure readability
+            // - Maximum 36px to prevent excessive spacing (appropriate for 14px font)
+            const minRowHeight = 25;
+            const maxRowHeight = 36;
+            const calculatedHeight = Math.floor(rowAreaHeight / rowCount);
+            rowHeight = Math.max(minRowHeight, Math.min(maxRowHeight, calculatedHeight));
+
+            // Calculate actual content height - use the smaller of available space or needed space
+            const neededHeight = rowCount * rowHeight;
+            actualRowAreaHeight = Math.min(rowAreaHeight, neededHeight);
+
+            console.log('📊 Row calculation:', { availableHeight, headerHeight, rowAreaHeight, rowCount, rowHeight, neededHeight, actualRowAreaHeight });
 
             // Apply row height via CSS on the rows and cells
             // Use setProperty to add !important without wiping existing styles
@@ -509,7 +510,49 @@ export class TruthTablePanel {
             });
         }
 
+        // Calculate actual total height needed (header + rows)
+        const actualTotalHeight = headerHeight + actualRowAreaHeight;
+
+        // Set all container heights to fit the actual content
+        content.style.height = actualTotalHeight + 'px';
+
+        const tabulatorEl = content.querySelector('.tabulator');
+        if (tabulatorEl) {
+            tabulatorEl.style.height = actualTotalHeight + 'px';
+        }
+
+        const tableholder = content.querySelector('.tabulator-tableholder');
+        if (tableholder) {
+            tableholder.style.height = actualRowAreaHeight + 'px';
+        }
+
+        const tableEl = content.querySelector('.tabulator-table');
+        if (tableEl) {
+            tableEl.style.height = actualRowAreaHeight + 'px';
+        }
+
+        // Resize the panel itself to fit the content
+        if (fitPanel && this.panel) {
+            const panelHeader = this.panel.querySelector('.panel-header');
+            const panelHeaderHeight = panelHeader ? panelHeader.offsetHeight : 0;
+            // Get the margin-bottom of the panel header (gap between header and content)
+            const panelHeaderStyles = panelHeader ? getComputedStyle(panelHeader) : null;
+            const headerMarginBottom = panelHeaderStyles ? parseFloat(panelHeaderStyles.marginBottom) || 0 : 0;
+
+            const panelStyles = getComputedStyle(this.panel);
+            const paddingTop = parseFloat(panelStyles.paddingTop) || 0;
+            const paddingBottom = parseFloat(panelStyles.paddingBottom) || 0;
+
+            // Add same gap at bottom as between header and content for visual balance
+            const bottomGap = headerMarginBottom;
+
+            const newPanelHeight = panelHeaderHeight + headerMarginBottom + paddingTop + paddingBottom + actualTotalHeight + bottomGap;
+            this.panel.style.height = newPanelHeight + 'px';
+            console.log('📐 Resized panel to fit content:', { newPanelHeight, actualTotalHeight, headerMarginBottom, bottomGap });
+        }
+
         // Don't call redraw() as it resets our styles
+        return actualTotalHeight;
     }
 
     /**

@@ -28,6 +28,8 @@
     min-height: 0;
     width: 100%;
     height: 100%;
+    /* Add small right padding to prevent rightmost column border from being clipped */
+    padding-right: 1px;
 }
 
 /* ===== Truth Table Close Button ===== */
