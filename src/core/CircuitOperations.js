@@ -24,6 +24,7 @@ import {
 } from './circuitEvaluator.js';
 import { computeTruthTable } from './TruthTableComputer.js';
 import { deepClone } from '../utils/serialization.js';
+import { snapToGrid } from '../utils/hitDetection.js';
 import { TIMING } from '../constants.js';
 
 export class CircuitOperations {
@@ -134,11 +135,12 @@ export class CircuitOperations {
         const components = this.state.getComponents();
         const customComponents = this.state.getCustomComponents();
 
+        const snapped = snapToGrid(x, y);
         const component = {
             id: this.state.generateNextId(),
             type: actualType,
-            x: Math.round(x / 50) * 50,
-            y: Math.round(y / 50) * 50,
+            x: snapped.x,
+            y: snapped.y,
             value: actualType === 'INPUT' ? 0 : null,
             inputs: [],
             outputs: [],

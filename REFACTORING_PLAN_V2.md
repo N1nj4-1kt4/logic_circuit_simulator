@@ -10,14 +10,15 @@
 
 **Current State:**
 - 77% reduction in main file achieved
-- 27 modular source files
-- 326 tests passing (~50% coverage by module)
+- 28 modular source files (added hitDetection.js)
+- 545 tests passing (~55% coverage by module)
 - Event bus foundation in place
+- Phase 10.1 completed ✅
 
 **Remaining Work:**
 - 3 separation of concerns violations
 - 119 console.log statements to clean up
-- ~50% test coverage (critical modules untested)
+- ~55% test coverage (critical modules untested)
 - Event bus underutilized
 
 **Estimated Effort:** 12-16 hours (2-3 days)
@@ -38,76 +39,30 @@
 
 ## Phase 10: Architecture Cleanup
 
-### Phase 10.1: Extract Hit Detection Utilities
+### Phase 10.1: Extract Hit Detection Utilities ✅ COMPLETED
 
 **Goal:** Move geometric/hit detection logic from coordinator to utilities
 
-**Timeline:** 2-3 hours
+**Status:** ✅ Completed
 
-**Files to Create:**
-- `src/utils/hitDetection.js` (~150 lines)
+**Files Created:**
+- `src/utils/hitDetection.js` (135 lines) - 5 pure utility functions:
+  - `findComponentAt()` - Find component at coordinates
+  - `findPortAt()` - Find port at coordinates (with optional type filter)
+  - `findConnectionAt()` - Find connection at coordinates
+  - `snapToGrid()` - Snap coordinates to grid
+  - `isPointInComponent()` - Check if point is within component bounds
 
-**Functions to Extract from `circuit-simulator.js` (lines 361-522):**
+- `tests/unit/utils/hitDetection.test.js` (43 tests) - Full test coverage
 
-```javascript
-// src/utils/hitDetection.js
+**Files Modified:**
+- `circuit-simulator.js` - Updated imports, simplified `findComponent()`, `findPort()`, `findConnection()`, `moveComponent()` to use utilities
+- `src/core/CircuitOperations.js` - Updated `placeComponent()` to use `snapToGrid()`
 
-/**
- * Find component at given coordinates
- * @param {Array} components - All components
- * @param {number} x - X coordinate
- * @param {number} y - Y coordinate
- * @returns {Object|null} Component or null
- */
-export function findComponentAt(components, x, y) { ... }
-
-/**
- * Find port at given coordinates
- * @param {Array} components - All components
- * @param {number} x - X coordinate
- * @param {number} y - Y coordinate
- * @param {string} portType - 'input' or 'output'
- * @returns {Object|null} Port info or null
- */
-export function findPortAt(components, x, y, portType) { ... }
-
-/**
- * Find connection at given coordinates
- * @param {Array} connections - All connections
- * @param {Array} components - All components
- * @param {number} x - X coordinate
- * @param {number} y - Y coordinate
- * @returns {Object|null} Connection or null
- */
-export function findConnectionAt(connections, components, x, y) { ... }
-
-/**
- * Calculate port positions for a component
- * @param {Object} component - Component object
- * @returns {Object} Component with calculated ports
- */
-export function calculateComponentPorts(component) { ... }
-
-/**
- * Snap coordinates to grid
- * @param {number} x - X coordinate
- * @param {number} y - Y coordinate
- * @param {number} gridSize - Grid size (default: GRID_SIZE)
- * @returns {{x: number, y: number}} Snapped coordinates
- */
-export function snapToGrid(x, y, gridSize = GRID_SIZE) { ... }
-```
-
-**Files to Modify:**
-- `circuit-simulator.js` - Remove extracted functions, import from hitDetection.js
-- `src/interaction/CanvasInteraction.js` - Use hitDetection utilities
-
-**Tests to Create:**
-- `tests/unit/utils/hitDetection.test.js`
-
-**Success Criteria:**
-- All hit detection tests pass
-- No geometric logic in coordinator
+**Results:**
+- All 545 tests pass
+- No geometric logic in coordinator (delegated to utilities)
+- Uses constants from `HIT_DETECTION_SIZES`, `PORT_DETECTION_RADIUS`, `GRID_SIZE`
 - App functionality unchanged
 
 ---
@@ -626,19 +581,19 @@ eventBus.on(EVENT_TYPES.MODE_CHANGED, (mode) => this.handleModeChange(mode));
 
 ## Summary: Priority Order
 
-| Phase | Priority | Effort | Impact |
-|-------|----------|--------|--------|
-| 10.1 Hit Detection | HIGH | 2-3h | Clean coordinator |
-| 10.2 Remove UI from Layers | HIGH | 2h | Testability |
-| 10.4 Console Cleanup | HIGH | 1h | Production ready |
-| 10.3 Constants | MEDIUM | 1-2h | Maintainability |
-| 10.5 Remove Duplicates | MEDIUM | 30m | Single source of truth |
-| 10.6 Move Drag State | MEDIUM | 1h | Clean architecture |
-| 11.1 CircuitOperations Tests | HIGH | 3-4h | Coverage |
-| 11.2 Interaction Tests | MEDIUM | 2h | Coverage |
-| 11.3 Rendering Tests | LOW | 2h | Coverage |
-| 11.4 UI Tests | LOW | 2-3h | Coverage |
-| 12.x Optional | LOW | 4-6h | Polish |
+| Phase | Priority | Effort | Impact | Status |
+|-------|----------|--------|--------|--------|
+| 10.1 Hit Detection | HIGH | 2-3h | Clean coordinator | ✅ Done |
+| 10.2 Remove UI from Layers | HIGH | 2h | Testability | Pending |
+| 10.4 Console Cleanup | HIGH | 1h | Production ready | Pending |
+| 10.3 Constants | MEDIUM | 1-2h | Maintainability | Pending |
+| 10.5 Remove Duplicates | MEDIUM | 30m | Single source of truth | Pending |
+| 10.6 Move Drag State | MEDIUM | 1h | Clean architecture | Pending |
+| 11.1 CircuitOperations Tests | HIGH | 3-4h | Coverage | Pending |
+| 11.2 Interaction Tests | MEDIUM | 2h | Coverage | Pending |
+| 11.3 Rendering Tests | LOW | 2h | Coverage | Pending |
+| 11.4 UI Tests | LOW | 2-3h | Coverage | Pending |
+| 12.x Optional | LOW | 4-6h | Polish | Pending |
 
 ---
 

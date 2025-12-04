@@ -3,11 +3,9 @@
 // Import utilities
 import {
     GATE_SIZES,
-    HIT_DETECTION_SIZES,
     COLORS,
     GRID_SIZE,
     PORT_RADIUS,
-    PORT_DETECTION_RADIUS,
     CANVAS_WIDTH,
     CANVAS_HEIGHT,
     FONTS,
@@ -18,7 +16,7 @@ import {
 
 import { eventBus, EVENT_TYPES } from './src/utils/eventBus.js';
 
-import { distanceToLine } from './src/utils/geometry.js';
+import { findComponentAt, findPortAt, findConnectionAt, snapToGrid } from './src/utils/hitDetection.js';
 
 import { LocalStorageAdapter } from './src/storage/LocalStorageAdapter.js';
 import { BoardManager } from './src/storage/BoardManager.js';
@@ -414,8 +412,9 @@ class CircuitSimulator {
         // Update component position (snap to grid)
         const oldX = component.x;
         const oldY = component.y;
-        component.x = Math.round(newX / 50) * 50;
-        component.y = Math.round(newY / 50) * 50;
+        const snapped = snapToGrid(newX, newY);
+        component.x = snapped.x;
+        component.y = snapped.y;
 
         // Clear and recalculate ports
         component.inputs = [];
@@ -446,22 +445,7 @@ class CircuitSimulator {
     }
 
     findComponent(x, y) {
-        const components = this.state.getComponents();
-        return components.find(c => {
-            let size = 50; // Increased default size for better detection
-            if (c.type === 'INPUT' || c.type === 'OUTPUT') {
-                size = 40; // Increased from 30 to cover full circle
-            } else if (c.type === 'CUSTOM') {
-                size = 100; // Updated for new 90x90 component size
-            } else if (c.type === 'NOT') {
-                size = 50; // NOT gates are smaller
-            } else {
-                // Logic gates (AND, OR, XOR, NAND, NOR, XNOR)
-                size = 60; // Increased to cover full gate shape
-            }
-            return x >= c.x - size/2 && x <= c.x + size/2 &&
-                   y >= c.y - size/2 && y <= c.y + size/2;
-        });
+        return findComponentAt(this.state.getComponents(), x, y);
     }
 
     // Recalculate port positions for a component (for migrating old saved boards)
@@ -483,47 +467,15 @@ class CircuitSimulator {
     }
 
     findPort(x, y) {
-        const components = this.state.getComponents();
-        for (let component of components) {
-            // Check output ports
-            for (let i = 0; i < component.outputs.length; i++) {
-                const port = component.outputs[i];
-                const dist = Math.hypot(port.x - x, port.y - y);
-                if (dist < 10) {
-                    return { component: component.id, portIndex: i, isOutput: true, x: port.x, y: port.y };
-                }
-            }
-
-            // Check input ports
-            for (let i = 0; i < component.inputs.length; i++) {
-                const port = component.inputs[i];
-                const dist = Math.hypot(port.x - x, port.y - y);
-                if (dist < 10) {
-                    return { component: component.id, portIndex: i, isOutput: false, x: port.x, y: port.y };
-                }
-            }
-        }
-        return null;
+        return findPortAt(this.state.getComponents(), x, y);
     }
 
     findConnection(x, y) {
-        const components = this.state.getComponents();
-        const connections = this.state.getConnections();
-        for (let conn of connections) {
-            const from = components.find(c => c.id === conn.from);
-            const to = components.find(c => c.id === conn.to);
-            if (!from || !to) continue;
-
-            const fromPort = from.outputs[conn.fromPort];
-            const toPort = to.inputs[conn.toPort];
-
-            // Simple distance check to connection line
-            const dist = distanceToLine(x, y, fromPort.x, fromPort.y, toPort.x, toPort.y);
-            if (dist < 5) {
-                return conn;
-            }
-        }
-        return null;
+        return findConnectionAt(
+            this.state.getConnections(),
+            this.state.getComponents(),
+            x, y
+        );
     }
 
     redraw() {
