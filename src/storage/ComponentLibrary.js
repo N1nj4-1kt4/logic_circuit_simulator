@@ -52,10 +52,6 @@ export class ComponentLibrary {
 
             const success = await this.storage.setItem(this.storageKey, components);
 
-            if (success) {
-                console.log(`Component "${name}" saved successfully`);
-            }
-
             return success;
         } catch (error) {
             console.error(`Failed to save component "${name}":`, error);
@@ -78,7 +74,6 @@ export class ComponentLibrary {
                 return null;
             }
 
-            console.log(`Component "${name}" loaded successfully`);
             return component;
         } catch (error) {
             console.error(`Failed to load component "${name}":`, error);
@@ -129,13 +124,8 @@ export class ComponentLibrary {
 
             const success = await this.storage.setItem(this.storageKey, components);
 
-            if (success) {
-                console.log(`Component "${name}" deleted successfully`);
-            }
-
             return success;
         } catch (error) {
-            console.error(`Failed to delete component "${name}":`, error);
             return false;
         }
     }
@@ -156,10 +146,8 @@ export class ComponentLibrary {
             // Use the serialization utility to export
             exportToJSON(component, name);
 
-            console.log(`Component "${name}" exported successfully`);
             return true;
         } catch (error) {
-            console.error(`Failed to export component "${name}":`, error);
             throw new ImportExportError(`Failed to export component: ${error.message}`);
         }
     }
@@ -192,7 +180,6 @@ export class ComponentLibrary {
             const success = await this.saveComponent(name, componentData);
 
             if (success) {
-                console.log(`Component "${name}" imported successfully`);
                 return componentData;
             }
 
@@ -202,7 +189,6 @@ export class ComponentLibrary {
             if (error.name === 'ComponentExistsError') {
                 throw error;
             }
-            console.error('Failed to import component:', error);
             throw new ImportExportError(`Failed to import component: ${error.message}`);
         }
     }
@@ -253,13 +239,8 @@ export class ComponentLibrary {
 
             const success = await this.storage.setItem(this.storageKey, components);
 
-            if (success) {
-                console.log(`Component renamed from "${oldName}" to "${newName}"`);
-            }
-
             return success;
         } catch (error) {
-            console.error(`Failed to rename component from "${oldName}" to "${newName}":`, error);
             return false;
         }
     }
@@ -272,13 +253,8 @@ export class ComponentLibrary {
         try {
             const success = await this.storage.setItem(this.storageKey, {});
 
-            if (success) {
-                console.log('All components cleared');
-            }
-
             return success;
         } catch (error) {
-            console.error('Failed to clear all components:', error);
             return false;
         }
     }

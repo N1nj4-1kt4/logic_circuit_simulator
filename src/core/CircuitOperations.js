@@ -174,10 +174,8 @@ export class CircuitOperations {
      */
     handleConnect(x, y) {
         const port = this.callbacks.findPort(x, y);
-        console.log('findPort result:', port);
 
         if (!port) {
-            console.log('No port found at', x, y);
             return;
         }
 
@@ -185,7 +183,6 @@ export class CircuitOperations {
         if (!connectStart) {
             // Start connection from output port only
             if (port.isOutput) {
-                console.log('Starting connection from output port');
                 this.state.setConnectStart({
                     component: port.component,
                     portIndex: port.portIndex,
@@ -193,13 +190,10 @@ export class CircuitOperations {
                     y: port.y
                 });
                 eventBus.emit(EVENT_TYPES.CONNECTION_START_CHANGED, true);
-            } else {
-                console.log('Clicked port is not an output port');
             }
         } else {
             // End connection at input port only
             if (!port.isOutput) {
-                console.log('Completing connection to input port');
                 this.state.addConnection({
                     from: connectStart.component,
                     fromPort: connectStart.portIndex,
@@ -209,8 +203,6 @@ export class CircuitOperations {
                 this.state.setConnectStart(null);
                 eventBus.emit(EVENT_TYPES.CONNECTION_START_CHANGED, false);
                 eventBus.emit(EVENT_TYPES.CANVAS_REDRAW);
-            } else {
-                console.log('Clicked port is not an input port');
             }
         }
     }
@@ -222,17 +214,10 @@ export class CircuitOperations {
      * @param {Function} findConnection - Find connection at coordinates
      */
     handleDelete(x, y, findConnection) {
-        const components = this.state.getComponents();
-        console.log('Total components on board:', components.length);
-        console.log('Components:', components.map(c => ({type: c.type, x: c.x, y: c.y, id: c.id})));
-
         // Delete component
         const component = this.callbacks.findComponent(x, y);
-        console.log('findComponent result:', component);
-        console.log('Clicked at:', x, y);
 
         if (component) {
-            console.log('Removing component');
             this.state.removeComponent(component.id);
             eventBus.emit(EVENT_TYPES.CANVAS_REDRAW);
             return;
@@ -240,10 +225,8 @@ export class CircuitOperations {
 
         // Delete connection
         const connection = findConnection(x, y);
-        console.log('findConnection result:', connection);
 
         if (connection) {
-            console.log('Removing connection');
             this.state.removeConnection(connection);
             eventBus.emit(EVENT_TYPES.CANVAS_REDRAW);
         }
@@ -846,7 +829,6 @@ export class CircuitOperations {
         const currentComponentName = this.state.getCurrentComponentName();
 
         if (currentBoardName) {
-            console.log(`Auto-saving current board "${currentBoardName}" before switching...`);
             const currentBoardData = {
                 components: this.state.getComponents(),
                 connections: this.state.getConnections(),
@@ -856,7 +838,6 @@ export class CircuitOperations {
             };
             await this.boardManager.saveBoard(currentBoardName, currentBoardData);
         } else if (currentComponentName) {
-            console.log(`Auto-saving current component "${currentComponentName}" before switching...`);
             // Load existing component to preserve its metadata
             const existingComponent = await this.componentLibrary.loadComponent(currentComponentName);
             if (existingComponent) {
@@ -988,9 +969,8 @@ export class CircuitOperations {
 
         try {
             await this.boardManager.storage.setItem('currentBoard', JSON.stringify(boardData));
-            console.log('Board state auto-saved');
         } catch (error) {
-            console.error('Error auto-saving board state:', error);
+            // Silently handle auto-save errors
         }
     }
 
@@ -1027,13 +1007,11 @@ export class CircuitOperations {
                 // Update last saved state
                 this.state.setLastSavedState(deepClone(this.state.getCurrentState()));
 
-                console.log('Board state restored from auto-save');
-
                 // Emit event to update toolbar displays
                 eventBus.emit(EVENT_TYPES.TOOLBAR_UPDATE_DISPLAYS);
             }
         } catch (error) {
-            console.error('Error loading board state:', error);
+            // Silently handle load errors - start with empty state
         }
     }
 
@@ -1043,9 +1021,8 @@ export class CircuitOperations {
     async clearBoardState() {
         try {
             await this.boardManager.storage.removeItem('currentBoard');
-            console.log('Auto-saved board state cleared');
         } catch (error) {
-            console.error('Error clearing board state:', error);
+            // Silently handle clear errors
         }
     }
 }

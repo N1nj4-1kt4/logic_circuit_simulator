@@ -12,8 +12,6 @@ import { getComponentsBoundingBox } from './geometry.js';
  * @param {Array} components - Array of component objects
  */
 export function positionPanelSmartly(panel, canvas, components) {
-    console.log('=== positionPanelSmartly() called ===');
-
     // Reset to default centered position first to measure panel size
     panel.style.transform = 'translate(-50%, -50%)';
     panel.style.left = '50%';
@@ -25,13 +23,10 @@ export function positionPanelSmartly(panel, canvas, components) {
     const panelRect = panel.getBoundingClientRect();
     const panelWidth = panelRect.width;
     const panelHeight = panelRect.height;
-    console.log('Panel size:', panelWidth, 'x', panelHeight);
 
     const componentBox = getComponentsBoundingBox(components, canvas);
-    console.log('Component box:', componentBox);
 
     const canvasRect = canvas.getBoundingClientRect();
-    console.log('Canvas rect:', canvasRect);
 
     // Define margin from canvas edges and between components
     const margin = 20;
@@ -39,7 +34,6 @@ export function positionPanelSmartly(panel, canvas, components) {
 
     // If no components, position in top-right corner of canvas
     if (!componentBox) {
-        console.log('No components - positioning in top-right corner');
         panel.style.transform = 'none';
         panel.style.left = (canvasRect.right - panelWidth - margin) + 'px';
         panel.style.top = (canvasRect.top + margin) + 'px';
@@ -148,8 +142,6 @@ export function positionPanelSmartly(panel, canvas, components) {
         // No overlap = full priority, 100% overlap = priority - 100
         const score = corner.basePriority - overlapInfo.total;
 
-        console.log(`Corner ${corner.name}: overlap=${overlapInfo.total.toFixed(1)}% (max single=${overlapInfo.max.toFixed(1)}%), score=${score.toFixed(1)}`);
-
         positions.push({
             left: corner.left,
             top: corner.top,
@@ -220,8 +212,6 @@ export function positionPanelSmartly(panel, canvas, components) {
         const overlapInfo = calculateComponentOverlap(edge.left, edge.top, panelWidth, panelHeight);
         const score = edge.basePriority - overlapInfo.total;
 
-        console.log(`Edge ${edge.name}: overlap=${overlapInfo.total.toFixed(1)}%, score=${score.toFixed(1)}`);
-
         positions.push({
             left: edge.left,
             top: edge.top,
@@ -230,15 +220,11 @@ export function positionPanelSmartly(panel, canvas, components) {
         });
     });
 
-    console.log('Candidate positions found:', positions.length);
-
     // If we have candidate positions, choose the best one
     if (positions.length > 0) {
-        console.log('All positions:', positions);
         // Sort by score (higher is better)
         positions.sort((a, b) => b.score - a.score);
         const best = positions[0];
-        console.log('Chose best position:', best);
 
         // Apply the position using transform (compatible with Interact.js)
         panel.style.left = '0';
@@ -247,7 +233,6 @@ export function positionPanelSmartly(panel, canvas, components) {
         panel.setAttribute('data-x', best.left);
         panel.setAttribute('data-y', best.top);
     } else {
-        console.log('No valid positions found, using fallback (centered in canvas)');
         // Fallback: center within canvas, even if it overlaps components
         // This handles cases where panel is larger than available space
         const fallbackLeft = Math.max(
@@ -264,7 +249,6 @@ export function positionPanelSmartly(panel, canvas, components) {
                 canvasBottom - panelHeight - margin
             )
         );
-        console.log('Fallback position:', fallbackLeft, fallbackTop);
 
         // Apply the position using transform (compatible with Interact.js)
         panel.style.left = '0';

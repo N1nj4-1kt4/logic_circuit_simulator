@@ -50,8 +50,6 @@ export class TruthTablePanel {
      * Generate and display the truth table from pre-computed cache
      */
     generate() {
-        console.log('=== TruthTablePanel.generate() START ===');
-
         // Read from pre-computed cache
         const cache = this.circuitState.getTruthTableCache();
 
@@ -91,8 +89,6 @@ export class TruthTablePanel {
             }
         }
 
-        console.log('✅ Truth table generated successfully');
-        console.log('=== TruthTablePanel.generate() END ===');
         return true;
     }
 
@@ -100,52 +96,37 @@ export class TruthTablePanel {
      * Display the truth table panel
      */
     display() {
-        console.log('=== TruthTablePanel.display() START ===');
-
         if (!this.truthTableData) {
-            console.error('❌ No truth table data available. Call generate() first.');
             return;
         }
-        console.log('✅ Truth table data exists:', this.truthTableData);
 
         this.panel = document.getElementById('truthTablePanel');
         const content = document.getElementById('truthTableContent');
-        console.log('📦 Panel element:', this.panel);
-        console.log('📦 Content element:', content);
 
         if (!this.panel || !content) {
-            console.error('❌ Truth table panel elements not found in DOM');
             return;
         }
 
         // Check if panel was already visible BEFORE we show it
         // Support both .hidden class and inline style for backwards compatibility
         const wasVisible = !this.panel.classList.contains('hidden') && this.panel.style.display !== 'none';
-        console.log('👁️ wasVisible (before showing):', wasVisible);
-        console.log('📏 Panel has hidden class:', this.panel.classList.contains('hidden'));
 
         // If table already exists, destroy it before creating a new one
         if (this.table) {
-            console.log('🗑️ Destroying existing table...');
             this.table.destroy();
             this.table = null;
 
             // Unset Interact.js if it was set up
             if (this.interactionsSetup && this.panel) {
-                console.log('🔧 Unsetting Interact.js...');
                 interact(this.panel).unset();
             }
 
             // Reset interactions flag when destroying table
             this.interactionsSetup = false;
-            console.log('🔄 Reset interactionsSetup to false');
-        } else {
-            console.log('ℹ️ No existing table to destroy');
         }
 
         // Apply saved position BEFORE making panel visible to avoid flicker
         if (this.state && !wasVisible) {
-            console.log('📍 Pre-positioning panel to avoid flicker...');
             // Apply the saved position before showing the panel
             if (this.state.width) {
                 this.panel.style.width = this.state.width;
@@ -159,29 +140,21 @@ export class TruthTablePanel {
                 this.panel.style.transform = `translate(${this.state.x}px, ${this.state.y}px)`;
                 this.panel.setAttribute('data-x', this.state.x);
                 this.panel.setAttribute('data-y', this.state.y);
-                console.log(`✅ Pre-positioned at (${this.state.x}, ${this.state.y})`);
             }
         }
 
         // Show panel first (remove hidden class and ensure display is block)
-        console.log('👁️ Removing hidden class and setting display to block...');
         this.panel.classList.remove('hidden');
         this.panel.style.display = 'block';
-        console.log('✅ Panel display set to block, hidden class removed');
 
         // Panel in layout but invisible during construction (Tabulator can measure)
-        console.log('👀 Setting panel opacity to 0 and pointer-events to auto...');
         this.panel.style.opacity = '0';
         this.panel.style.pointerEvents = 'auto';
-        console.log('✅ Panel invisible but in layout for Tabulator measurement');
 
         // Generate Tabulator columns with groups
-        console.log('📊 Generating columns...');
         const columns = this.generateColumns();
-        console.log('✅ Columns generated:', columns);
 
         // Initialize Tabulator
-        console.log('🚀 Initializing Tabulator...');
         this.table = new Tabulator(content, {
             columns: columns,
             data: this.truthTableData.table,
@@ -193,39 +166,23 @@ export class TruthTablePanel {
             reactiveData: false,
             maxHeight: '100%', // Limit to container height
         });
-        console.log('✅ Tabulator instance created:', this.table);
 
         // Apply dark mode theme if needed
         const isDarkMode = document.body.classList.contains('dark-mode');
-        console.log('🌙 Dark mode:', isDarkMode);
         if (isDarkMode) {
             content.classList.add('tabulator-midnight');
-            console.log('✅ Added tabulator-midnight class');
         }
 
         // Setup after table is built
         this.table.on('tableBuilt', () => {
-            console.log('🎉 tableBuilt event fired!');
-
             // Only setup interactions once
             if (!this.interactionsSetup) {
-                console.log('🔧 Setting up interactions...');
                 this.setupInteractions();
                 this.interactionsSetup = true;
-                console.log('✅ Interactions setup complete');
-            } else {
-                console.log('⏭️ Skipping interactions setup (already done)');
             }
 
             // Position panel on first open
-            console.log('📍 Positioning panel... wasVisible:', wasVisible);
             if (!wasVisible) {
-                console.log('🔍 Checking state:', this.state);
-                if (this.state) {
-                    console.log('  - state.x:', this.state.x);
-                    console.log('  - state.left:', this.state.left);
-                }
-
                 // Check if we have a valid saved position
                 // Position (0, 0) is valid but indicates no previous drag occurred
                 // We only want to skip smart positioning if user has explicitly positioned the panel
@@ -234,32 +191,17 @@ export class TruthTablePanel {
                     this.state.y !== undefined &&
                     (this.state.x !== 0 || this.state.y !== 0);
 
-                console.log('🤔 hasValidSavedPosition:', hasValidSavedPosition);
-
                 if (!hasValidSavedPosition) {
-                    console.log('🎯 Using smart positioning (no saved position)');
                     positionPanelSmartly(this.panel, this.canvas, this.components);
-                    console.log('✅ Smart positioning complete');
-                    console.log('  📍 After smart positioning:');
-                    console.log('    - panel.style.left:', this.panel.style.left);
-                    console.log('    - panel.style.top:', this.panel.style.top);
-                    console.log('    - panel.style.transform:', this.panel.style.transform);
-                    console.log('    - data-x:', this.panel.getAttribute('data-x'));
-                    console.log('    - data-y:', this.panel.getAttribute('data-y'));
                 } else {
                     // Position was already applied before display() to avoid flicker
                     // Just validate it here with restoreState to ensure bounds checking
-                    console.log('💾 Validating pre-applied position:', this.state);
                     this.restoreState(this.state);
                 }
-            } else {
-                console.log('⏭️ Panel was visible, skipping positioning');
             }
 
             // Highlight current row after table is built
-            console.log('🎨 Updating highlight...');
             this.updateHighlight();
-            console.log('✅ Highlight updated');
 
             // Apply height to Tabulator after table is built
             // Calculate from panel dimensions for accuracy
@@ -277,32 +219,20 @@ export class TruthTablePanel {
             const shouldFitPanel = !hasValidSavedHeight;
 
             if (availableHeight > 0) {
-                console.log('📐 Setting table height to:', availableHeight, 'fitPanel:', shouldFitPanel);
                 this.applyTableHeight(availableHeight, { fitPanel: shouldFitPanel });
             }
 
             // Reveal panel with instant transition (table is fully constructed)
-            console.log('✨ Revealing fully-constructed table...');
             this.panel.style.opacity = '1';
-            console.log('✅ Panel revealed instantly');
 
             // Save state after showing the panel
-            console.log('💾 Saving state after showing panel...');
             this.saveState();
-            console.log('✅ State saved');
         });
 
         // Listen for column reorder
         this.table.on('columnMoved', () => {
-            console.log('🔀 Column moved, saving state...');
             this.saveState();
         });
-
-        // Don't apply saved state here - let tableBuilt event handle positioning
-        // This prevents premature positioning before the table is rendered
-        console.log('⏭️ Skipping early restoreState() - will position in tableBuilt event');
-
-        console.log('=== TruthTablePanel.display() END ===');
     }
 
     /**
@@ -335,8 +265,6 @@ export class TruthTablePanel {
 
         // If we have a saved column order, reorder the columns to match
         if (this.state && this.state.columnOrder && this.state.columnOrder.length > 0) {
-            console.log('📋 Applying saved column order during generation:', this.state.columnOrder);
-
             const orderedInputCols = [];
             const orderedOutputCols = [];
 
@@ -359,7 +287,6 @@ export class TruthTablePanel {
 
             // Use ordered columns if we successfully reordered them
             if (orderedInputCols.length === inputCols.length && orderedOutputCols.length === outputCols.length) {
-                console.log('✅ Using reordered columns');
                 return [
                     {
                         title: 'Inputs',
@@ -370,8 +297,6 @@ export class TruthTablePanel {
                         columns: orderedOutputCols
                     }
                 ];
-            } else {
-                console.log('⚠️ Column count mismatch, using default order');
             }
         }
 
@@ -468,8 +393,6 @@ export class TruthTablePanel {
             const neededHeight = rowCount * rowHeight;
             actualRowAreaHeight = Math.min(rowAreaHeight, neededHeight);
 
-            console.log('📊 Row calculation:', { availableHeight, headerHeight, rowAreaHeight, rowCount, rowHeight, neededHeight, actualRowAreaHeight });
-
             // Apply row height via CSS on the rows and cells
             // Use setProperty to add !important without wiping existing styles
             const rowElements = content.querySelectorAll('.tabulator-row');
@@ -530,7 +453,6 @@ export class TruthTablePanel {
 
             const newPanelHeight = panelHeaderHeight + headerMarginBottom + paddingTop + paddingBottom + actualTotalHeight + bottomGap;
             this.panel.style.height = newPanelHeight + 'px';
-            console.log('📐 Resized panel to fit content:', { newPanelHeight, actualTotalHeight, headerMarginBottom, bottomGap });
         }
 
         // Don't call redraw() as it resets our styles
@@ -622,26 +544,13 @@ export class TruthTablePanel {
         const paddingBottom = parseFloat(panelStyles.paddingBottom) || 0;
         const availableHeight = event.rect.height - headerHeight - paddingTop - paddingBottom;
 
-        console.log('📏 resizeMoveListener:', {
-            'event.rect.height': event.rect.height,
-            'event.rect.width': event.rect.width,
-            headerHeight,
-            paddingTop,
-            paddingBottom,
-            availableHeight,
-            'this.table exists': !!this.table
-        });
-
         // Debounce Tabulator redraw using requestAnimationFrame
         if (this.resizeRAF) {
             cancelAnimationFrame(this.resizeRAF);
         }
         this.resizeRAF = requestAnimationFrame(() => {
-            console.log('🔄 RAF callback - setting height to:', availableHeight);
             if (this.table && availableHeight > 0) {
                 this.applyTableHeight(availableHeight);
-            } else {
-                console.log('❌ this.table is null/undefined or invalid height');
             }
         });
     }
@@ -651,13 +560,6 @@ export class TruthTablePanel {
      */
     saveState() {
         if (!this.panel || !this.table) return;
-
-        console.log('💾 saveState() called');
-        console.log('  - panel.style.left:', this.panel.style.left);
-        console.log('  - panel.style.top:', this.panel.style.top);
-        console.log('  - panel.style.transform:', this.panel.style.transform);
-        console.log('  - data-x:', this.panel.getAttribute('data-x'));
-        console.log('  - data-y:', this.panel.getAttribute('data-y'));
 
         const columns = this.table.getColumns().map(col => col.getField()).filter(f => f);
 
@@ -674,8 +576,6 @@ export class TruthTablePanel {
             visible: this.panel.style.opacity !== '0'
         };
 
-        console.log('  📝 Saved state:', this.state);
-
         // Trigger callback to save to localStorage
         if (this.onStateChange) {
             this.onStateChange(this.state);
@@ -687,8 +587,6 @@ export class TruthTablePanel {
      */
     restoreState(state) {
         if (!state || !this.panel) return;
-
-        console.log('🔧 restoreState() called with state:', state);
 
         // Restore size (only if valid)
         if (state.width && state.width !== '') {
@@ -703,8 +601,6 @@ export class TruthTablePanel {
             // Validate position to ensure panel stays within viewport
             let x = state.x;
             let y = state.y;
-
-            console.log('📍 Original position:', { x, y });
 
             // Get viewport dimensions
             const viewportWidth = window.innerWidth;
@@ -726,9 +622,6 @@ export class TruthTablePanel {
                 if (savedHeight > 0) panelHeight = savedHeight;
             }
 
-            console.log('📏 Viewport:', { viewportWidth, viewportHeight });
-            console.log('📐 Panel size:', { panelWidth, panelHeight });
-
             // Clamp position to keep panel at least partially visible
             // Allow panel to be positioned at most 80% off-screen
             const maxOffscreenX = panelWidth * 0.8;
@@ -739,13 +632,9 @@ export class TruthTablePanel {
             const minY = -maxOffscreenY;
             const maxY = viewportHeight - (panelHeight - maxOffscreenY);
 
-            console.log('🎯 Bounds:', { minX, maxX, minY, maxY });
-
             // Clamp values
             x = Math.max(minX, Math.min(maxX, x));
             y = Math.max(minY, Math.min(maxY, y));
-
-            console.log('✅ Clamped position:', { x, y });
 
             // Apply transform positioning (compatible with Interact.js)
             this.panel.style.left = '0';
@@ -760,26 +649,18 @@ export class TruthTablePanel {
 
         // DON'T restore visibility here - we want panel to stay visible
         // The display() method already sets it to 'block'
-
-        console.log('✅ restoreState() complete');
     }
 
     /**
      * Hide the truth table panel
      */
     hide() {
-        console.log('=== TruthTablePanel.hide() called ===');
         if (this.panel) {
-            console.log('🙈 Hiding panel...');
             this.panel.style.opacity = '0';
             this.panel.style.pointerEvents = 'none';
             this.panel.classList.add('hidden');
             this.panel.style.display = 'none';
-            console.log('💾 Saving state...');
             this.saveState();
-            console.log('✅ Panel hidden and state saved');
-        } else {
-            console.log('⚠️ No panel to hide');
         }
     }
 
@@ -799,17 +680,13 @@ export class TruthTablePanel {
             return;
         }
 
-        console.log('🔄 setState() called with:', state);
-
         const sanitizedState = { ...state };
 
         // Validate that positions are reasonable (not extremely negative or corrupted)
         if (sanitizedState.x !== undefined && sanitizedState.x < -500) {
-            console.log(`  ⚠️ Rejecting invalid x position: ${sanitizedState.x}, resetting to 0`);
             sanitizedState.x = 0;
         }
         if (sanitizedState.y !== undefined && sanitizedState.y < -500) {
-            console.log(`  ⚠️ Rejecting invalid y position: ${sanitizedState.y}, resetting to 0`);
             sanitizedState.y = 0;
         }
 
@@ -817,8 +694,6 @@ export class TruthTablePanel {
         delete sanitizedState.left;
         delete sanitizedState.top;
         delete sanitizedState.transform;
-
-        console.log('  ✅ Sanitized state:', sanitizedState);
 
         this.state = sanitizedState;
         if (sanitizedState.columnOrder) {

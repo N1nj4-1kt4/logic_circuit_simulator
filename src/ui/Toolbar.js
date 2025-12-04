@@ -415,9 +415,6 @@ export class Toolbar {
         // Update UI
         this.updateModeIndicator();
 
-        // Visual feedback
-        console.log('Exited to neutral mode');
-
         // Notify CircuitSimulator
         if (this.onModeChange) {
             this.onModeChange(this.mode);

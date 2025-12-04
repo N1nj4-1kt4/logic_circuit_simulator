@@ -615,14 +615,10 @@ export class DialogManager {
         const discardChanges = document.getElementById('discardChanges');
 
         saveAsCurrentBoard?.addEventListener('click', async () => {
-            console.log('💾 Update Current Board clicked');
             const currentBoardName = this.callbacks.getCurrentBoardName();
-            console.log('Current board name:', currentBoardName);
             if (currentBoardName) {
                 try {
-                    console.log('Attempting to save current board:', currentBoardName);
                     await this.callbacks.onSaveCurrentBoard(currentBoardName);
-                    console.log('Save completed successfully');
                     this.hideSaveOptionsDialog();
                     if (this.state.pendingActionAfterSave) {
                         this.state.pendingActionAfterSave();

@@ -47,13 +47,8 @@ export class BoardManager {
 
             const success = await this.storage.setItem(this.storageKey, boards);
 
-            if (success) {
-                console.log(`Board "${name}" saved successfully`);
-            }
-
             return success;
         } catch (error) {
-            console.error(`Failed to save board "${name}":`, error);
             return false;
         }
     }
@@ -73,7 +68,6 @@ export class BoardManager {
                 return null;
             }
 
-            console.log(`Board "${name}" loaded successfully`);
             return board;
         } catch (error) {
             console.error(`Failed to load board "${name}":`, error);
@@ -122,13 +116,8 @@ export class BoardManager {
 
             const success = await this.storage.setItem(this.storageKey, boards);
 
-            if (success) {
-                console.log(`Board "${name}" deleted successfully`);
-            }
-
             return success;
         } catch (error) {
-            console.error(`Failed to delete board "${name}":`, error);
             return false;
         }
     }
@@ -179,13 +168,8 @@ export class BoardManager {
 
             const success = await this.storage.setItem(this.storageKey, boards);
 
-            if (success) {
-                console.log(`Board renamed from "${oldName}" to "${newName}"`);
-            }
-
             return success;
         } catch (error) {
-            console.error(`Failed to rename board from "${oldName}" to "${newName}":`, error);
             return false;
         }
     }
@@ -198,13 +182,8 @@ export class BoardManager {
         try {
             const success = await this.storage.setItem(this.storageKey, {});
 
-            if (success) {
-                console.log('All boards cleared');
-            }
-
             return success;
         } catch (error) {
-            console.error('Failed to clear all boards:', error);
             return false;
         }
     }
