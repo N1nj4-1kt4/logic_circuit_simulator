@@ -355,11 +355,15 @@ export class DialogManager {
             });
 
             // Add delete handler
-            item.querySelector('.delete-btn').addEventListener('click', async () => {
-                if (confirm(`Delete component "${name}"?`)) {
-                    await this.callbacks.onDeleteComponent(name);
-                    this.updateComponentLibraryList();
-                }
+            item.querySelector('.delete-btn').addEventListener('click', () => {
+                DialogFactory.showConfirm({
+                    message: `Delete component "${name}"?`,
+                    type: 'warning',
+                    onConfirm: async () => {
+                        await this.callbacks.onDeleteComponent(name);
+                        this.updateComponentLibraryList();
+                    }
+                });
             });
 
             list.appendChild(item);

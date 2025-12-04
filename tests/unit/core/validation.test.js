@@ -15,6 +15,7 @@ import {
     validateCircuitData,
     deepClone
 } from '../../../src/utils/serialization.js';
+import { BoardNameRequiredError } from '../../../src/core/errors.js';
 
 // Create a working localStorage mock
 function createLocalStorageMock() {
@@ -170,17 +171,13 @@ describe('Board Name Validation', () => {
     it('should reject empty string board name', async () => {
         state.addComponent({ id: 1, type: 'INPUT', x: 100, y: 100 });
 
-        const result = await operations.saveCurrentBoard('');
-
-        expect(result).toBe(false);
+        await expect(operations.saveCurrentBoard('')).rejects.toThrow(BoardNameRequiredError);
     });
 
     it('should reject whitespace-only board name', async () => {
         state.addComponent({ id: 1, type: 'INPUT', x: 100, y: 100 });
 
-        const result = await operations.saveCurrentBoard('   ');
-
-        expect(result).toBe(false);
+        await expect(operations.saveCurrentBoard('   ')).rejects.toThrow(BoardNameRequiredError);
     });
 
     it('should accept valid board name', async () => {
@@ -188,7 +185,8 @@ describe('Board Name Validation', () => {
 
         const result = await operations.saveCurrentBoard('ValidBoardName');
 
-        expect(result).toBe(true);
+        // Now returns the board name on success
+        expect(result).toBe('ValidBoardName');
     });
 
     it('should accept board name with spaces', async () => {
@@ -196,7 +194,8 @@ describe('Board Name Validation', () => {
 
         const result = await operations.saveCurrentBoard('My Board Name');
 
-        expect(result).toBe(true);
+        // Now returns the board name on success
+        expect(result).toBe('My Board Name');
     });
 
     it('should handle very long board names', async () => {
@@ -205,8 +204,8 @@ describe('Board Name Validation', () => {
         const longName = 'A'.repeat(1000);
         const result = await operations.saveCurrentBoard(longName);
 
-        // Should succeed (localStorage can handle long keys)
-        expect(result).toBe(true);
+        // Should succeed (localStorage can handle long keys) - now returns the board name
+        expect(result).toBe(longName);
     });
 });
 

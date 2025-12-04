@@ -40,8 +40,11 @@ import { ThemeManager } from './src/ui/ThemeManager.js';
 
 import { CircuitState } from './src/core/CircuitState.js';
 import { CircuitOperations } from './src/core/CircuitOperations.js';
+import { CircuitError } from './src/core/errors.js';
 
 import { CanvasInteraction } from './src/interaction/CanvasInteraction.js';
+
+import { messages } from './src/ui/messages.js';
 
 class CircuitSimulator {
     constructor() {
@@ -229,7 +232,13 @@ class CircuitSimulator {
 
     handleNewBoard() {
         this.operations.createNewBoard(
-            (callback) => this.dialogManager.showSaveOptionsDialog(callback)
+            (callback) => this.dialogManager.showSaveOptionsDialog(callback),
+            () => {
+                DialogFactory.showAlert({
+                    message: messages.alerts.newBoardCreated,
+                    type: 'success'
+                });
+            }
         );
     }
 
@@ -239,20 +248,28 @@ class CircuitSimulator {
     }
 
     handleSimulationStep(direction) {
-        if (direction === 'next') {
-            this.operations.stepSimulation(1);
-        } else if (direction === 'prev') {
-            this.operations.stepSimulation(-1);
-        } else if (direction === 'reset') {
-            this.operations.resetSimulation();
+        try {
+            if (direction === 'next') {
+                this.operations.stepSimulation(1);
+            } else if (direction === 'prev') {
+                this.operations.stepSimulation(-1);
+            } else if (direction === 'reset') {
+                this.operations.resetSimulation();
+            }
+        } catch (error) {
+            this._handleError(error);
         }
     }
 
     toggleSimulation() {
-        if (this.state.isAutoCyclingActive()) {
-            this.operations.stopAutoCycle();
-        } else {
-            this.operations.startAutoCycle();
+        try {
+            if (this.state.isAutoCyclingActive()) {
+                this.operations.stopAutoCycle();
+            } else {
+                this.operations.startAutoCycle();
+            }
+        } catch (error) {
+            this._handleError(error);
         }
     }
 
@@ -345,17 +362,21 @@ class CircuitSimulator {
         console.log('Canvas click - Mode:', this.state.getMode(), 'SelectedTool:', this.state.getSelectedTool());
         console.log('Scaled coords:', x.toFixed(0), y.toFixed(0));
 
-        if (this.state.getMode() === 'place' && this.state.getSelectedTool()) {
-            this.operations.placeComponent(x, y, this.state.getSelectedTool());
-        } else if (this.state.getMode() === 'connect') {
-            console.log('Calling handleConnect');
-            this.operations.handleConnect(x, y);
-        } else if (this.state.getMode() === 'delete') {
-            console.log('Calling handleDelete');
-            this.operations.handleDelete(x, y, (x, y) => this.findConnection(x, y));
-        } else {
-            // Check if clicking on an input to toggle
-            this.toggleInput(x, y);
+        try {
+            if (this.state.getMode() === 'place' && this.state.getSelectedTool()) {
+                this.operations.placeComponent(x, y, this.state.getSelectedTool());
+            } else if (this.state.getMode() === 'connect') {
+                console.log('Calling handleConnect');
+                this.operations.handleConnect(x, y);
+            } else if (this.state.getMode() === 'delete') {
+                console.log('Calling handleDelete');
+                this.operations.handleDelete(x, y, (x, y) => this.findConnection(x, y));
+            } else {
+                // Check if clicking on an input to toggle
+                this.toggleInput(x, y);
+            }
+        } catch (error) {
+            this._handleError(error);
         }
     }
 
@@ -597,7 +618,15 @@ class CircuitSimulator {
      * Handle saving component - callback for DialogManager
      */
     async handleSaveComponent(name, description) {
-        await this.operations.saveComponent(name, description);
+        try {
+            const savedName = await this.operations.saveComponent(name, description);
+            DialogFactory.showAlert({
+                message: messages.alerts.componentSaved(savedName),
+                type: 'success'
+            });
+        } catch (error) {
+            this._handleError(error);
+        }
     }
 
     /**
@@ -614,16 +643,42 @@ class CircuitSimulator {
     }
 
     async downloadComponent(name) {
-        await this.operations.exportComponent(name);
+        try {
+            const exportedName = await this.operations.exportComponent(name);
+            DialogFactory.showAlert({
+                message: messages.alerts.componentExported(exportedName),
+                type: 'success'
+            });
+        } catch (error) {
+            this._handleError(error);
+        }
     }
 
     async importComponentFromFile(event) {
-        await this.operations.importComponent(event);
+        try {
+            const importedName = await this.operations.importComponent(event);
+            if (importedName) {
+                DialogFactory.showAlert({
+                    message: messages.alerts.componentImported(importedName),
+                    type: 'success'
+                });
+            }
+        } catch (error) {
+            this._handleError(error);
+        }
     }
 
     // Edit Component Method
     async loadComponentForEditing(name) {
-        await this.operations.loadComponentForEditing(name);
+        try {
+            const loadedName = await this.operations.loadComponentForEditing(name);
+            DialogFactory.showAlert({
+                message: messages.alerts.componentLoadedForEditing(loadedName),
+                type: 'success'
+            });
+        } catch (error) {
+            this._handleError(error);
+        }
     }
 
     // stepSimulation and resetSimulation moved to CircuitOperations
@@ -680,18 +735,97 @@ class CircuitSimulator {
     }
 
     async saveCurrentBoard(boardName) {
-        // CircuitOperations.saveCurrentBoard already updates saved boards list
-        await this.operations.saveCurrentBoard(boardName);
+        try {
+            const savedName = await this.operations.saveCurrentBoard(boardName);
+            DialogFactory.showAlert({
+                message: messages.alerts.boardSaved(savedName),
+                type: 'success'
+            });
+        } catch (error) {
+            this._handleError(error);
+        }
     }
 
     async loadBoard(boardName) {
-        await this.operations.loadBoard(boardName);
+        try {
+            const loadedName = await this.operations.loadBoard(boardName);
+            DialogFactory.showAlert({
+                message: messages.alerts.boardLoaded(loadedName),
+                type: 'success'
+            });
+        } catch (error) {
+            this._handleError(error);
+        }
     }
 
     // createNewBoard now called through operations.createNewBoard in handleNewBoard
 
     async deleteBoard(boardName) {
-        await this.operations.deleteBoard(boardName);
+        // Show confirmation dialog (UI concern belongs in coordinator)
+        DialogFactory.showConfirm({
+            message: messages.confirms.deleteBoard(boardName),
+            type: 'warning',
+            onConfirm: async () => {
+                try {
+                    const deletedName = await this.operations.deleteBoard(boardName);
+                    DialogFactory.showAlert({
+                        message: messages.alerts.boardDeleted(deletedName),
+                        type: 'success'
+                    });
+                } catch (error) {
+                    this._handleError(error);
+                }
+            }
+        });
+    }
+
+    /**
+     * Central error handler for operations
+     * Maps error types to appropriate user-facing messages
+     * @private
+     */
+    _handleError(error) {
+        // Log all errors for debugging
+        console.error('Operation error:', error);
+
+        // Handle CircuitError subclasses with their built-in type
+        if (error instanceof CircuitError) {
+            DialogFactory.showAlert({
+                message: error.message,
+                type: error.type
+            });
+            return;
+        }
+
+        // Map known error names to user-friendly messages
+        const errorMessages = {
+            'NoInputsError': messages.alerts.noInputsToSimulate,
+            'NoOutputsError': messages.alerts.noOutputsToSimulate,
+            'EmptyCircuitError': messages.alerts.emptyCircuit,
+            'BoardNameRequiredError': messages.alerts.boardNameRequired,
+            'ComponentNotFoundError': messages.alerts.customComponentNotFound,
+            'InvalidComponentFileError': messages.alerts.invalidComponentFile,
+            'BoardLoadError': (err) => messages.alerts.boardLoadFailed(err.boardName || 'unknown'),
+            'BoardSaveError': messages.alerts.boardSaveFailed,
+            'ComponentSaveError': messages.alerts.componentSaveFailed,
+            'ImportExportError': messages.alerts.componentImportFailed,
+            'ComponentExistsError': (err) => messages.alerts.componentNameConflict(err.componentName)
+        };
+
+        const messageOrFn = errorMessages[error.name];
+        if (messageOrFn) {
+            const message = typeof messageOrFn === 'function' ? messageOrFn(error) : messageOrFn;
+            DialogFactory.showAlert({
+                message,
+                type: error.type || 'error'
+            });
+        } else {
+            // Fallback for unknown errors
+            DialogFactory.showAlert({
+                message: error.message || 'An unexpected error occurred.',
+                type: 'error'
+            });
+        }
     }
 }
 

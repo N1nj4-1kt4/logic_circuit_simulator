@@ -3,6 +3,7 @@ import 'tabulator-tables/dist/css/tabulator.min.css';
 import 'tabulator-tables/dist/css/tabulator_midnight.min.css';
 import interact from 'interactjs';
 import { positionPanelSmartly } from '../utils/positioning.js';
+import { DialogFactory } from './DialogFactory.js';
 
 /**
  * TruthTablePanel - Manages the truth table UI using Tabulator.js
@@ -57,13 +58,19 @@ export class TruthTablePanel {
         if (!cache) {
             // Cache not available yet - this shouldn't normally happen
             // as cache is computed on circuit changes
-            alert('Truth table is being computed. Please try again.');
+            DialogFactory.showAlert({
+                message: 'Truth table is being computed. Please try again.',
+                type: 'info'
+            });
             return false;
         }
 
         if (!cache.isValid) {
             // Circuit is incomplete or invalid
-            alert(cache.reason || 'Circuit is incomplete. Please connect all components.');
+            DialogFactory.showAlert({
+                message: cache.reason || 'Circuit is incomplete. Please connect all components.',
+                type: 'warning'
+            });
             return false;
         }
 

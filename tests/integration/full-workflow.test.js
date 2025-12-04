@@ -11,6 +11,7 @@ import { simulateCircuit } from '../../src/core/circuitEvaluator.js';
 import { BoardManager } from '../../src/storage/BoardManager.js';
 import { ComponentLibrary } from '../../src/storage/ComponentLibrary.js';
 import { LocalStorageAdapter } from '../../src/storage/LocalStorageAdapter.js';
+import { EmptyCircuitError, NoInputsError } from '../../src/core/errors.js';
 
 // Create a working localStorage mock for integration tests
 function createLocalStorageMock() {
@@ -310,16 +311,14 @@ describe('Full Circuit Workflow', () => {
         });
 
         it('should not allow saving empty circuit as component', async () => {
-            const result = await operations.saveComponent('EmptyComponent', 'Empty');
-            expect(result).toBe(false);
+            await expect(operations.saveComponent('EmptyComponent', 'Empty')).rejects.toThrow(EmptyCircuitError);
         });
 
         it('should not allow saving circuit without inputs or outputs', async () => {
             // Only add a gate (no inputs/outputs)
             state.addComponent({ id: 1, type: 'AND', x: 200, y: 100, value: null, inputs: [null, null], inputPorts: [{}, {}], outputPorts: [{}] });
 
-            const result = await operations.saveComponent('InvalidComponent', 'No I/O');
-            expect(result).toBe(false);
+            await expect(operations.saveComponent('InvalidComponent', 'No I/O')).rejects.toThrow(NoInputsError);
         });
     });
 

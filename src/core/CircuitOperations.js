@@ -15,8 +15,6 @@
  */
 
 import { eventBus, EVENT_TYPES } from '../utils/eventBus.js';
-import { DialogFactory } from '../ui/DialogFactory.js';
-import { messages } from '../ui/messages.js';
 import {
     simulateCircuit,
     getInputCount,
@@ -26,6 +24,17 @@ import { computeTruthTable } from './TruthTableComputer.js';
 import { deepClone } from '../utils/serialization.js';
 import { snapToGrid } from '../utils/hitDetection.js';
 import { TIMING } from '../constants.js';
+import {
+    NoInputsError,
+    NoOutputsError,
+    EmptyCircuitError,
+    BoardNameRequiredError,
+    ComponentNotFoundError,
+    BoardSaveError,
+    BoardLoadError,
+    InvalidComponentFileError,
+    ComponentSaveError
+} from './errors.js';
 
 export class CircuitOperations {
     /**
@@ -124,11 +133,7 @@ export class CircuitOperations {
 
             const customComponents = this.state.getCustomComponents();
             if (!customComponents[customName]) {
-                DialogFactory.showAlert({
-                    message: messages.alerts.customComponentNotFound,
-                    type: 'error'
-                });
-                return;
+                throw new ComponentNotFoundError(customName);
             }
         }
 
@@ -266,20 +271,12 @@ export class CircuitOperations {
             a.label.localeCompare(b.label));
 
         if (inputs.length === 0) {
-            DialogFactory.showAlert({
-                message: messages.alerts.noInputsToSimulate,
-                type: 'warning'
-            });
-            return;
+            throw new NoInputsError();
         }
 
         const outputs = components.filter(c => c.type === 'OUTPUT');
         if (outputs.length === 0) {
-            DialogFactory.showAlert({
-                message: messages.alerts.noOutputsToSimulate,
-                type: 'warning'
-            });
-            return;
+            throw new NoOutputsError();
         }
 
         this.state.setAutoCycling(true);
@@ -402,20 +399,12 @@ export class CircuitOperations {
             a.label.localeCompare(b.label));
 
         if (inputs.length === 0) {
-            DialogFactory.showAlert({
-                message: messages.alerts.noInputsToSimulate,
-                type: 'warning'
-            });
-            return;
+            throw new NoInputsError();
         }
 
         const outputs = components.filter(c => c.type === 'OUTPUT');
         if (outputs.length === 0) {
-            DialogFactory.showAlert({
-                message: messages.alerts.noOutputsToSimulate,
-                type: 'warning'
-            });
-            return;
+            throw new NoOutputsError();
         }
 
         const totalCombinations = Math.pow(2, inputs.length);
@@ -532,11 +521,7 @@ export class CircuitOperations {
      */
     async saveCurrentBoard(boardName) {
         if (!boardName || boardName.trim() === '') {
-            DialogFactory.showAlert({
-                message: messages.alerts.boardNameRequired,
-                type: 'warning'
-            });
-            return false;
+            throw new BoardNameRequiredError();
         }
 
         const boardData = {
@@ -564,15 +549,9 @@ export class CircuitOperations {
             // Emit event to update toolbar displays
             eventBus.emit(EVENT_TYPES.TOOLBAR_UPDATE_DISPLAYS);
 
-            DialogFactory.showAlert({
-                message: messages.alerts.boardSaved(boardName),
-                type: 'success'
-            });
-
-            return true;
+            return boardName; // Return board name for success message
         } else {
-            // Throw error so calling code can handle it
-            throw new Error('Failed to save board to storage');
+            throw new BoardSaveError('Failed to save board to storage');
         }
     }
 
@@ -590,33 +569,27 @@ export class CircuitOperations {
             // Load circuit context using common helper
             this._loadCircuitContext(boardData, { type: 'board', name: boardName });
 
-            DialogFactory.showAlert({
-                message: messages.alerts.boardLoaded(boardName),
-                type: 'success'
-            });
-
-            return true;
+            return boardName; // Return board name for success message
         } else {
-            DialogFactory.showAlert({
-                message: messages.alerts.boardLoadFailed(boardName),
-                type: 'error'
-            });
-            return false;
+            throw new BoardLoadError(boardName);
         }
     }
 
     /**
      * Create a new empty board
      * @param {Function} showSaveOptionsDialog - Callback to show save options dialog (still needed for dialog flow)
+     * @param {Function} onCreated - Optional callback called when new board is created
      */
-    createNewBoard(showSaveOptionsDialog) {
+    createNewBoard(showSaveOptionsDialog, onCreated) {
         // Check for unsaved changes
         if (this.state.hasUnsavedChanges()) {
             showSaveOptionsDialog(() => {
                 this._createNewBoardInternal();
+                if (onCreated) onCreated();
             });
         } else {
             this._createNewBoardInternal();
+            if (onCreated) onCreated();
         }
     }
 
@@ -634,27 +607,15 @@ export class CircuitOperations {
         eventBus.emit(EVENT_TYPES.BOARD_CLEARED);
         eventBus.emit(EVENT_TYPES.CANVAS_REDRAW);
         eventBus.emit(EVENT_TYPES.TOOLBAR_UPDATE_DISPLAYS);
-
-        DialogFactory.showAlert({
-            message: messages.alerts.newBoardCreated,
-            type: 'success'
-        });
     }
 
     /**
      * Delete a board from storage
+     * Note: Caller should confirm with user before calling this method
      * @param {string} boardName - Name of the board to delete
+     * @returns {Promise<string>} Board name on success for notification
      */
     async deleteBoard(boardName) {
-        const confirmed = await DialogFactory.showConfirm({
-            message: messages.confirms.deleteBoard(boardName),
-            type: 'warning'
-        });
-
-        if (!confirmed) {
-            return false;
-        }
-
         const success = await this.boardManager.deleteBoard(boardName);
 
         if (success) {
@@ -673,18 +634,9 @@ export class CircuitOperations {
             // Emit event to update toolbar displays
             eventBus.emit(EVENT_TYPES.TOOLBAR_UPDATE_DISPLAYS);
 
-            DialogFactory.showAlert({
-                message: messages.alerts.boardDeleted(boardName),
-                type: 'success'
-            });
-
-            return true;
+            return boardName; // Return name for success message
         } else {
-            DialogFactory.showAlert({
-                message: messages.alerts.boardDeleteFailed,
-                type: 'error'
-            });
-            return false;
+            throw new BoardSaveError(`Failed to delete board "${boardName}"`);
         }
     }
 
@@ -696,29 +648,26 @@ export class CircuitOperations {
      * Save current circuit as a custom component
      * @param {string} name - Component name
      * @param {string} description - Component description
+     * @returns {Promise<string>} Component name on success for notification
      */
     async saveComponent(name, description) {
         const components = this.state.getComponents();
         const connections = this.state.getConnections();
 
         if (components.length === 0) {
-            DialogFactory.showAlert({
-                message: messages.alerts.emptyCircuit,
-                type: 'warning'
-            });
-            return false;
+            throw new EmptyCircuitError();
         }
 
         // Validate inputs and outputs
         const inputs = components.filter(c => c.type === 'INPUT');
         const outputs = components.filter(c => c.type === 'OUTPUT');
 
-        if (inputs.length === 0 || outputs.length === 0) {
-            DialogFactory.showAlert({
-                message: messages.alerts.componentNeedsInputsOutputs,
-                type: 'warning'
-            });
-            return false;
+        if (inputs.length === 0) {
+            throw new NoInputsError();
+        }
+
+        if (outputs.length === 0) {
+            throw new NoOutputsError();
         }
 
         // Create component definition
@@ -750,18 +699,9 @@ export class CircuitOperations {
             // Emit event to update toolbar displays
             eventBus.emit(EVENT_TYPES.TOOLBAR_UPDATE_DISPLAYS);
 
-            DialogFactory.showAlert({
-                message: messages.alerts.componentSaved(name),
-                type: 'success'
-            });
-
-            return true;
+            return name; // Return name for success message
         } else {
-            DialogFactory.showAlert({
-                message: messages.alerts.componentSaveFailed,
-                type: 'error'
-            });
-            return false;
+            throw new ComponentSaveError(`Failed to save component "${name}"`);
         }
     }
 
@@ -794,6 +734,7 @@ export class CircuitOperations {
     /**
      * Export component to file
      * @param {string} name - Component name
+     * @returns {Promise<string>} Component name on success for notification
      */
     async exportComponent(name) {
         const component = await this.componentLibrary.loadComponent(name);
@@ -810,75 +751,74 @@ export class CircuitOperations {
 
             URL.revokeObjectURL(url);
 
-            DialogFactory.showAlert({
-                message: messages.alerts.componentExported(name),
-                type: 'success'
-            });
+            return name; // Return name for success message
         } else {
-            DialogFactory.showAlert({
-                message: messages.alerts.componentExportFailed,
-                type: 'error'
-            });
+            throw new ComponentNotFoundError(name);
         }
     }
 
     /**
      * Import component from file
      * @param {Event} event - File input change event
+     * @returns {Promise<string>} Component name on success for notification
      */
     async importComponent(event) {
         const file = event.target.files[0];
-        if (!file) return;
+        if (!file) return null;
 
-        const reader = new FileReader();
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
 
-        reader.onload = async (e) => {
-            try {
-                const componentDef = JSON.parse(e.target.result);
+            reader.onload = async (e) => {
+                try {
+                    const componentDef = JSON.parse(e.target.result);
 
-                // Validate component definition
-                if (!componentDef.name || !componentDef.components || !componentDef.connections) {
-                    DialogFactory.showAlert({
-                        message: messages.alerts.invalidComponentFile,
-                        type: 'error'
-                    });
-                    return;
+                    // Validate component definition
+                    if (!componentDef.name || !componentDef.components || !componentDef.connections) {
+                        reject(new InvalidComponentFileError());
+                        return;
+                    }
+
+                    // Save to component library
+                    const success = await this.componentLibrary.saveComponent(componentDef.name, componentDef);
+
+                    if (success) {
+                        // Update custom components in state
+                        const customComponents = await this.componentLibrary.listComponents();
+                        this.state.setCustomComponents(customComponents);
+
+                        // Emit event to update toolbar displays
+                        eventBus.emit(EVENT_TYPES.TOOLBAR_UPDATE_DISPLAYS);
+
+                        resolve(componentDef.name); // Return name for success message
+                    } else {
+                        reject(new ComponentSaveError(`Failed to save imported component "${componentDef.name}"`));
+                    }
+                } catch (error) {
+                    console.error('Error importing component:', error);
+                    if (error.name === 'InvalidComponentFileError' || error.name === 'ComponentSaveError') {
+                        reject(error);
+                    } else {
+                        reject(new InvalidComponentFileError());
+                    }
                 }
+            };
 
-                // Save to component library
-                const success = await this.componentLibrary.saveComponent(componentDef.name, componentDef);
+            reader.onerror = () => {
+                reject(new InvalidComponentFileError());
+            };
 
-                if (success) {
-                    // Update custom components in state
-                    const customComponents = await this.componentLibrary.listComponents();
-                    this.state.setCustomComponents(customComponents);
+            reader.readAsText(file);
 
-                    // Emit event to update toolbar displays
-                    eventBus.emit(EVENT_TYPES.TOOLBAR_UPDATE_DISPLAYS);
-
-                    DialogFactory.showAlert({
-                        message: messages.alerts.componentImported(componentDef.name),
-                        type: 'success'
-                    });
-                }
-            } catch (error) {
-                console.error('Error importing component:', error);
-                DialogFactory.showAlert({
-                    message: messages.alerts.componentImportFailed,
-                    type: 'error'
-                });
-            }
-        };
-
-        reader.readAsText(file);
-
-        // Reset file input
-        event.target.value = '';
+            // Reset file input
+            event.target.value = '';
+        });
     }
 
     /**
      * Load component for editing
      * @param {string} name - Component name
+     * @returns {Promise<string>} Component name on success for notification
      */
     async loadComponentForEditing(name) {
         // Save current context's state before switching (including truth table changes)
@@ -890,18 +830,9 @@ export class CircuitOperations {
             // Load circuit context using common helper
             this._loadCircuitContext(componentDef, { type: 'component', name });
 
-            DialogFactory.showAlert({
-                message: messages.alerts.componentLoadedForEditing(name),
-                type: 'success'
-            });
-
-            return true;
+            return name; // Return name for success message
         } else {
-            DialogFactory.showAlert({
-                message: messages.alerts.componentLoadFailed(name),
-                type: 'error'
-            });
-            return false;
+            throw new ComponentNotFoundError(name);
         }
     }
 

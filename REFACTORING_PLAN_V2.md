@@ -10,13 +10,14 @@
 
 **Current State:**
 - 77% reduction in main file achieved
-- 28 modular source files (added hitDetection.js)
+- 29 modular source files (added hitDetection.js, errors.js)
 - 545 tests passing (~55% coverage by module)
 - Event bus foundation in place
 - Phase 10.1 completed ✅
+- Phase 10.2 completed ✅
 
 **Remaining Work:**
-- 3 separation of concerns violations
+- 2 separation of concerns violations (drag state in CircuitState)
 - 119 console.log statements to clean up
 - ~55% test coverage (critical modules untested)
 - Event bus underutilized
@@ -67,11 +68,44 @@
 
 ---
 
-### Phase 10.2: Remove UI from Storage/Business Layers
+### Phase 10.2: Remove UI from Storage/Business Layers ✅ COMPLETED
 
 **Goal:** Storage and business logic should not import or use UI components
 
-**Timeline:** 2 hours
+**Status:** ✅ Completed
+
+**Files Created:**
+- `src/core/errors.js` (120 lines) - Custom error classes:
+  - `CircuitError` - Base error class
+  - `ValidationError` - Base validation error
+  - `NoInputsError` - No inputs for simulation
+  - `NoOutputsError` - No outputs for simulation
+  - `EmptyCircuitError` - Empty circuit error
+  - `BoardNameRequiredError` - Missing board name
+  - `ComponentNotFoundError` - Component not found
+  - `ComponentSaveError` - Failed to save component
+  - `BoardSaveError` - Failed to save board
+  - `BoardLoadError` - Failed to load board
+  - `ImportExportError` - Import/export error
+  - `InvalidComponentFileError` - Invalid component file
+  - `ComponentExistsError` - Component already exists
+
+**Files Modified:**
+- `src/storage/ComponentLibrary.js` - Removed DialogFactory import, throws errors
+- `src/storage/localStorage.js` - Removed DialogFactory import
+- `src/core/CircuitOperations.js` - Removed DialogFactory/messages imports, throws errors
+- `circuit-simulator.js` - Added `_handleError()` method, catches errors and displays dialogs
+- Updated tests to expect thrown errors instead of false returns
+
+**Results:**
+- All 545 tests pass
+- No UI imports in storage/ or core/ directories
+- Errors are caught and displayed by coordinator
+- CircuitOperations fully testable without UI mocks
+
+---
+
+**Original Plan (for reference):**
 
 **Files to Create:**
 - `src/core/errors.js` (~50 lines)
@@ -584,7 +618,7 @@ eventBus.on(EVENT_TYPES.MODE_CHANGED, (mode) => this.handleModeChange(mode));
 | Phase | Priority | Effort | Impact | Status |
 |-------|----------|--------|--------|--------|
 | 10.1 Hit Detection | HIGH | 2-3h | Clean coordinator | ✅ Done |
-| 10.2 Remove UI from Layers | HIGH | 2h | Testability | Pending |
+| 10.2 Remove UI from Layers | HIGH | 2h | Testability | ✅ Done |
 | 10.4 Console Cleanup | HIGH | 1h | Production ready | Pending |
 | 10.3 Constants | MEDIUM | 1-2h | Maintainability | Pending |
 | 10.5 Remove Duplicates | MEDIUM | 30m | Single source of truth | Pending |

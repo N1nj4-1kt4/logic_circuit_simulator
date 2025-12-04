@@ -4,7 +4,6 @@
  */
 
 import { STORAGE_KEYS } from '../constants.js';
-import { DialogFactory } from '../ui/DialogFactory.js';
 
 /**
  * Generic localStorage getter with JSON parsing
@@ -94,14 +93,7 @@ export function getCustomComponents() {
  * @returns {boolean} True if successful
  */
 export function setCustomComponents(components) {
-    const success = setItem(STORAGE_KEYS.CUSTOM_COMPONENTS, components);
-    if (!success) {
-        DialogFactory.showAlert({
-            message: 'Failed to save components to storage.',
-            type: 'error'
-        });
-    }
-    return success;
+    return setItem(STORAGE_KEYS.CUSTOM_COMPONENTS, components);
 }
 
 // ==================== CIRCUIT BOARD STATE ====================
