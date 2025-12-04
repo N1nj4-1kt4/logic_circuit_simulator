@@ -8,6 +8,8 @@
  * - UI updates (mode indicator, dropdowns, circuit name)
  * - Event handling for all toolbar buttons
  */
+import { COLORS } from '../constants.js';
+
 export class Toolbar {
     /**
      * @param {Object} callbacks - Callback functions for toolbar actions
@@ -553,7 +555,7 @@ export class Toolbar {
 
         if (isRunning) {
             this.elements.simulateBtn.textContent = '■ Simulation';
-            this.elements.simulateBtn.style.background = '#f44336';
+            this.elements.simulateBtn.style.background = COLORS.VALUE_OFF;
 
             // Update mode indicator for simulation
             if (this.elements.modeIndicator && this.elements.selectedComponent) {

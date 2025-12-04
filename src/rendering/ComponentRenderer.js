@@ -2,6 +2,7 @@
  * ComponentRenderer - Renders all components (gates, I/O, custom components, ports)
  */
 import { getComponentValue } from '../core/circuitEvaluator.js';
+import { COLORS, FONTS, PORT_RADIUS } from '../constants.js';
 
 export class ComponentRenderer {
     constructor(ctx, darkMode = false) {
@@ -49,17 +50,17 @@ export class ComponentRenderer {
 
         if (type === 'INPUT') {
             // Draw input as a circle
-            this.ctx.fillStyle = value === 1 ? '#4caf50' : '#f44336';
+            this.ctx.fillStyle = value === 1 ? COLORS.VALUE_ON : COLORS.VALUE_OFF;
             this.ctx.beginPath();
             this.ctx.arc(x, y, 20, 0, Math.PI * 2);
             this.ctx.fill();
-            this.ctx.strokeStyle = this.darkMode ? '#e9e9e9' : '#333';
+            this.ctx.strokeStyle = this.darkMode ? COLORS.DARK.TEXT_PRIMARY : COLORS.LIGHT.TEXT_PRIMARY;
             this.ctx.lineWidth = 2;
             this.ctx.stroke();
 
             // Label
-            this.ctx.fillStyle = this.darkMode ? '#e9e9e9' : '#333';
-            this.ctx.font = 'bold 14px Arial';
+            this.ctx.fillStyle = this.darkMode ? COLORS.DARK.TEXT_PRIMARY : COLORS.LIGHT.TEXT_PRIMARY;
+            this.ctx.font = FONTS.COMPONENT_LABEL;
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
             this.ctx.fillText(component.label, x, y - 35);
@@ -72,18 +73,19 @@ export class ComponentRenderer {
         } else {
             // OUTPUT
             const outputValue = getComponentValue(component);
-            this.ctx.fillStyle = outputValue === 1 ? '#4caf50' :
-                                outputValue === 0 ? '#f44336' : (this.darkMode ? '#555' : '#ccc');
+            this.ctx.fillStyle = outputValue === 1 ? COLORS.VALUE_ON :
+                                outputValue === 0 ? COLORS.VALUE_OFF :
+                                (this.darkMode ? COLORS.DARK.VALUE_UNDEFINED : COLORS.LIGHT.VALUE_UNDEFINED);
             this.ctx.beginPath();
             this.ctx.arc(x, y, 20, 0, Math.PI * 2);
             this.ctx.fill();
-            this.ctx.strokeStyle = this.darkMode ? '#e9e9e9' : '#333';
+            this.ctx.strokeStyle = this.darkMode ? COLORS.DARK.TEXT_PRIMARY : COLORS.LIGHT.TEXT_PRIMARY;
             this.ctx.lineWidth = 2;
             this.ctx.stroke();
 
             // Label
-            this.ctx.fillStyle = this.darkMode ? '#e9e9e9' : '#333';
-            this.ctx.font = 'bold 14px Arial';
+            this.ctx.fillStyle = this.darkMode ? COLORS.DARK.TEXT_PRIMARY : COLORS.LIGHT.TEXT_PRIMARY;
+            this.ctx.font = FONTS.COMPONENT_LABEL;
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
             this.ctx.fillText(component.label, x, y - 35);
@@ -106,15 +108,15 @@ export class ComponentRenderer {
         const { x, y, label, customDefinition } = component;
 
         // Draw component body with theme colors (90x90 size - 15% larger)
-        this.ctx.fillStyle = this.darkMode ? '#1a1a2e' : '#fff3e0';
-        this.ctx.strokeStyle = this.darkMode ? '#f39c12' : '#ff9800';
+        this.ctx.fillStyle = this.darkMode ? COLORS.CUSTOM_FILL : COLORS.CUSTOM_FILL_LIGHT;
+        this.ctx.strokeStyle = this.darkMode ? COLORS.CUSTOM_STROKE : COLORS.CUSTOM_STROKE_LIGHT;
         this.ctx.lineWidth = 3;
         this.ctx.fillRect(x - 45, y - 45, 90, 90);
         this.ctx.strokeRect(x - 45, y - 45, 90, 90);
 
         // Draw label (larger font for better readability)
-        this.ctx.fillStyle = this.darkMode ? '#f39c12' : '#ff9800';
-        this.ctx.font = 'bold 14px Arial';
+        this.ctx.fillStyle = this.darkMode ? COLORS.CUSTOM_STROKE : COLORS.CUSTOM_STROKE_LIGHT;
+        this.ctx.font = FONTS.COMPONENT_LABEL;
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
 
@@ -134,8 +136,8 @@ export class ComponentRenderer {
         }
 
         // Draw ports with labels (larger font)
-        this.ctx.font = 'bold 11px Arial';
-        this.ctx.fillStyle = this.darkMode ? '#b3b3b3' : '#666';
+        this.ctx.font = FONTS.CUSTOM_COMPONENT_LABEL;
+        this.ctx.fillStyle = this.darkMode ? COLORS.DARK.PORT_LABEL : COLORS.LIGHT.PORT_LABEL;
 
         // Draw input ports with labels
         component.inputs.forEach((port, index) => {
@@ -171,8 +173,8 @@ export class ComponentRenderer {
     drawGate(component) {
         const { type, x, y } = component;
 
-        const fillColor = this.darkMode ? '#0f3460' : '#e3f2fd';
-        const strokeColor = this.darkMode ? '#53a8f4' : '#1976d2';
+        const fillColor = this.darkMode ? COLORS.DARK.GATE_FILL : COLORS.LIGHT.GATE_FILL;
+        const strokeColor = this.darkMode ? COLORS.DARK.GATE_STROKE : COLORS.LIGHT.GATE_STROKE;
 
         this.ctx.fillStyle = fillColor;
         this.ctx.strokeStyle = strokeColor;
@@ -304,11 +306,11 @@ export class ComponentRenderer {
      * @param {boolean} isOutput - If true, draw output port (green), else input port (blue)
      */
     drawPort(x, y, isOutput) {
-        this.ctx.fillStyle = isOutput ? '#4caf50' : '#2196f3';
+        this.ctx.fillStyle = isOutput ? COLORS.PORT_OUTPUT : COLORS.PORT_INPUT;
         this.ctx.beginPath();
-        this.ctx.arc(x, y, 5, 0, Math.PI * 2);
+        this.ctx.arc(x, y, PORT_RADIUS, 0, Math.PI * 2);
         this.ctx.fill();
-        this.ctx.strokeStyle = '#333';
+        this.ctx.strokeStyle = COLORS.PORT_STROKE;
         this.ctx.lineWidth = 1;
         this.ctx.stroke();
     }

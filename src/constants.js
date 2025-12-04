@@ -59,7 +59,47 @@ export const COLORS = {
 
     // Truth table
     TRUTH_TABLE_ACTIVE_BG: '#4caf50',
-    TRUTH_TABLE_HOVER_BG: '#f0f0f0'
+    TRUTH_TABLE_HOVER_BG: '#f0f0f0',
+
+    // Component state colors (used in multiple renderers)
+    VALUE_ON: '#4caf50',
+    VALUE_OFF: '#f44336',
+    VALUE_UNDEFINED: '#999',
+
+    // Custom component colors
+    CUSTOM_FILL: '#1a1a2e',
+    CUSTOM_STROKE: '#f39c12',
+    CUSTOM_FILL_LIGHT: '#fff3e0',
+    CUSTOM_STROKE_LIGHT: '#ff9800',
+
+    // Dark mode variants
+    DARK: {
+        CANVAS_BG: '#1a1a2e',
+        GRID_COLOR: '#2a2a4e',
+        TEXT_PRIMARY: '#e9e9e9',
+        TEXT_SECONDARY: '#999',
+        COMPONENT_STROKE: '#ccc',
+        VALUE_UNDEFINED: '#555',
+        WIRE_UNDEFINED: '#888',
+        GATE_FILL: '#0f3460',
+        GATE_STROKE: '#53a8f4',
+        PORT_LABEL: '#b3b3b3'
+    },
+
+    // Light mode variants (for explicit contrast with dark mode)
+    LIGHT: {
+        TEXT_PRIMARY: '#333',
+        TEXT_SECONDARY: '#666',
+        VALUE_UNDEFINED: '#ccc',
+        WIRE_UNDEFINED: '#666',
+        GATE_FILL: '#e3f2fd',
+        GATE_STROKE: '#1976d2',
+        PORT_LABEL: '#666'
+    },
+
+    // Port colors by type
+    PORT_OUTPUT: '#4caf50',
+    PORT_INPUT: '#2196f3'
 };
 
 // ==================== LAYOUT ====================
@@ -97,7 +137,26 @@ export const TIMING = {
     AUTO_CYCLE_DELAY: 750, // ms
     AUTO_SAVE_DEBOUNCE: 1000, // ms
     ANIMATION_DURATION: 300, // ms
-    TRUTH_TABLE_DEBOUNCE: 150 // ms - debounce before recomputing truth table
+    TRUTH_TABLE_DEBOUNCE: 150, // ms - debounce before recomputing truth table
+    DIALOG_FADE_IN: 200, // ms
+    DIALOG_FADE_OUT: 200, // ms
+    DIALOG_CLEANUP_DELAY: 100, // ms - delay before removing dialog from DOM
+    TOOLTIP_DELAY: 500, // ms
+    FOCUS_DELAY: 300 // ms - delay before focusing dialog buttons
+};
+
+// ==================== UI ====================
+
+export const UI = {
+    ICONS: {
+        SUN: '☀️',
+        MOON: '🌙',
+        CLOSE: '×',
+        CHECK: '✓',
+        CROSS: '✗',
+        WARNING: '⚠',
+        INFO: 'ℹ'
+    }
 };
 
 // ==================== STORAGE KEYS ====================

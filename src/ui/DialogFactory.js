@@ -11,6 +11,8 @@
  * - Support for various dialog types (forms, lists, custom layouts)
  */
 
+import { TIMING, UI } from '../constants.js';
+
 export class DialogFactory {
     /**
      * Create a dialog element programmatically
@@ -84,7 +86,7 @@ export class DialogFactory {
             closeBtn.id = closeButtonId;
             closeBtn.className = 'dialog-close-btn';
             closeBtn.title = 'Close';
-            closeBtn.textContent = '×';  // ← CHANGE HERE, AFFECTS ALL DIALOGS!
+            closeBtn.textContent = UI.ICONS.CLOSE;  // ← CHANGE HERE, AFFECTS ALL DIALOGS!
 
             closeBtn.addEventListener('click', () => {
                 this.hideDialog(dialog);
@@ -131,7 +133,7 @@ export class DialogFactory {
 
             // Fade in animation
             requestAnimationFrame(() => {
-                dialog.style.transition = 'opacity 0.2s ease';
+                dialog.style.transition = `opacity ${TIMING.DIALOG_FADE_IN}ms ease`;
                 dialog.style.opacity = '1';
             });
         } else {
@@ -154,13 +156,13 @@ export class DialogFactory {
 
         // Hide dialog
         if (animate) {
-            dialog.style.transition = 'opacity 0.2s ease';
+            dialog.style.transition = `opacity ${TIMING.DIALOG_FADE_OUT}ms ease`;
             dialog.style.opacity = '0';
 
             setTimeout(() => {
                 dialog.style.display = 'none';
                 dialog.style.opacity = '';
-            }, 200);
+            }, TIMING.DIALOG_FADE_OUT);
         } else {
             dialog.style.display = 'none';
         }
@@ -201,7 +203,7 @@ export class DialogFactory {
             backdrop.style.opacity = '0';
             setTimeout(() => {
                 backdrop.remove();
-            }, 200);
+            }, TIMING.DIALOG_FADE_OUT);
         }
     }
 
@@ -380,10 +382,10 @@ export class DialogFactory {
 
         // Add icon to header via data attribute
         const iconMap = {
-            success: '✓',
-            error: '✗',
-            warning: '⚠',
-            info: 'ℹ'
+            success: UI.ICONS.CHECK,
+            error: UI.ICONS.CROSS,
+            warning: UI.ICONS.WARNING,
+            info: UI.ICONS.INFO
         };
         const header = alertDialog.querySelector('.panel-header');
         if (header && iconMap[type]) {
@@ -398,7 +400,7 @@ export class DialogFactory {
                         setTimeout(() => {
                             alertDialog.remove();
                             observer.disconnect();
-                        }, 100);
+                        }, TIMING.DIALOG_CLEANUP_DELAY);
                     }
                 }
             });
@@ -413,7 +415,7 @@ export class DialogFactory {
         setTimeout(() => {
             const okBtn = alertDialog.querySelector('#alertOkBtn');
             if (okBtn) okBtn.focus();
-        }, 300);
+        }, TIMING.FOCUS_DELAY);
 
         return alertDialog;
     }
@@ -488,8 +490,8 @@ export class DialogFactory {
 
         // Add icon to header via data attribute
         const iconMap = {
-            warning: '⚠',
-            info: 'ℹ'
+            warning: UI.ICONS.WARNING,
+            info: UI.ICONS.INFO
         };
         const header = confirmDialog.querySelector('.panel-header');
         if (header && iconMap[type]) {
@@ -504,7 +506,7 @@ export class DialogFactory {
                         setTimeout(() => {
                             confirmDialog.remove();
                             observer.disconnect();
-                        }, 100);
+                        }, TIMING.DIALOG_CLEANUP_DELAY);
                     }
                 }
             });
@@ -519,7 +521,7 @@ export class DialogFactory {
         setTimeout(() => {
             const noBtn = confirmDialog.querySelector('#confirmNoBtn');
             if (noBtn) noBtn.focus();
-        }, 300);
+        }, TIMING.FOCUS_DELAY);
 
         return confirmDialog;
     }

@@ -12,6 +12,7 @@
 
 import { getDarkMode, setDarkMode } from '../storage/localStorage.js';
 import { eventBus, EVENT_TYPES } from '../utils/eventBus.js';
+import { UI } from '../constants.js';
 
 export class ThemeManager {
     /**
@@ -57,13 +58,13 @@ export class ThemeManager {
         if (this.isDarkMode) {
             document.body.classList.add('dark-mode');
             if (this.themeToggleButton) {
-                this.themeToggleButton.textContent = '☀️';
+                this.themeToggleButton.textContent = UI.ICONS.SUN;
                 this.themeToggleButton.title = 'Switch to light mode';
             }
         } else {
             document.body.classList.remove('dark-mode');
             if (this.themeToggleButton) {
-                this.themeToggleButton.textContent = '🌙';
+                this.themeToggleButton.textContent = UI.ICONS.MOON;
                 this.themeToggleButton.title = 'Switch to dark mode';
             }
         }

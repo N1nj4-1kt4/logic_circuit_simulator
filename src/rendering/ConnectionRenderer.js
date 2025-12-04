@@ -2,6 +2,7 @@
  * ConnectionRenderer - Renders connections (wires) between components
  */
 import { getPortValue } from '../core/circuitEvaluator.js';
+import { COLORS } from '../constants.js';
 
 export class ConnectionRenderer {
     constructor(ctx, darkMode = false) {
@@ -34,9 +35,9 @@ export class ConnectionRenderer {
 
             // Determine color based on signal value and theme
             const value = getPortValue(from, conn.fromPort);
-            this.ctx.strokeStyle = value === 1 ? '#4caf50' :
-                                   value === 0 ? '#f44336' :
-                                   (this.darkMode ? '#888' : '#666');
+            this.ctx.strokeStyle = value === 1 ? COLORS.VALUE_ON :
+                                   value === 0 ? COLORS.VALUE_OFF :
+                                   (this.darkMode ? COLORS.DARK.WIRE_UNDEFINED : COLORS.LIGHT.WIRE_UNDEFINED);
             this.ctx.lineWidth = 3;
 
             this.ctx.beginPath();
@@ -75,7 +76,7 @@ export class ConnectionRenderer {
      * @param {number} toY - End Y position
      */
     drawConnectionPreview(fromX, fromY, toX, toY) {
-        this.ctx.strokeStyle = 'rgba(102, 126, 234, 0.5)';
+        this.ctx.strokeStyle = COLORS.WIRE_PREVIEW;
         this.ctx.lineWidth = 2;
         this.ctx.setLineDash([5, 5]);
         this.ctx.beginPath();

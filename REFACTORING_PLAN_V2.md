@@ -11,10 +11,11 @@
 **Current State:**
 - 77% reduction in main file achieved
 - 29 modular source files (added hitDetection.js, errors.js)
-- 545 tests passing (~55% coverage by module)
+- 569 tests passing (~55% coverage by module)
 - Event bus foundation in place
 - Phase 10.1 completed ✅
 - Phase 10.2 completed ✅
+- Phase 10.3 completed ✅
 
 **Remaining Work:**
 - 2 separation of concerns violations (drag state in CircuitState)
@@ -223,13 +224,40 @@ export class ImportExportError extends CircuitError {
 
 ---
 
-### Phase 10.3: Complete Constants Extraction
+### Phase 10.3: Complete Constants Extraction ✅ COMPLETED
 
 **Goal:** Extract all remaining magic values to constants.js
 
-**Timeline:** 1-2 hours
+**Status:** ✅ Completed
 
-**Files to Modify:**
+**Files Modified:**
+- `src/constants.js` - Added new constants:
+  - `COLORS.VALUE_ON`, `COLORS.VALUE_OFF`, `COLORS.VALUE_UNDEFINED` - component state colors
+  - `COLORS.CUSTOM_*` - custom component colors (fill/stroke for light/dark modes)
+  - `COLORS.DARK.*` - dark mode variants (canvas bg, grid, text, gate colors, port labels)
+  - `COLORS.LIGHT.*` - light mode variants for explicit contrast
+  - `COLORS.PORT_OUTPUT`, `COLORS.PORT_INPUT` - port colors by type
+  - `TIMING.DIALOG_FADE_IN`, `TIMING.DIALOG_FADE_OUT`, `TIMING.DIALOG_CLEANUP_DELAY`, `TIMING.FOCUS_DELAY`
+  - `UI.ICONS` - centralized icon characters (SUN, MOON, CLOSE, CHECK, CROSS, WARNING, INFO)
+
+- `src/rendering/ComponentRenderer.js` - Replaced hardcoded colors with constants
+- `src/rendering/ConnectionRenderer.js` - Replaced hardcoded wire colors with constants
+- `src/ui/Toolbar.js` - Replaced `#f44336` with `COLORS.VALUE_OFF`
+- `src/ui/DialogFactory.js` - Replaced timing values and icons with constants
+- `src/ui/ThemeManager.js` - Replaced emoji icons with `UI.ICONS.*`
+
+**Tests Created:**
+- `tests/unit/constants.test.js` (24 tests) - Full coverage of all constant exports
+
+**Results:**
+- All 569 tests pass (545 original + 24 new constants tests)
+- No hardcoded colors in rendering files
+- No hardcoded timing values in UI files
+- All values traceable to constants.js
+
+---
+
+**Original Plan (for reference):**
 
 1. **`src/constants.js`** - Add missing constants:
 
@@ -619,8 +647,8 @@ eventBus.on(EVENT_TYPES.MODE_CHANGED, (mode) => this.handleModeChange(mode));
 |-------|----------|--------|--------|--------|
 | 10.1 Hit Detection | HIGH | 2-3h | Clean coordinator | ✅ Done |
 | 10.2 Remove UI from Layers | HIGH | 2h | Testability | ✅ Done |
+| 10.3 Constants | MEDIUM | 1-2h | Maintainability | ✅ Done |
 | 10.4 Console Cleanup | HIGH | 1h | Production ready | Pending |
-| 10.3 Constants | MEDIUM | 1-2h | Maintainability | Pending |
 | 10.5 Remove Duplicates | MEDIUM | 30m | Single source of truth | Pending |
 | 10.6 Move Drag State | MEDIUM | 1h | Clean architecture | Pending |
 | 11.1 CircuitOperations Tests | HIGH | 3-4h | Coverage | Pending |
@@ -639,8 +667,8 @@ After completing Phase 10-11:
 |--------|---------|--------|
 | Test Coverage (modules) | 50% | 80% |
 | Console.log Statements | 119 | 0 |
-| Hardcoded Colors | ~30 | 0 |
-| Separation Violations | 3 | 0 |
+| Hardcoded Colors | 0 ✅ | 0 |
+| Separation Violations | 2 | 0 |
 | Files > 800 lines | 3 | 0 (Phase 12) |
 
 ---
