@@ -150,6 +150,15 @@ export function computeTruthTable(components, connections) {
         // Simulate circuit on cloned components
         simulateCircuit(clonedComponents, connections);
 
+        // Store ALL component values for this row (for wire color rendering)
+        row.componentValues = {};
+        clonedComponents.forEach(comp => {
+            row.componentValues[comp.id] = {
+                value: comp.value,
+                outputValues: comp.outputValues ? [...comp.outputValues] : null
+            };
+        });
+
         // Record output values from cloned outputs
         const clonedOutputs = clonedComponents
             .filter(c => c.type === 'OUTPUT')

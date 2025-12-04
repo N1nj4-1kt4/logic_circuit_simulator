@@ -187,10 +187,10 @@ describe('TruthTableComputer', () => {
             expect(result.table).toHaveLength(4); // 2^2 = 4 combinations
 
             // AND truth table: output is 1 only when both inputs are 1
-            expect(result.table[0]).toEqual({ input0: 0, input1: 0, output0: 0 });
-            expect(result.table[1]).toEqual({ input0: 0, input1: 1, output0: 0 });
-            expect(result.table[2]).toEqual({ input0: 1, input1: 0, output0: 0 });
-            expect(result.table[3]).toEqual({ input0: 1, input1: 1, output0: 1 });
+            expect(result.table[0]).toMatchObject({ input0: 0, input1: 0, output0: 0 });
+            expect(result.table[1]).toMatchObject({ input0: 0, input1: 1, output0: 0 });
+            expect(result.table[2]).toMatchObject({ input0: 1, input1: 0, output0: 0 });
+            expect(result.table[3]).toMatchObject({ input0: 1, input1: 1, output0: 1 });
         });
 
         it('should compute correct truth table for OR gate', () => {
@@ -201,10 +201,10 @@ describe('TruthTableComputer', () => {
             expect(result.table).toHaveLength(4);
 
             // OR truth table: output is 1 when any input is 1
-            expect(result.table[0]).toEqual({ input0: 0, input1: 0, output0: 0 });
-            expect(result.table[1]).toEqual({ input0: 0, input1: 1, output0: 1 });
-            expect(result.table[2]).toEqual({ input0: 1, input1: 0, output0: 1 });
-            expect(result.table[3]).toEqual({ input0: 1, input1: 1, output0: 1 });
+            expect(result.table[0]).toMatchObject({ input0: 0, input1: 0, output0: 0 });
+            expect(result.table[1]).toMatchObject({ input0: 0, input1: 1, output0: 1 });
+            expect(result.table[2]).toMatchObject({ input0: 1, input1: 0, output0: 1 });
+            expect(result.table[3]).toMatchObject({ input0: 1, input1: 1, output0: 1 });
         });
 
         it('should NOT modify original components during computation', () => {
@@ -240,8 +240,8 @@ describe('TruthTableComputer', () => {
 
             expect(result.isValid).toBe(true);
             expect(result.table).toHaveLength(2); // 2^1 = 2 combinations
-            expect(result.table[0]).toEqual({ input0: 0, output0: 1 }); // NOT 0 = 1
-            expect(result.table[1]).toEqual({ input0: 1, output0: 0 }); // NOT 1 = 0
+            expect(result.table[0]).toMatchObject({ input0: 0, output0: 1 }); // NOT 0 = 1
+            expect(result.table[1]).toMatchObject({ input0: 1, output0: 0 }); // NOT 1 = 0
         });
 
         it('should handle three input circuit', () => {
@@ -267,7 +267,7 @@ describe('TruthTableComputer', () => {
             expect(result.table).toHaveLength(8); // 2^3 = 8 combinations
 
             // Only when all three inputs are 1 should output be 1
-            expect(result.table[7]).toEqual({ input0: 1, input1: 1, input2: 1, output0: 1 });
+            expect(result.table[7]).toMatchObject({ input0: 1, input1: 1, input2: 1, output0: 1 });
             // All other combinations should be 0
             for (let i = 0; i < 7; i++) {
                 expect(result.table[i].output0).toBe(0);
@@ -319,13 +319,13 @@ describe('TruthTableComputer', () => {
         it('should return correct row for input combination', () => {
             // Input [0, 0] should be row 0
             const row = lookupTruthTableRow(cache, [0, 0]);
-            expect(row).toEqual({ input0: 0, input1: 0, output0: 0 });
+            expect(row).toMatchObject({ input0: 0, input1: 0, output0: 0 });
         });
 
         it('should return correct row for different combinations', () => {
             // Input [1, 1] should be row 3
             const row = lookupTruthTableRow(cache, [1, 1]);
-            expect(row).toEqual({ input0: 1, input1: 1, output0: 1 });
+            expect(row).toMatchObject({ input0: 1, input1: 1, output0: 1 });
         });
 
         it('should return null for invalid cache', () => {

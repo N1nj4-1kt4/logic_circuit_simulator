@@ -330,8 +330,6 @@ export class CircuitOperations {
         const components = this.state.getComponents();
         const inputs = components.filter(c => c.type === 'INPUT').sort((a, b) =>
             a.label.localeCompare(b.label));
-        const outputs = components.filter(c => c.type === 'OUTPUT').sort((a, b) =>
-            a.label.localeCompare(b.label));
 
         let currentCycleIndex = this.state.getCurrentCycleIndex();
         const totalCombinations = this.state.getTotalCombinations();
@@ -351,12 +349,22 @@ export class CircuitOperations {
         // Try to use cached truth table for output lookup
         const cache = this.state.getTruthTableCache();
         if (cache && cache.isValid && cache.table && cache.table[currentCycleIndex]) {
-            // Use cached output values
             const row = cache.table[currentCycleIndex];
-            outputs.forEach((output, index) => {
-                const cachedValue = row[`output${index}`];
-                output.value = cachedValue === '?' ? null : cachedValue;
-            });
+
+            // Restore ALL component values from cache (not just inputs/outputs)
+            // This ensures wire colors are correct for all connections
+            if (row.componentValues) {
+                components.forEach(comp => {
+                    const cached = row.componentValues[comp.id];
+                    if (cached) {
+                        comp.value = cached.value;
+                        if (cached.outputValues) {
+                            comp.outputValues = [...cached.outputValues];
+                        }
+                    }
+                });
+            }
+
             eventBus.emit(EVENT_TYPES.CANVAS_REDRAW);
             eventBus.emit(EVENT_TYPES.TRUTH_TABLE_UPDATE_HIGHLIGHT);
         } else {
@@ -444,13 +452,22 @@ export class CircuitOperations {
         // Try to use cached truth table for output lookup
         const cache = this.state.getTruthTableCache();
         if (cache && cache.isValid && cache.table && cache.table[currentCycleIndex]) {
-            // Use cached output values
             const row = cache.table[currentCycleIndex];
-            const sortedOutputs = outputs.sort((a, b) => a.label.localeCompare(b.label));
-            sortedOutputs.forEach((output, index) => {
-                const cachedValue = row[`output${index}`];
-                output.value = cachedValue === '?' ? null : cachedValue;
-            });
+
+            // Restore ALL component values from cache (not just inputs/outputs)
+            // This ensures wire colors are correct for all connections
+            if (row.componentValues) {
+                components.forEach(comp => {
+                    const cached = row.componentValues[comp.id];
+                    if (cached) {
+                        comp.value = cached.value;
+                        if (cached.outputValues) {
+                            comp.outputValues = [...cached.outputValues];
+                        }
+                    }
+                });
+            }
+
             eventBus.emit(EVENT_TYPES.CANVAS_REDRAW);
             eventBus.emit(EVENT_TYPES.TRUTH_TABLE_UPDATE_HIGHLIGHT);
         } else {
