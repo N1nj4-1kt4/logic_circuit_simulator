@@ -96,9 +96,7 @@ export class TruthTablePanel {
      * Display the truth table panel
      */
     display() {
-        console.log('[TTP display] START');
         if (!this.truthTableData) {
-            console.log('[TTP display] No truthTableData, returning');
             return;
         }
 
@@ -106,24 +104,19 @@ export class TruthTablePanel {
         const content = document.getElementById('truthTableContent');
 
         if (!this.panel || !content) {
-            console.log('[TTP display] No panel or content element, returning');
             return;
         }
 
         // Check if panel was already visible BEFORE we show it
         // Support both .hidden class and inline style for backwards compatibility
         const wasVisible = !this.panel.classList.contains('hidden') && this.panel.style.display !== 'none';
-        console.log('[TTP display] wasVisible:', wasVisible);
-        console.log('[TTP display] this.state:', JSON.stringify(this.state));
 
         // Detect if structure changed since state was saved (e.g., inputs/outputs added while panel was closed)
         // If structure changed, clear saved dimensions so panel auto-fits to new content
         if (this.state && this.state.columnOrder) {
             const currentColumnCount = this.truthTableData.inputs.length + this.truthTableData.outputs.length;
             const savedColumnCount = this.state.columnOrder.length;
-            console.log('[TTP display] Structure check - current columns:', currentColumnCount, 'saved columns:', savedColumnCount);
             if (currentColumnCount !== savedColumnCount) {
-                console.log('[TTP display] Structure changed while closed - clearing saved dimensions');
                 this.state.width = '';
                 this.state.height = '';
                 this.panel.style.width = '';
@@ -149,15 +142,12 @@ export class TruthTablePanel {
 
         // Apply saved position BEFORE making panel visible to avoid flicker
         if (this.state && !wasVisible) {
-            console.log('[TTP display] Applying saved state - width:', this.state.width, 'height:', this.state.height);
             // Apply the saved position before showing the panel
             if (this.state.width) {
                 this.panel.style.width = this.state.width;
-                console.log('[TTP display] Applied width:', this.state.width);
             }
             if (this.state.height) {
                 this.panel.style.height = this.state.height;
-                console.log('[TTP display] Applied height:', this.state.height);
             }
             if (this.state.x !== undefined && this.state.y !== undefined) {
                 this.panel.style.left = '0';
@@ -166,10 +156,7 @@ export class TruthTablePanel {
                 this.panel.setAttribute('data-x', this.state.x);
                 this.panel.setAttribute('data-y', this.state.y);
             }
-        } else {
-            console.log('[TTP display] NOT applying saved state - state:', !!this.state, 'wasVisible:', wasVisible);
         }
-        console.log('[TTP display] Panel style.width after state apply:', this.panel.style.width);
 
         // Show panel first (remove hidden class and ensure display is block)
         this.panel.classList.remove('hidden');
@@ -245,33 +232,22 @@ export class TruthTablePanel {
             // Fit panel when: no saved size state (new board or first open)
             const hasValidSavedHeight = this.state && this.state.height && this.state.height !== '';
             const hasValidSavedWidth = this.state && this.state.width && this.state.width !== '';
-            console.log('[TTP tableBuilt] hasValidSavedHeight:', hasValidSavedHeight, 'hasValidSavedWidth:', hasValidSavedWidth);
-            console.log('[TTP tableBuilt] this.state:', JSON.stringify(this.state));
-            console.log('[TTP tableBuilt] Panel style.width BEFORE height/width apply:', this.panel.style.width);
-            console.log('[TTP tableBuilt] Panel offsetWidth BEFORE:', this.panel.offsetWidth);
 
             // Fit height if no saved height
             if (availableHeight > 0) {
                 this.applyTableHeight(availableHeight, { fitPanel: !hasValidSavedHeight });
             }
-            console.log('[TTP tableBuilt] Panel style.width AFTER applyTableHeight:', this.panel.style.width);
 
             // Fit width if no saved width
             if (!hasValidSavedWidth) {
-                console.log('[TTP tableBuilt] Calling applyTableWidth()');
                 this.applyTableWidth();
-            } else {
-                console.log('[TTP tableBuilt] Skipping applyTableWidth() - using saved width');
             }
-            console.log('[TTP tableBuilt] Panel style.width AFTER width logic:', this.panel.style.width);
-            console.log('[TTP tableBuilt] Panel offsetWidth AFTER:', this.panel.offsetWidth);
 
             // Reveal panel with instant transition (table is fully constructed)
             this.panel.style.opacity = '1';
 
             // Save state after showing the panel
             this.saveState();
-            console.log('[TTP tableBuilt] After saveState - this.state.width:', this.state?.width);
         });
 
         // Listen for column reorder
@@ -517,9 +493,7 @@ export class TruthTablePanel {
      * Called when panel needs to auto-fit to new column structure
      */
     applyTableWidth() {
-        console.log('[TTP applyTableWidth] START');
         if (!this.panel || !this.table) {
-            console.log('[TTP applyTableWidth] No panel or table, returning');
             return;
         }
 
@@ -527,7 +501,6 @@ export class TruthTablePanel {
         // which is #truthTableContent itself, not a child element
         const content = document.getElementById('truthTableContent');
         if (!content) {
-            console.log('[TTP applyTableWidth] No content element, returning');
             return;
         }
 
@@ -537,13 +510,9 @@ export class TruthTablePanel {
 
         // Get the table's natural width (scrollWidth includes overflow content)
         const tableWidth = content.scrollWidth;
-        console.log('[TTP applyTableWidth] content.scrollWidth:', tableWidth);
-        console.log('[TTP applyTableWidth] paddingLeft:', paddingLeft, 'paddingRight:', paddingRight);
         // Add panel padding and a small buffer
         const newPanelWidth = tableWidth + paddingLeft + paddingRight + 2;
-        console.log('[TTP applyTableWidth] Setting panel width to:', newPanelWidth + 'px');
         this.panel.style.width = newPanelWidth + 'px';
-        console.log('[TTP applyTableWidth] END - panel.style.width is now:', this.panel.style.width);
     }
 
     /**
@@ -646,9 +615,7 @@ export class TruthTablePanel {
      * Save panel state
      */
     saveState() {
-        console.log('[TTP saveState] START');
         if (!this.panel || !this.table) {
-            console.log('[TTP saveState] No panel or table, returning');
             return;
         }
 
@@ -660,12 +627,8 @@ export class TruthTablePanel {
 
         // Get dimensions - use style values if set, otherwise use computed offset dimensions
         // This ensures auto-fitted dimensions are captured after structure changes
-        console.log('[TTP saveState] panel.style.width:', this.panel.style.width);
-        console.log('[TTP saveState] panel.offsetWidth:', this.panel.offsetWidth);
         const width = this.panel.style.width || (this.panel.offsetWidth + 'px');
         const height = this.panel.style.height || (this.panel.offsetHeight + 'px');
-        console.log('[TTP saveState] Computed width to save:', width);
-        console.log('[TTP saveState] Computed height to save:', height);
 
         this.state = {
             columnOrder: columns,
@@ -680,7 +643,6 @@ export class TruthTablePanel {
         if (this.onStateChange) {
             this.onStateChange(this.state);
         }
-        console.log('[TTP saveState] END - saved width:', this.state.width);
     }
 
     /**
@@ -757,16 +719,13 @@ export class TruthTablePanel {
      * Called when TRUTH_TABLE_COMPUTED event fires
      */
     refresh() {
-        console.log('[TTP refresh] START');
         // Don't refresh if panel doesn't exist or table not initialized
         if (!this.panel || !this.table) {
-            console.log('[TTP refresh] No panel or table, returning');
             return;
         }
 
         // Don't refresh if panel is hidden
         if (this.panel.classList.contains('hidden')) {
-            console.log('[TTP refresh] Panel is hidden, returning');
             return;
         }
 
@@ -774,7 +733,6 @@ export class TruthTablePanel {
 
         // Hide panel if cache is invalid (circuit became incomplete)
         if (!cache || !cache.isValid) {
-            console.log('[TTP refresh] Cache invalid, hiding');
             this.hide();
             return;
         }
@@ -787,28 +745,20 @@ export class TruthTablePanel {
             inputs.length !== this.truthTableData.inputs.length ||
             outputs.length !== this.truthTableData.outputs.length;
 
-        console.log('[TTP refresh] structureChanged:', structureChanged);
-        console.log('[TTP refresh] Current inputs:', this.truthTableData?.inputs?.length, 'New inputs:', inputs.length);
-        console.log('[TTP refresh] Current outputs:', this.truthTableData?.outputs?.length, 'New outputs:', outputs.length);
-
         if (structureChanged) {
-            console.log('[TTP refresh] STRUCTURE CHANGED - rebuilding');
             // Full rebuild needed - structure has changed
             // Save current position before rebuild
             this.saveState();
-            console.log('[TTP refresh] After saveState, this.state.width:', this.state?.width);
 
             // Clear saved height/width so panel auto-fits to new content
             // Keep position (x, y) so panel stays in same location
             if (this.state) {
-                console.log('[TTP refresh] Clearing state.height and state.width');
                 this.state.height = '';
                 this.state.width = '';
             }
 
             // Clear inline styles so panel can auto-fit to new content
             // The CSS will handle default sizing, then applyTableHeight will fit to content
-            console.log('[TTP refresh] Clearing panel inline styles');
             this.panel.style.width = '';
             this.panel.style.height = '';
 
@@ -817,10 +767,8 @@ export class TruthTablePanel {
             this.columnOrder = null;
 
             // Rebuild table with new columns (display() will restore position from state)
-            console.log('[TTP refresh] Calling display()');
             this.display();
         } else {
-            console.log('[TTP refresh] Same structure - fast path (replaceData)');
             // Same structure - just update data in place (fast path)
             this.truthTableData = { inputs, outputs, table };
             this.table.replaceData(table);
@@ -830,7 +778,6 @@ export class TruthTablePanel {
 
             this.updateHighlight();
         }
-        console.log('[TTP refresh] END');
     }
 
     /**
@@ -864,19 +811,14 @@ export class TruthTablePanel {
      * Hide the truth table panel
      */
     hide() {
-        console.log('[TTP hide] START');
         if (this.panel) {
-            console.log('[TTP hide] Panel style.width BEFORE hide:', this.panel.style.width);
-            console.log('[TTP hide] Panel offsetWidth BEFORE hide:', this.panel.offsetWidth);
             // Save state BEFORE hiding - offsetWidth becomes 0 after display:none
             this.saveState();
-            console.log('[TTP hide] After saveState - this.state.width:', this.state?.width);
             this.panel.style.opacity = '0';
             this.panel.style.pointerEvents = 'none';
             this.panel.classList.add('hidden');
             this.panel.style.display = 'none';
         }
-        console.log('[TTP hide] END');
     }
 
     /**

@@ -313,6 +313,16 @@ export class CircuitOperations {
         const inputs = components.filter(c => c.type === 'INPUT').sort((a, b) =>
             a.label.localeCompare(b.label));
 
+        // Detect if input count changed during simulation (e.g., user added/removed an input)
+        const currentTotalCombinations = Math.pow(2, inputs.length);
+        const storedTotalCombinations = this.state.getTotalCombinations();
+
+        if (currentTotalCombinations !== storedTotalCombinations) {
+            // Input count changed - reset simulation state to avoid index/bit misalignment
+            this.state.setTotalCombinations(currentTotalCombinations);
+            this.state.setCurrentCycleIndex(0);
+        }
+
         let currentCycleIndex = this.state.getCurrentCycleIndex();
         const totalCombinations = this.state.getTotalCombinations();
 

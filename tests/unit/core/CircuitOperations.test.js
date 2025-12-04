@@ -509,6 +509,75 @@ describe('CircuitOperations', () => {
                     isRunning: false
                 }));
             });
+
+            it('resets cycle state when input count increases during simulation', () => {
+                // Start with 2 inputs
+                operations.startAutoCycle();
+                expect(state.getTotalCombinations()).toBe(4); // 2^2 = 4
+
+                // Simulate some cycling
+                state.setCurrentCycleIndex(2);
+
+                // Add a third input while simulation is running
+                operations.placeComponent(100, 300, 'INPUT');
+
+                // Call autoCycleStep which should detect the change
+                operations.autoCycleStep();
+
+                // totalCombinations should be updated to 8 (2^3)
+                expect(state.getTotalCombinations()).toBe(8);
+                // currentCycleIndex should be reset to 0
+                expect(state.getCurrentCycleIndex()).toBe(1); // 0 + 1 after step
+            });
+
+            it('resets cycle state when input count decreases during simulation', () => {
+                // Start with 2 inputs
+                operations.startAutoCycle();
+                expect(state.getTotalCombinations()).toBe(4); // 2^2 = 4
+
+                // Simulate some cycling
+                state.setCurrentCycleIndex(3);
+
+                // Remove one input while simulation is running
+                const inputs = state.getComponents().filter(c => c.type === 'INPUT');
+                state.removeComponent(inputs[0].id);
+
+                // Call autoCycleStep which should detect the change
+                operations.autoCycleStep();
+
+                // totalCombinations should be updated to 2 (2^1)
+                expect(state.getTotalCombinations()).toBe(2);
+                // currentCycleIndex should be reset to 0 then incremented
+                expect(state.getCurrentCycleIndex()).toBe(1); // 0 + 1 after step
+            });
+
+            it('cycles through all combinations correctly after input added', () => {
+                // Start with 2 inputs
+                operations.startAutoCycle();
+
+                // Add a third input
+                operations.placeComponent(100, 300, 'INPUT');
+
+                // Run one step to trigger the reset
+                operations.autoCycleStep();
+
+                // Get inputs sorted by label
+                const inputs = state.getComponents()
+                    .filter(c => c.type === 'INPUT')
+                    .sort((a, b) => a.label.localeCompare(b.label));
+
+                expect(inputs).toHaveLength(3);
+
+                // After reset to 0 and one step, we should be at index 1
+                // Index 1 in binary for 3 inputs is 001 (I1=0, I2=0, I3=1)
+                // The step would have set index 0 values (000), then incremented to 1
+                // Actually, on reset currentCycleIndex becomes 0, then values are set for 0,
+                // then index is incremented to 1 for next iteration
+                // So after one autoCycleStep, the inputs should reflect index 0 values
+                expect(inputs[0].value).toBe(0); // I1
+                expect(inputs[1].value).toBe(0); // I2
+                expect(inputs[2].value).toBe(0); // I3
+            });
         });
 
         describe('Step Simulation', () => {
