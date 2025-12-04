@@ -1,0 +1,93 @@
+/* ===== CSS Custom Properties (Variables) ===== */
+/* Logic Circuit Simulator - Theme Variables */
+
+:root {
+    /* ===== Primary Colors ===== */
+    --color-primary: #667eea;
+    --color-primary-dark: #764ba2;
+    --color-primary-hover: #5568d3;
+    --color-primary-light: rgba(102, 126, 234, 0.3);
+
+    /* ===== Status Colors ===== */
+    --color-success: #4caf50;
+    --color-success-hover: #45a049;
+    --color-success-dark: #388e3c;
+    --color-success-light: rgba(76, 175, 80, 0.2);
+
+    --color-warning: #ff9800;
+    --color-warning-hover: #e68900;
+    --color-warning-pastel: #ffcc80;
+
+    --color-danger: #f44336;
+    --color-danger-hover: #da190b;
+    --color-danger-dark: #c62828;
+    --color-danger-light: rgba(244, 67, 54, 0.1);
+    --color-danger-pastel: #ef9a9a;
+
+    --color-info: #2196f3;
+    --color-info-hover: #0b7dda;
+    --color-info-pastel: #90caf9;
+
+    /* ===== Text Colors ===== */
+    --text-primary: #444;
+    --text-secondary: #666;
+    --text-muted: #999;
+    --text-light: #555;
+    --text-dark: #333;
+    --text-white: white;
+
+    /* ===== Background Colors ===== */
+    --bg-white: white;
+    --bg-light: #f5f5f5;
+    --bg-lighter: #f9f9f9;
+    --bg-body-start: #667eea;
+    --bg-body-end: #764ba2;
+
+    /* ===== Border Colors ===== */
+    --border-color: #ddd;
+    --border-color-light: #e0e0e0;
+    --border-color-dark: #ccc;
+
+    /* ===== Border Radius ===== */
+    --border-radius-xs: 3px;
+    --border-radius-sm: 5px;
+    --border-radius-md: 8px;
+    --border-radius-lg: 10px;
+
+    /* ===== Shadows ===== */
+    --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.1);
+    --shadow-sm: 0 2px 5px rgba(0, 0, 0, 0.2);
+    --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.2);
+    --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.4);
+    --shadow-primary: 0 4px 8px rgba(102, 126, 234, 0.3);
+    --shadow-primary-dark: 0 4px 8px rgba(118, 75, 162, 0.3);
+    --shadow-primary-ring: 0 0 0 3px rgba(118, 75, 162, 0.3);
+
+    /* ===== Transitions ===== */
+    --transition-fast: 0.2s ease;
+    --transition-normal: 0.3s ease;
+
+    /* ===== Spacing ===== */
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 15px;
+    --spacing-lg: 20px;
+    --spacing-xl: 25px;
+
+    /* ===== Grid Background ===== */
+    --grid-line-color: #f0f0f0;
+    --grid-size: 50px;
+
+    /* ===== Truth Table Colors ===== */
+    --tt-input-bg: rgba(102, 126, 234, 0.05);
+    --tt-output-bg: rgba(118, 75, 162, 0.05);
+    --tt-group-input-bg: #5568d3;
+    --tt-group-output-bg: #764ba2;
+    --tt-group-border: #4554b8;
+
+    /* ===== Alert Pastel Colors ===== */
+    --alert-success-pastel: #a5d6a7;
+    --alert-error-pastel: #ef9a9a;
+    --alert-warning-pastel: #ffcc80;
+    --alert-info-pastel: #90caf9;
+}

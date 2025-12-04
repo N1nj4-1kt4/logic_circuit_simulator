@@ -1,0 +1,374 @@
+/* ===== Dark Mode Styles ===== */
+/* Logic Circuit Simulator - Dark Theme Overrides */
+
+/* ===== Dark Mode Variables ===== */
+/* Note: Some components use [data-theme="dark"], others use body.dark-mode
+   We support both selectors for backwards compatibility */
+
+/* ===== Body & Containers ===== */
+body.dark-mode {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+}
+
+body.dark-mode .toolbar,
+body.dark-mode .canvas-container,
+body.dark-mode .truth-table-panel,
+body.dark-mode .dialog-panel {
+    background: #0f3460;
+    color: #e9e9e9;
+}
+
+/* ===== Canvas ===== */
+body.dark-mode .canvas-header,
+body.dark-mode .canvas-footer {
+    background: #16213e;
+    color: #e9e9e9;
+}
+
+body.dark-mode .circuit-name {
+    color: #53a8f4;
+}
+
+body.dark-mode #breadboard {
+    background:
+        repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 49px,
+            #1a1a2e 49px,
+            #1a1a2e 50px
+        ),
+        repeating-linear-gradient(
+            90deg,
+            transparent,
+            transparent 49px,
+            #1a1a2e 49px,
+            #1a1a2e 50px
+        );
+    background-color: #16213e;
+    border-color: #1a1a2e;
+}
+
+/* ===== Toolbar ===== */
+body.dark-mode .tool-section h4,
+body.dark-mode .info-panel h4,
+body.dark-mode h3 {
+    color: #53a8f4;
+}
+
+body.dark-mode .info-panel {
+    background: #1a1a2e;
+    color: #b3b3b3;
+}
+
+body.dark-mode .info-panel ul {
+    color: #b3b3b3;
+}
+
+body.dark-mode .custom-dropdown {
+    background: #1a1a2e;
+    border-color: #53a8f4;
+    color: #e9e9e9;
+}
+
+body.dark-mode .custom-dropdown option {
+    background: #1a1a2e;
+    color: #e9e9e9;
+}
+
+body.dark-mode .gate-btn svg,
+body.dark-mode .tool-btn svg {
+    color: #53a8f4;
+}
+
+body.dark-mode .gate-btn.selected svg,
+body.dark-mode .tool-btn.selected svg {
+    color: white;
+}
+
+body.dark-mode .action-btn.active {
+    background: #764ba2;
+    color: white;
+    box-shadow: 0 0 0 3px rgba(118, 75, 162, 0.5);
+}
+
+/* ===== Simulation Stepper (uses data-theme) ===== */
+[data-theme="dark"] .step-btn {
+    background: #2a2a3e;
+    border-color: #9b7dc4;
+    color: #9b7dc4;
+}
+
+[data-theme="dark"] .step-btn:hover {
+    background: #9b7dc4;
+    color: #2a2a3e;
+}
+
+[data-theme="dark"] .step-btn:disabled:hover {
+    background: #2a2a3e;
+    color: #9b7dc4;
+}
+
+/* Also support body.dark-mode for consistency */
+body.dark-mode .step-btn {
+    background: #2a2a3e;
+    border-color: #9b7dc4;
+    color: #9b7dc4;
+}
+
+body.dark-mode .step-btn:hover {
+    background: #9b7dc4;
+    color: #2a2a3e;
+}
+
+body.dark-mode .step-btn:disabled:hover {
+    background: #2a2a3e;
+    color: #9b7dc4;
+}
+
+/* ===== Board Management ===== */
+body.dark-mode .current-board-info {
+    background: #1a1a2e;
+}
+
+body.dark-mode .current-board-info small {
+    color: #b3b3b3;
+}
+
+body.dark-mode .current-board-info span {
+    color: #53a8f4;
+}
+
+/* ===== Components Library ===== */
+body.dark-mode .library-item {
+    background: #1a1a2e;
+    border-color: #53a8f4;
+}
+
+body.dark-mode .library-item-name {
+    color: #53a8f4;
+}
+
+body.dark-mode .library-item-description,
+body.dark-mode .library-item-info {
+    color: #b3b3b3;
+}
+
+body.dark-mode .export-component-item {
+    background: #1a1a2e;
+    border-color: #53a8f4;
+    color: #e0e0e0;
+}
+
+body.dark-mode .export-component-item:hover {
+    background: #667eea;
+    border-color: #667eea;
+    color: white;
+}
+
+body.dark-mode .export-component-item-info {
+    color: #b3b3b3;
+}
+
+/* ===== Dialogs ===== */
+body.dark-mode .panel-header h3,
+body.dark-mode .dialog-content p {
+    color: #e9e9e9;
+}
+
+body.dark-mode .dialog-close-btn {
+    color: #888;
+}
+
+body.dark-mode .dialog-close-btn:hover {
+    background: rgba(244, 67, 54, 0.2);
+    color: #ff6b6b;
+}
+
+body.dark-mode .form-group label {
+    color: #b3b3b3;
+}
+
+body.dark-mode .form-group input[type="text"],
+body.dark-mode .form-group textarea {
+    background: #1a1a2e;
+    border-color: #53a8f4;
+    color: #e9e9e9;
+}
+
+body.dark-mode .info-box {
+    background: #1a1a2e;
+    border-left-color: #53a8f4;
+    color: #b3b3b3;
+}
+
+/* ===== Help Dialog ===== */
+body.dark-mode .help-content h4 {
+    color: #53a8f4;
+    border-bottom-color: #16213e;
+}
+
+body.dark-mode kbd {
+    background: #16213e;
+    border-color: #1a1a2e;
+    color: #e9e9e9;
+}
+
+/* ===== Save Options Dialog ===== */
+body.dark-mode .save-option-btn {
+    background: #0f3460;
+    border-color: #53a8f4;
+}
+
+body.dark-mode .save-option-btn:hover {
+    background: #16213e;
+}
+
+body.dark-mode .save-option-btn.discard-btn {
+    border-color: #f44336;
+}
+
+body.dark-mode .save-option-btn.discard-btn:hover {
+    background: #2d1414;
+}
+
+body.dark-mode .option-title {
+    color: #53a8f4;
+}
+
+body.dark-mode .save-option-btn.discard-btn .option-title {
+    color: #ff6b6b;
+}
+
+body.dark-mode .option-desc {
+    color: #b3b3b3;
+}
+
+/* ===== Alert & Confirm Dialogs ===== */
+body.dark-mode .alert-message,
+body.dark-mode .confirm-message {
+    color: #e9e9e9;
+}
+
+body.dark-mode .alert-dialog,
+body.dark-mode .confirm-dialog {
+    background: #0f3460;
+}
+
+body.dark-mode .secondary-btn {
+    background: #1a1a2e;
+    color: #e9e9e9;
+    border-color: #53a8f4;
+}
+
+body.dark-mode .secondary-btn:hover {
+    background: #16213e;
+    border-color: #667eea;
+}
+
+/* ===== Truth Table (Native) ===== */
+body.dark-mode #truthTableContent th {
+    background: #53a8f4;
+    color: #0f3460;
+    border-color: #1a1a2e;
+}
+
+body.dark-mode #truthTableContent td {
+    border-color: #1a1a2e;
+}
+
+body.dark-mode #truthTableContent .group-header th {
+    background: #3d8fd1;
+    color: #0f3460;
+    border-color: #2c7ab8;
+}
+
+body.dark-mode #truthTableContent .group-header .group-output {
+    background: #9b59b6;
+    color: white;
+}
+
+body.dark-mode #truthTableContent .column-header th:hover {
+    background: #3d8fd1;
+}
+
+body.dark-mode #truthTableContent .column-header th.drag-over {
+    background: #2e7d32;
+    color: white;
+}
+
+body.dark-mode #truthTableContent .column-header th.drag-forbidden {
+    background: #c62828;
+    color: white;
+}
+
+body.dark-mode #truthTableContent tbody tr:nth-child(even) {
+    background: #1a1a2e;
+}
+
+body.dark-mode #truthTableContent tbody tr:hover {
+    background: #16213e;
+}
+
+body.dark-mode #truthTableContent tr.truth-table-active {
+    background: #2e7d32 !important;
+    color: white;
+}
+
+body.dark-mode #truthTableContent tr.truth-table-active td {
+    border-color: #1b5e20;
+}
+
+body.dark-mode #truthTableContent .input-cell {
+    background: rgba(83, 168, 244, 0.1);
+}
+
+body.dark-mode #truthTableContent .output-cell {
+    background: rgba(155, 89, 182, 0.1);
+}
+
+/* ===== Truth Table - Tabulator Overrides ===== */
+body.dark-mode .truth-table-panel .tabulator {
+    background: #1a1a2e;
+    color: #e9e9e9;
+    width: 100%;
+}
+
+body.dark-mode .truth-table-panel .tabulator-header {
+    background: #2a2a3e;
+    border-bottom-color: #53a8f4;
+}
+
+body.dark-mode .truth-table-panel .tabulator-col {
+    background: #2a2a3e;
+    color: #e9e9e9;
+    border-right-color: #444;
+}
+
+body.dark-mode .truth-table-panel .tabulator-col-content {
+    text-align: center;
+    justify-content: center;
+}
+
+body.dark-mode .truth-table-panel .tabulator-row {
+    background: #1a1a2e;
+    color: #e9e9e9;
+}
+
+body.dark-mode .truth-table-panel .tabulator-row.tabulator-selected {
+    background-color: rgba(46, 125, 50, 0.4) !important;
+}
+
+body.dark-mode .truth-table-panel .tabulator-cell {
+    border-right-color: #444;
+    text-align: center;
+    vertical-align: middle;
+}
+
+body.dark-mode .truth-table-panel .input-cell {
+    background-color: rgba(83, 168, 244, 0.15);
+}
+
+body.dark-mode .truth-table-panel .output-cell {
+    background-color: rgba(155, 89, 182, 0.15);
+}

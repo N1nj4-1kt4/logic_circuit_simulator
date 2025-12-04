@@ -333,7 +333,7 @@ export class DialogManager {
                 </div>
                 ${component.description ? `<div class="library-item-description">${component.description}</div>` : ''}
                 <div class="library-item-info">
-                    ${component.inputPorts.length} input(s), ${component.outputPorts.length} output(s) • Created: ${date}
+                    ${component.inputPorts?.length || 0} input(s), ${component.outputPorts?.length || 0} output(s) • Created: ${date}
                 </div>
                 <div class="library-item-actions">
                     <button class="edit-btn" data-name="${name}">Edit</button>
@@ -591,10 +591,10 @@ export class DialogManager {
         const currentBoardNameSpan = document.getElementById('currentBoardNameInDialog');
 
         if (currentBoardName) {
-            saveAsCurrentBoardBtn.style.display = 'block';
+            saveAsCurrentBoardBtn.classList.remove('hidden');
             currentBoardNameSpan.textContent = currentBoardName;
         } else {
-            saveAsCurrentBoardBtn.style.display = 'none';
+            saveAsCurrentBoardBtn.classList.add('hidden');
         }
 
         DialogFactory.showDialog(this.dialogs.saveOptions);
@@ -805,7 +805,7 @@ export class DialogManager {
 
             const infoDiv = document.createElement('div');
             infoDiv.className = 'export-component-item-info';
-            infoDiv.textContent = `${component.inputPorts.length} inputs, ${component.outputPorts.length} outputs`;
+            infoDiv.textContent = `${component.inputPorts?.length || 0} inputs, ${component.outputPorts?.length || 0} outputs`;
 
             item.appendChild(nameDiv);
             item.appendChild(infoDiv);

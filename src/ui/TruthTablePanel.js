@@ -134,9 +134,10 @@ export class TruthTablePanel {
         }
 
         // Check if panel was already visible BEFORE we show it
-        const wasVisible = this.panel.style.display !== 'none';
+        // Support both .hidden class and inline style for backwards compatibility
+        const wasVisible = !this.panel.classList.contains('hidden') && this.panel.style.display !== 'none';
         console.log('👁️ wasVisible (before showing):', wasVisible);
-        console.log('📏 Panel display style:', this.panel.style.display);
+        console.log('📏 Panel has hidden class:', this.panel.classList.contains('hidden'));
 
         // If table already exists, destroy it before creating a new one
         if (this.table) {
@@ -177,10 +178,11 @@ export class TruthTablePanel {
             }
         }
 
-        // Show panel first (change from display: none to display: block)
-        console.log('👁️ Setting panel display to block...');
+        // Show panel first (remove hidden class and ensure display is block)
+        console.log('👁️ Removing hidden class and setting display to block...');
+        this.panel.classList.remove('hidden');
         this.panel.style.display = 'block';
-        console.log('✅ Panel display set to block');
+        console.log('✅ Panel display set to block, hidden class removed');
 
         // Panel in layout but invisible during construction (Tabulator can measure)
         console.log('👀 Setting panel opacity to 0 and pointer-events to auto...');
@@ -631,6 +633,7 @@ export class TruthTablePanel {
             console.log('🙈 Hiding panel...');
             this.panel.style.opacity = '0';
             this.panel.style.pointerEvents = 'none';
+            this.panel.classList.add('hidden');
             this.panel.style.display = 'none';
             console.log('💾 Saving state...');
             this.saveState();

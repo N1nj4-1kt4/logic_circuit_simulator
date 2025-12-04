@@ -1,0 +1,27 @@
+/* ===== Main CSS Entry Point ===== */
+/* Logic Circuit Simulator - CSS Module Imports */
+/* Phase 8 Refactoring: Modular CSS Architecture */
+
+/*
+ * Import Order Matters!
+ * 1. Variables must come first (defines CSS custom properties)
+ * 2. Base styles (reset, body, container)
+ * 3. Utilities (helper classes like .hidden, .icon-lg)
+ * 4. Component styles (toolbar, canvas, etc.)
+ * 5. Dark mode (theme overrides) comes last
+ */
+
+/* Core */
+@import './variables.css';
+@import './base.css';
+@import './utilities.css';
+
+/* Component Styles */
+@import './toolbar.css';
+@import './canvas.css';
+@import './components.css';
+@import './dialogs.css';
+@import './truth-table.css';
+
+/* Theme */
+@import './dark-mode.css';

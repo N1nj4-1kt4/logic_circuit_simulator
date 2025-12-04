@@ -1,0 +1,209 @@
+/* ===== Truth Table Styles ===== */
+/* Logic Circuit Simulator - Truth Table Panel and Tabulator Overrides */
+
+/* ===== Truth Table Panel ===== */
+.truth-table-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--bg-white);
+    border-radius: var(--border-radius-lg);
+    padding: var(--spacing-lg);
+    box-shadow: var(--shadow-lg);
+    max-width: 90%;
+    max-height: 90vh;
+    overflow: hidden;
+    z-index: 1000;
+    min-width: 200px;
+    min-height: 150px;
+    display: flex;
+    flex-direction: column;
+    touch-action: none;
+}
+
+#truthTableContent {
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+    width: 100%;
+    height: 100%;
+}
+
+/* ===== Truth Table Close Button ===== */
+#closeTruthTable {
+    padding: 8px 16px;
+    background: var(--color-danger);
+    color: var(--text-white);
+    border: none;
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    font-weight: 600;
+}
+
+#closeTruthTable:hover {
+    background: var(--color-danger-hover);
+}
+
+/* ===== Native Table Styles (Fallback) ===== */
+#truthTableContent table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    table-layout: fixed;
+}
+
+#truthTableContent th,
+#truthTableContent td {
+    border: 1px solid var(--border-color);
+    padding: 8px 6px;
+    text-align: center;
+    min-width: 60px;
+    width: auto;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    height: 36px;
+    max-height: 36px;
+    line-height: 1.3;
+}
+
+#truthTableContent th {
+    background: var(--color-primary);
+    color: var(--text-white);
+    font-weight: 600;
+    height: 40px;
+    max-height: 40px;
+}
+
+/* Group header row (Inputs/Outputs) */
+#truthTableContent .group-header th {
+    background: var(--tt-group-input-bg);
+    font-size: 14px;
+    font-weight: 700;
+    padding: 10px 8px;
+    border: 2px solid var(--tt-group-border);
+}
+
+#truthTableContent .group-header .group-input {
+    background: var(--tt-group-input-bg);
+}
+
+#truthTableContent .group-header .group-output {
+    background: var(--tt-group-output-bg);
+}
+
+/* Column header row (draggable individual columns) */
+#truthTableContent .column-header th {
+    background: var(--color-primary);
+    padding: 8px 6px;
+    font-size: 12px;
+    cursor: grab;
+    user-select: none;
+    position: relative;
+}
+
+#truthTableContent .column-header th.dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+}
+
+#truthTableContent .column-header th.drag-over {
+    background: var(--color-success);
+    transform: scale(1.05);
+    transition: all var(--transition-fast);
+}
+
+#truthTableContent .column-header th.drag-forbidden {
+    background: var(--color-danger);
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+#truthTableContent .column-header th:hover {
+    background: var(--color-primary-hover);
+}
+
+#truthTableContent .column-header .col-label {
+    display: block;
+    line-height: 1.3;
+    word-break: break-word;
+}
+
+/* Data rows */
+#truthTableContent tbody tr:nth-child(even) {
+    background: var(--bg-lighter);
+}
+
+#truthTableContent tbody tr:hover {
+    background: var(--bg-light);
+}
+
+#truthTableContent tr.truth-table-active {
+    background: var(--color-success) !important;
+    color: var(--text-white);
+    font-weight: bold;
+}
+
+#truthTableContent tr.truth-table-active td {
+    border-color: var(--color-success-dark);
+}
+
+/* Cell styling */
+#truthTableContent .input-cell {
+    background: var(--tt-input-bg);
+}
+
+#truthTableContent .output-cell {
+    background: var(--tt-output-bg);
+}
+
+#truthTableContent tr.truth-table-active .input-cell,
+#truthTableContent tr.truth-table-active .output-cell {
+    background: transparent;
+}
+
+/* ===== Tabulator Overrides ===== */
+.truth-table-panel .tabulator {
+    border: none;
+    font-size: 14px;
+    background: transparent;
+    width: 100%;
+}
+
+.truth-table-panel .tabulator-header {
+    background: #f5f7fa;
+    border-bottom: 2px solid var(--color-primary);
+}
+
+.truth-table-panel .tabulator-col {
+    background: #f5f7fa;
+}
+
+.truth-table-panel .tabulator-col-content {
+    padding: 8px;
+    text-align: center;
+    justify-content: center;
+}
+
+.truth-table-panel .tabulator-row.tabulator-selected {
+    background-color: var(--color-success-light) !important;
+}
+
+.truth-table-panel .tabulator-row.tabulator-selected:hover {
+    background-color: rgba(76, 175, 80, 0.3) !important;
+}
+
+.truth-table-panel .tabulator-cell {
+    border-right: 1px solid var(--border-color);
+    text-align: center;
+    padding: 6px;
+    vertical-align: middle;
+}
+
+.truth-table-panel .input-cell {
+    background-color: #e3f2fd;
+}
+
+.truth-table-panel .output-cell {
+    background-color: #fff3e0;
+}

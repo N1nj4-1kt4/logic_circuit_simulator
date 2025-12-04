@@ -1,0 +1,85 @@
+/* ===== Base Styles ===== */
+/* Logic Circuit Simulator - Reset, Body, Container, Scrollbar */
+
+/* ===== Reset ===== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* ===== Body ===== */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, var(--bg-body-start) 0%, var(--bg-body-end) 100%);
+    height: 100vh;
+    padding: 2px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ===== Container ===== */
+.container {
+    max-width: 1600px;
+    width: 100%;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* ===== Header ===== */
+header {
+    text-align: center;
+    color: var(--text-white);
+    margin-bottom: 15px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+header h1 {
+    font-size: 2.25em;
+    margin-bottom: 10px;
+}
+
+header p {
+    font-size: 1.2em;
+    opacity: 0.9;
+}
+
+/* ===== Main Content ===== */
+.main-content {
+    display: flex;
+    gap: 10px;
+    position: relative;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* ===== Scrollbar Styling ===== */
+.toolbar::-webkit-scrollbar,
+.truth-table-panel::-webkit-scrollbar,
+.dialog-panel::-webkit-scrollbar {
+    width: 8px;
+}
+
+.toolbar::-webkit-scrollbar-track,
+.truth-table-panel::-webkit-scrollbar-track,
+.dialog-panel::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: var(--border-radius-lg);
+}
+
+.toolbar::-webkit-scrollbar-thumb,
+.truth-table-panel::-webkit-scrollbar-thumb,
+.dialog-panel::-webkit-scrollbar-thumb {
+    background: var(--color-primary);
+    border-radius: var(--border-radius-lg);
+}
+
+.toolbar::-webkit-scrollbar-thumb:hover,
+.truth-table-panel::-webkit-scrollbar-thumb:hover,
+.dialog-panel::-webkit-scrollbar-thumb:hover {
+    background: var(--color-primary-dark);
+}

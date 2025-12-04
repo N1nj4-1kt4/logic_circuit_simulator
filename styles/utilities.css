@@ -1,0 +1,74 @@
+/* ===== Utility Classes ===== */
+/* Logic Circuit Simulator - Common Utility Patterns */
+
+/* ===== Visibility ===== */
+.hidden {
+    display: none !important;
+}
+
+.invisible {
+    visibility: hidden;
+}
+
+/* ===== Icon Sizes ===== */
+.icon-lg {
+    font-size: 20px;
+}
+
+.icon-md {
+    font-size: 16px;
+}
+
+.icon-sm {
+    font-size: 12px;
+}
+
+/* ===== Label Styles ===== */
+.label-sm {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* ===== Spacing Utilities ===== */
+.mt-8 {
+    margin-top: 8px;
+}
+
+.mt-10 {
+    margin-top: 10px;
+}
+
+.mt-15 {
+    margin-top: 15px;
+}
+
+.mt-20 {
+    margin-top: 20px;
+}
+
+.mb-8 {
+    margin-bottom: 8px;
+}
+
+.mb-10 {
+    margin-bottom: 10px;
+}
+
+/* ===== Animations ===== */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+.fade-in {
+    animation: fadeIn var(--transition-fast);
+}
+
+.fade-out {
+    animation: fadeOut var(--transition-fast);
+}

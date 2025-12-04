@@ -454,11 +454,11 @@ export class Toolbar {
         const componentNames = Object.keys(customComponents);
 
         if (componentNames.length === 0) {
-            this.elements.customComponentsSection.style.display = 'none';
+            this.elements.customComponentsSection.classList.add('hidden');
             return;
         }
 
-        this.elements.customComponentsSection.style.display = 'block';
+        this.elements.customComponentsSection.classList.remove('hidden');
 
         // Clear existing options except the first one
         this.elements.customComponentsDropdown.innerHTML = '<option value="">Select a component...</option>';
@@ -483,11 +483,11 @@ export class Toolbar {
         const boardNames = Object.keys(savedBoards);
 
         if (boardNames.length === 0) {
-            this.elements.savedBoardsSection.style.display = 'none';
+            this.elements.savedBoardsSection.classList.add('hidden');
             return;
         }
 
-        this.elements.savedBoardsSection.style.display = 'block';
+        this.elements.savedBoardsSection.classList.remove('hidden');
         this.elements.savedBoardsDropdown.innerHTML = '<option value="">Select a board...</option>';
 
         // Sort all boards alphabetically

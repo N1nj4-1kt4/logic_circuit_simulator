@@ -1,0 +1,269 @@
+/* ===== Toolbar Styles ===== */
+/* Logic Circuit Simulator - Toolbar, Buttons, Stepper Controls */
+
+/* ===== Toolbar Container ===== */
+.toolbar {
+    background: var(--bg-white);
+    border-radius: var(--border-radius-lg);
+    padding: var(--spacing-lg);
+    width: 225px;
+    box-shadow: var(--shadow-md);
+    max-height: 85vh;
+    overflow-y: auto;
+}
+
+.toolbar h3 {
+    color: var(--color-primary);
+    margin-bottom: var(--spacing-lg);
+    font-size: 1.5em;
+}
+
+/* ===== Tool Sections ===== */
+.tool-section {
+    margin-bottom: var(--spacing-xl);
+}
+
+.tool-section h4 {
+    color: var(--text-primary);
+    margin-bottom: 10px;
+    font-size: 1em;
+    border-bottom: 2px solid var(--color-primary);
+    padding-bottom: 5px;
+}
+
+/* ===== Tool & Action Buttons ===== */
+.tool-btn,
+.action-btn {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 8px;
+    border: 2px solid var(--color-primary);
+    background: var(--bg-white);
+    color: var(--color-primary);
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    font-size: 0.95em;
+    font-weight: 600;
+    transition: all var(--transition-normal);
+}
+
+.tool-btn:hover,
+.action-btn:hover {
+    background: var(--color-primary);
+    color: var(--text-white);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-primary);
+}
+
+.tool-btn.selected {
+    background: var(--color-primary);
+    color: var(--text-white);
+}
+
+.action-btn {
+    border-color: var(--color-primary-dark);
+    color: var(--color-primary-dark);
+}
+
+.action-btn:hover {
+    background: var(--color-primary-dark);
+    color: var(--text-white);
+}
+
+.action-btn.active {
+    background: var(--color-primary-dark);
+    color: var(--text-white);
+    box-shadow: var(--shadow-primary-ring);
+}
+
+/* ===== Grid Layouts ===== */
+.gate-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 0;
+}
+
+.gate-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 4px;
+    min-height: 70px;
+}
+
+.gate-btn svg {
+    flex-shrink: 0;
+}
+
+.gate-btn span {
+    font-size: 0.85em;
+}
+
+.io-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 0;
+}
+
+.io-grid .tool-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 10px 4px;
+}
+
+/* ===== Simulation Stepper Controls ===== */
+.simulation-stepper {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.step-btn {
+    flex: 1;
+    height: 40px;
+    padding: 0 10px;
+    border: 2px solid var(--color-primary-dark);
+    background: var(--bg-white);
+    color: var(--color-primary-dark);
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-normal);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 0.9em;
+    font-weight: 500;
+}
+
+.step-btn svg {
+    width: 16px;
+    height: 16px;
+    transition: transform var(--transition-fast);
+}
+
+.step-btn:hover {
+    background: var(--color-primary-dark);
+    color: var(--text-white);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-primary-dark);
+}
+
+.step-btn:hover svg {
+    transform: scale(1.1);
+}
+
+.step-btn:active {
+    transform: translateY(0px);
+}
+
+.step-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.step-btn:disabled:hover {
+    background: var(--bg-white);
+    color: var(--color-primary-dark);
+    box-shadow: none;
+}
+
+/* ===== Custom Components Dropdown ===== */
+.custom-dropdown {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 8px;
+    border: 2px solid var(--color-primary);
+    background: var(--bg-white);
+    color: var(--color-primary);
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    font-size: 0.95em;
+    font-weight: 600;
+    transition: all var(--transition-normal);
+}
+
+.custom-dropdown:hover {
+    border-color: var(--color-primary-dark);
+    box-shadow: 0 2px 5px rgba(102, 126, 234, 0.2);
+}
+
+/* ===== Special Action Buttons ===== */
+.action-btn#simulate {
+    background: var(--color-success);
+    color: var(--text-white);
+    border-color: var(--color-success);
+}
+
+.action-btn#simulate:hover {
+    background: var(--color-success-hover);
+}
+
+.action-btn#truthTable {
+    background: var(--color-warning);
+    color: var(--text-white);
+    border-color: var(--color-warning);
+}
+
+.action-btn#truthTable:hover {
+    background: var(--color-warning-hover);
+}
+
+.action-btn#clearBoard {
+    background: var(--color-danger);
+    color: var(--text-white);
+    border-color: var(--color-danger);
+}
+
+.action-btn#clearBoard:hover {
+    background: var(--color-danger-hover);
+}
+
+/* ===== Info Panel ===== */
+.info-panel {
+    margin-top: var(--spacing-lg);
+    padding: var(--spacing-md);
+    background: var(--bg-light);
+    border-radius: var(--border-radius-sm);
+    font-size: 0.85em;
+}
+
+.info-panel h4 {
+    color: var(--color-primary);
+    margin-bottom: 10px;
+}
+
+.info-panel ul {
+    list-style-position: inside;
+    color: var(--text-light);
+}
+
+.info-panel li {
+    margin-bottom: 5px;
+}
+
+/* ===== Board Management Styles ===== */
+.current-board-info {
+    padding: 8px;
+    background: var(--bg-light);
+    border-radius: var(--border-radius-sm);
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.current-board-info small {
+    color: var(--text-secondary);
+    font-size: 0.85em;
+}
+
+.current-board-info span {
+    font-weight: 600;
+    color: var(--color-primary);
+}
