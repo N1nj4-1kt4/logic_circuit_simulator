@@ -5,6 +5,7 @@
 
 import { DialogFactory } from './DialogFactory.js';
 import { messages, formatMessage } from './messages.js';
+import { generateNextBoardName } from '../utils/naming.js';
 
 export class DialogManager {
     constructor(callbacks) {
@@ -641,7 +642,9 @@ export class DialogManager {
         saveAsNewBoard?.addEventListener('click', () => {
             this.hideSaveOptionsDialog();
             // Pass the next board name as the default for "Save as New Board"
-            this.promptForBoardName(this.getNextBoardName(), async (boardName) => {
+            const savedBoards = this.callbacks.getSavedBoards();
+            const nextName = generateNextBoardName(Object.keys(savedBoards));
+            this.promptForBoardName(nextName, async (boardName) => {
                 await this.callbacks.onSaveCurrentBoard(boardName);
                 if (this.state.pendingActionAfterSave) {
                     this.state.pendingActionAfterSave();
@@ -704,7 +707,9 @@ export class DialogManager {
 
         // Pre-fill with: explicit default > current board name > next board name
         const currentBoardName = this.callbacks.getCurrentBoardName();
-        input.value = defaultName || currentBoardName || this.getNextBoardName();
+        const savedBoards = this.callbacks.getSavedBoards();
+        const nextBoardName = generateNextBoardName(Object.keys(savedBoards));
+        input.value = defaultName || currentBoardName || nextBoardName;
 
         // Set up the confirm handler dynamically (since onSave changes each time)
         const confirmBtn = document.getElementById('confirmBoardName');
@@ -1043,30 +1048,5 @@ export class DialogManager {
         }
 
         DialogFactory.showDialog(this.dialogs.help);
-    }
-
-    // ==================== Board Name Management ====================
-
-    /**
-     * Get next available board name
-     * @returns {string} Next board name (e.g., "Board01", "Board02", etc.)
-     */
-    getNextBoardName() {
-        const savedBoards = this.callbacks.getSavedBoards();
-        const boardNames = Object.keys(savedBoards);
-
-        // Extract existing board numbers from names like "Board01", "Board02", etc.
-        const existingNumbers = boardNames
-            .filter(name => /^Board\d+$/.test(name))
-            .map(name => parseInt(name.replace('Board', ''), 10))
-            .filter(num => !isNaN(num));
-
-        // Find the highest number and increment
-        const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
-        const nextNumber = maxNumber + 1;
-
-        // Format with zero-padding (at least 2 digits)
-        const paddedNumber = String(nextNumber).padStart(2, '0');
-        return `Board${paddedNumber}`;
     }
 }

@@ -17,6 +17,7 @@ import {
 import { eventBus, EVENT_TYPES } from './src/utils/eventBus.js';
 
 import { findComponentAt, findPortAt, findConnectionAt, snapToGrid } from './src/utils/hitDetection.js';
+import { generateNextBoardName } from './src/utils/naming.js';
 
 import { LocalStorageAdapter } from './src/storage/LocalStorageAdapter.js';
 import { BoardManager } from './src/storage/BoardManager.js';
@@ -715,15 +716,10 @@ class CircuitSimulator {
     }
 
     getNextBoardName() {
-        let counter = 1;
-        let name;
         const savedBoards = this.state.getSavedBoards();
         const customComponents = this.state.getCustomComponents();
-        do {
-            name = `Board${String(counter).padStart(2, '0')}`;
-            counter++;
-        } while (savedBoards[name] || customComponents[name]);
-        return name;
+        const allNames = [...Object.keys(savedBoards), ...Object.keys(customComponents)];
+        return generateNextBoardName(allNames);
     }
 
     getCurrentState() {

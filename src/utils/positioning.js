@@ -3,7 +3,7 @@
  * Handles intelligent panel placement to avoid overlapping with components
  */
 
-import { getComponentsBoundingBox } from './geometry.js';
+import { getComponentsBoundingBox, getComponentDimensions } from './geometry.js';
 
 /**
  * Position a panel smartly to avoid overlapping with components
@@ -56,17 +56,7 @@ export function positionPanelSmartly(panel, canvas, components) {
         // Check overlap with each individual component
         components.forEach(component => {
             const { x, y, type } = component;
-
-            // Use half-widths and half-heights (same as getComponentsBoundingBox)
-            let halfWidth = 25, halfHeight = 20;
-            if (type === 'INPUT' || type === 'OUTPUT') {
-                halfWidth = halfHeight = 20;
-            } else if (type === 'CUSTOM') {
-                halfWidth = halfHeight = 45;
-            } else if (type === 'NOT') {
-                halfWidth = 22.5;
-                halfHeight = 20;
-            }
+            const { halfWidth, halfHeight } = getComponentDimensions(type);
 
             // Component bounds in canvas coordinates
             const compLeft = x - halfWidth;

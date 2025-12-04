@@ -3,6 +3,22 @@
  * Pure functions with no side effects
  */
 
+import { GATE_SIZES } from '../constants.js';
+
+/**
+ * Get component dimensions (half-width and half-height) for a given type
+ * @param {string} type - Component type (AND, OR, NOT, INPUT, OUTPUT, CUSTOM, etc.)
+ * @returns {{halfWidth: number, halfHeight: number}} Component dimensions
+ */
+export function getComponentDimensions(type) {
+    const sizes = GATE_SIZES[type];
+    if (sizes) {
+        return { halfWidth: sizes.halfWidth, halfHeight: sizes.halfHeight };
+    }
+    // Default fallback for unknown types (standard gate size)
+    return { halfWidth: 25, halfHeight: 20 };
+}
+
 /**
  * Calculate distance between two points
  * @param {number} x1
@@ -71,17 +87,7 @@ export function getComponentsBoundingBox(components, canvas) {
 
     components.forEach(component => {
         const { x, y, type } = component;
-
-        // Use half-widths and half-heights
-        let halfWidth = 25, halfHeight = 20; // Default for logic gates
-        if (type === 'INPUT' || type === 'OUTPUT') {
-            halfWidth = halfHeight = 20;
-        } else if (type === 'CUSTOM') {
-            halfWidth = halfHeight = 45;
-        } else if (type === 'NOT') {
-            halfWidth = 22.5;
-            halfHeight = 20;
-        }
+        const { halfWidth, halfHeight } = getComponentDimensions(type);
 
         minX = Math.min(minX, x - halfWidth);
         minY = Math.min(minY, y - halfHeight);

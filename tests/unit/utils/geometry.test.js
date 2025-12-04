@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
+    getComponentDimensions,
     pointDistance,
     distanceToLine,
     getComponentsBoundingBox,
@@ -9,6 +10,80 @@ import {
 } from '../../../src/utils/geometry.js';
 
 describe('Geometry Utils', () => {
+    describe('getComponentDimensions', () => {
+        it('should return correct dimensions for AND gate', () => {
+            const dims = getComponentDimensions('AND');
+            expect(dims.halfWidth).toBe(25);
+            expect(dims.halfHeight).toBe(20);
+        });
+
+        it('should return correct dimensions for OR gate', () => {
+            const dims = getComponentDimensions('OR');
+            expect(dims.halfWidth).toBe(25);
+            expect(dims.halfHeight).toBe(20);
+        });
+
+        it('should return correct dimensions for NOT gate', () => {
+            const dims = getComponentDimensions('NOT');
+            expect(dims.halfWidth).toBe(22.5);
+            expect(dims.halfHeight).toBe(20);
+        });
+
+        it('should return correct dimensions for INPUT', () => {
+            const dims = getComponentDimensions('INPUT');
+            expect(dims.halfWidth).toBe(20);
+            expect(dims.halfHeight).toBe(20);
+        });
+
+        it('should return correct dimensions for OUTPUT', () => {
+            const dims = getComponentDimensions('OUTPUT');
+            expect(dims.halfWidth).toBe(20);
+            expect(dims.halfHeight).toBe(20);
+        });
+
+        it('should return correct dimensions for CUSTOM component', () => {
+            const dims = getComponentDimensions('CUSTOM');
+            expect(dims.halfWidth).toBe(45);
+            expect(dims.halfHeight).toBe(45);
+        });
+
+        it('should return correct dimensions for NAND gate', () => {
+            const dims = getComponentDimensions('NAND');
+            expect(dims.halfWidth).toBe(25);
+            expect(dims.halfHeight).toBe(20);
+        });
+
+        it('should return correct dimensions for NOR gate', () => {
+            const dims = getComponentDimensions('NOR');
+            expect(dims.halfWidth).toBe(25);
+            expect(dims.halfHeight).toBe(20);
+        });
+
+        it('should return correct dimensions for XOR gate', () => {
+            const dims = getComponentDimensions('XOR');
+            expect(dims.halfWidth).toBe(25);
+            expect(dims.halfHeight).toBe(20);
+        });
+
+        it('should return correct dimensions for XNOR gate', () => {
+            const dims = getComponentDimensions('XNOR');
+            expect(dims.halfWidth).toBe(25);
+            expect(dims.halfHeight).toBe(20);
+        });
+
+        it('should return default dimensions for unknown type', () => {
+            const dims = getComponentDimensions('UNKNOWN');
+            expect(dims.halfWidth).toBe(25);
+            expect(dims.halfHeight).toBe(20);
+        });
+
+        it('should return default dimensions for undefined type', () => {
+            const dims = getComponentDimensions(undefined);
+            expect(dims.halfWidth).toBe(25);
+            expect(dims.halfHeight).toBe(20);
+        });
+    });
+
     describe('pointDistance', () => {
         it('should calculate distance between two points', () => {
             expect(pointDistance(0, 0, 3, 4)).toBe(5);

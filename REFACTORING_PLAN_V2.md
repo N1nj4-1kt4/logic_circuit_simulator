@@ -10,16 +10,17 @@
 
 **Current State:**
 - 77% reduction in main file achieved
-- 30 modular source files (added hitDetection.js, errors.js, logger.js)
-- 569 tests passing (~55% coverage by module)
+- 32 modular source files (added hitDetection.js, errors.js, logger.js, naming.js)
+- 591 tests passing (~55% coverage by module)
 - Event bus foundation in place
 - Phase 10.1 completed ✅
 - Phase 10.2 completed ✅
 - Phase 10.3 completed ✅
 - Phase 10.4 completed ✅
+- Phase 10.5 completed ✅
 
 **Remaining Work:**
-- 2 separation of concerns violations (drag state in CircuitState)
+- 1 separation of concerns violation (drag state in CircuitState)
 - ~55% test coverage (critical modules untested)
 - Event bus underutilized
 
@@ -367,43 +368,41 @@ export const UI = {
 
 ---
 
-### Phase 10.5: Remove Duplicate Logic
+### Phase 10.5: Remove Duplicate Logic ✅ COMPLETED
 
 **Goal:** Single source of truth for shared logic
 
-**Timeline:** 30 minutes
+**Status:** ✅ Completed
 
-**Duplicates to Remove:**
+**Files Created:**
+- `src/utils/naming.js` - Pure utility for board name generation:
+  - `generateNextBoardName(existingNames)` - Generates next available board name (Board01, Board02, etc.)
 
-1. **`getNextBoardName()` duplication:**
-   - Keep: `src/storage/BoardManager.js` (lines 217-230)
-   - Remove: `src/ui/DialogManager.js` (lines 947-964)
-   - Update: DialogManager to call `boardManager.getNextBoardName()`
+- `tests/unit/utils/naming.test.js` (10 tests) - Full test coverage for naming utility
 
-2. **Component dimensions duplication:**
-   - Already in: `src/constants.js` as `GATE_SIZES`
-   - Remove duplicates from:
-     - `src/utils/geometry.js` (lines 76-84)
-     - `src/utils/positioning.js` (lines 56-75)
-   - Create helper function:
+**Files Modified:**
+- `src/utils/geometry.js` - Added `getComponentDimensions(type)` helper function
+- `src/utils/positioning.js` - Refactored to use `getComponentDimensions()` instead of inline logic
+- `src/storage/BoardManager.js` - Refactored `getNextBoardName()` to use naming utility
+- `src/ui/DialogManager.js` - Removed duplicate `getNextBoardName()` method (22 lines), now uses naming utility
+- `circuit-simulator.js` - Refactored `getNextBoardName()` to use naming utility
+- `tests/unit/utils/geometry.test.js` - Added 12 tests for `getComponentDimensions()`
 
-```javascript
-// Add to src/utils/geometry.js
-import { GATE_SIZES } from '../constants.js';
+**Duplicates Removed:**
 
-/**
- * Get component dimensions by type
- * @param {string} type - Component type
- * @returns {{width: number, height: number, halfWidth: number, halfHeight: number}}
- */
-export function getComponentDimensions(type) {
-    return GATE_SIZES[type] || GATE_SIZES.CUSTOM;
-}
-```
+1. **`getNextBoardName()` - 3 implementations → 1 utility:**
+   - Removed from: `src/ui/DialogManager.js` (22 lines)
+   - Simplified: `src/storage/BoardManager.js`, `circuit-simulator.js`
+   - Single source: `src/utils/naming.js`
 
-**Success Criteria:**
+2. **Component dimensions - 2 inline implementations → 1 helper:**
+   - Removed inline logic from: `src/utils/geometry.js`, `src/utils/positioning.js`
+   - Single source: `getComponentDimensions()` in `src/utils/geometry.js` using `GATE_SIZES` constants
+
+**Results:**
+- All 591 tests pass (569 original + 22 new)
 - No duplicate function implementations
-- Single source of truth for dimensions
+- Single source of truth for board naming and component dimensions
 
 ---
 
@@ -634,7 +633,7 @@ eventBus.on(EVENT_TYPES.MODE_CHANGED, (mode) => this.handleModeChange(mode));
 | 10.2 Remove UI from Layers | HIGH | 2h | Testability | ✅ Done |
 | 10.3 Constants | MEDIUM | 1-2h | Maintainability | ✅ Done |
 | 10.4 Console Cleanup | HIGH | 1h | Production ready | ✅ Done |
-| 10.5 Remove Duplicates | MEDIUM | 30m | Single source of truth | Pending |
+| 10.5 Remove Duplicates | MEDIUM | 30m | Single source of truth | ✅ Done |
 | 10.6 Move Drag State | MEDIUM | 1h | Clean architecture | Pending |
 | 11.1 CircuitOperations Tests | HIGH | 3-4h | Coverage | Pending |
 | 11.2 Interaction Tests | MEDIUM | 2h | Coverage | Pending |

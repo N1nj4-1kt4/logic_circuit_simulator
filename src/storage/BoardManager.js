@@ -3,6 +3,7 @@
  * Handles saving, loading, listing, and deleting circuit boards
  */
 import { STORAGE_KEYS } from '../constants.js';
+import { generateNextBoardName } from '../utils/naming.js';
 
 export class BoardManager {
     /**
@@ -196,15 +197,6 @@ export class BoardManager {
     async getNextBoardName(existingNames = []) {
         const boards = await this.getAllBoards();
         const allNames = [...Object.keys(boards), ...existingNames];
-
-        let counter = 1;
-        let name;
-
-        do {
-            name = `Board${String(counter).padStart(2, '0')}`;
-            counter++;
-        } while (allNames.includes(name));
-
-        return name;
+        return generateNextBoardName(allNames);
     }
 }
