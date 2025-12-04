@@ -410,7 +410,7 @@ class CircuitSimulator {
                         type: 'warning',
                         onConfirm: () => {
                             // Stop simulation and reset inputs (but don't simulate yet)
-                            this.operations.stopAndResetSimulation();
+                            this.operations.resetSimulation({ skipSimulate: true });
                             // Delete the component
                             this.operations.handleDelete(x, y, (x, y) => this.findConnection(x, y));
                             // Now simulate to update component values after deletion

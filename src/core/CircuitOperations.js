@@ -340,10 +340,48 @@ export class CircuitOperations {
             this.state.setAutoCycleTimeout(null);
         }
 
-        // Emit simulation state change
+        // Emit simulation state change with complete payload
         eventBus.emit(EVENT_TYPES.SIMULATION_STATE_CHANGED, {
-            isRunning: false
+            isRunning: false,
+            currentIndex: this.state.getCurrentCycleIndex(),
+            totalCombinations: this.state.getTotalCombinations()
         });
+    }
+
+    /**
+     * Restore component values from cache or fall back to simulation
+     * @private
+     * @param {number} cycleIndex - Current cycle index to look up in cache
+     * @param {Array} components - Array of components to update
+     * @returns {boolean} True if cache was used, false if simulation fallback was used
+     */
+    _restoreFromCacheOrSimulate(cycleIndex, components) {
+        const cache = this.state.getTruthTableCache();
+        if (cache && cache.isValid && cache.table && cache.table[cycleIndex]) {
+            const row = cache.table[cycleIndex];
+
+            // Restore ALL component values from cache (not just inputs/outputs)
+            // This ensures wire colors are correct for all connections
+            if (row.componentValues) {
+                components.forEach(comp => {
+                    const cached = row.componentValues[comp.id];
+                    if (cached) {
+                        comp.value = cached.value;
+                        if (cached.outputValues) {
+                            comp.outputValues = [...cached.outputValues];
+                        }
+                    }
+                });
+            }
+
+            eventBus.emit(EVENT_TYPES.CANVAS_REDRAW);
+            eventBus.emit(EVENT_TYPES.TRUTH_TABLE_UPDATE_HIGHLIGHT);
+            return true;
+        } else {
+            // Fallback to full simulation if cache not available
+            this.simulate();
+            return false;
+        }
     }
 
     /**
@@ -365,7 +403,7 @@ export class CircuitOperations {
             // Convert current input values to the equivalent index in the new space
             // New inputs default to 0, removed inputs are ignored
             let newIndex = 0;
-            inputs.forEach((input, index) => {
+            inputs.forEach(input => {
                 const bitValue = input.value || 0;
                 newIndex = (newIndex << 1) | bitValue;
             });
@@ -389,32 +427,8 @@ export class CircuitOperations {
             input.value = bitValue;
         });
 
-        // Try to use cached truth table for output lookup
-        const cache = this.state.getTruthTableCache();
-        if (cache && cache.isValid && cache.table && cache.table[currentCycleIndex]) {
-            const row = cache.table[currentCycleIndex];
-
-            // Restore ALL component values from cache (not just inputs/outputs)
-            // This ensures wire colors are correct for all connections
-            // For invalid circuits, disconnected components will have null values (gray)
-            if (row.componentValues) {
-                components.forEach(comp => {
-                    const cached = row.componentValues[comp.id];
-                    if (cached) {
-                        comp.value = cached.value;
-                        if (cached.outputValues) {
-                            comp.outputValues = [...cached.outputValues];
-                        }
-                    }
-                });
-            }
-
-            eventBus.emit(EVENT_TYPES.CANVAS_REDRAW);
-            eventBus.emit(EVENT_TYPES.TRUTH_TABLE_UPDATE_HIGHLIGHT);
-        } else {
-            // Fallback to full simulation if cache not available
-            this.simulate();
-        }
+        // Restore component values from cache or simulate
+        this._restoreFromCacheOrSimulate(currentCycleIndex, components);
 
         // Emit simulation state change with current progress (before incrementing)
         eventBus.emit(EVENT_TYPES.SIMULATION_STATE_CHANGED, {
@@ -482,31 +496,8 @@ export class CircuitOperations {
             input.value = bitValue;
         });
 
-        // Try to use cached truth table for output lookup
-        const cache = this.state.getTruthTableCache();
-        if (cache && cache.isValid && cache.table && cache.table[currentCycleIndex]) {
-            const row = cache.table[currentCycleIndex];
-
-            // Restore ALL component values from cache (not just inputs/outputs)
-            // This ensures wire colors are correct for all connections
-            if (row.componentValues) {
-                components.forEach(comp => {
-                    const cached = row.componentValues[comp.id];
-                    if (cached) {
-                        comp.value = cached.value;
-                        if (cached.outputValues) {
-                            comp.outputValues = [...cached.outputValues];
-                        }
-                    }
-                });
-            }
-
-            eventBus.emit(EVENT_TYPES.CANVAS_REDRAW);
-            eventBus.emit(EVENT_TYPES.TRUTH_TABLE_UPDATE_HIGHLIGHT);
-        } else {
-            // Fallback to full simulation if cache not available
-            this.simulate();
-        }
+        // Restore component values from cache or simulate
+        this._restoreFromCacheOrSimulate(currentCycleIndex, components);
 
         // Emit simulation state change with current progress
         eventBus.emit(EVENT_TYPES.SIMULATION_STATE_CHANGED, {
@@ -518,18 +509,21 @@ export class CircuitOperations {
 
     /**
      * Reset simulation to initial state (all inputs to 0)
+     * @param {Object} options - Optional configuration
+     * @param {boolean} options.skipSimulate - If true, don't run simulation after reset (caller will handle it)
      */
-    resetSimulation() {
+    resetSimulation(options = {}) {
+        const { skipSimulate = false } = options;
         const components = this.state.getComponents();
         const inputs = components.filter(c => c.type === 'INPUT');
-
-        if (inputs.length === 0) {
-            return;
-        }
 
         // Stop auto-cycle if running
         if (this.state.isAutoCyclingActive()) {
             this.stopAutoCycle();
+        }
+
+        if (inputs.length === 0) {
+            return;
         }
 
         // Reset all inputs to 0
@@ -542,46 +536,12 @@ export class CircuitOperations {
         const totalCombinations = Math.pow(2, inputs.length);
         this.state.setTotalCombinations(totalCombinations);
 
-        // Simulate circuit
-        this.simulate();
+        // Simulate circuit (unless caller will do it after modifications)
+        if (!skipSimulate) {
+            this.simulate();
+        }
 
         // Emit simulation state change
-        eventBus.emit(EVENT_TYPES.SIMULATION_STATE_CHANGED, {
-            isRunning: false,
-            currentIndex: 0,
-            totalCombinations: totalCombinations
-        });
-    }
-
-    /**
-     * Stop simulation and reset inputs to 0, but don't re-simulate.
-     * Used when we need to delete a component after stopping simulation,
-     * then simulate once after the deletion.
-     */
-    stopAndResetSimulation() {
-        const components = this.state.getComponents();
-        const inputs = components.filter(c => c.type === 'INPUT');
-
-        // Stop auto-cycle if running
-        if (this.state.isAutoCyclingActive()) {
-            this.stopAutoCycle();
-        }
-
-        if (inputs.length === 0) {
-            return;
-        }
-
-        // Reset all inputs to 0
-        inputs.forEach(input => {
-            input.value = 0;
-        });
-
-        // Reset cycle index
-        this.state.setCurrentCycleIndex(0);
-        const totalCombinations = Math.pow(2, inputs.length);
-        this.state.setTotalCombinations(totalCombinations);
-
-        // Emit simulation state change (but don't simulate - caller will do that after modifications)
         eventBus.emit(EVENT_TYPES.SIMULATION_STATE_CHANGED, {
             isRunning: false,
             currentIndex: 0,
