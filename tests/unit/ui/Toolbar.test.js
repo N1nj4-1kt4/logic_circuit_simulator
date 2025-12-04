@@ -49,6 +49,8 @@ const createMockDOM = () => {
     createElement('deleteMode', 'button');
     createElement('clearBoard', 'button');
     createElement('truthTable', 'button');
+    createElement('prevStep', 'button');
+    createElement('nextStep', 'button');
 
     // Create tool buttons
     const toolButtons = [];
@@ -431,6 +433,68 @@ describe('Toolbar', () => {
             expect(document.getElementById).toHaveBeenCalledWith('savedBoardsSection');
             expect(document.getElementById).toHaveBeenCalledWith('currentCircuitName');
             expect(document.getElementById).toHaveBeenCalledWith('simulate');
+            expect(document.getElementById).toHaveBeenCalledWith('prevStep');
+            expect(document.getElementById).toHaveBeenCalledWith('nextStep');
+        });
+    });
+
+    describe('setSimulationState', () => {
+        beforeEach(() => {
+            toolbar.init();
+        });
+
+        it('disables prev/next buttons when simulation is running', () => {
+            toolbar.setSimulationState(true, 0, 4);
+
+            expect(toolbar.elements.prevStepBtn.disabled).toBe(true);
+            expect(toolbar.elements.nextStepBtn.disabled).toBe(true);
+        });
+
+        it('enables prev/next buttons when simulation stops', () => {
+            // First start simulation
+            toolbar.setSimulationState(true, 0, 4);
+
+            // Then stop it
+            toolbar.setSimulationState(false, 0, 0);
+
+            expect(toolbar.elements.prevStepBtn.disabled).toBe(false);
+            expect(toolbar.elements.nextStepBtn.disabled).toBe(false);
+        });
+
+        it('updates simulate button text when running', () => {
+            toolbar.setSimulationState(true, 0, 4);
+
+            expect(toolbar.elements.simulateBtn.textContent).toBe('■ Simulation');
+        });
+
+        it('updates simulate button text when stopped', () => {
+            toolbar.setSimulationState(false, 0, 0);
+
+            expect(toolbar.elements.simulateBtn.textContent).toBe('▶ Simulation');
+        });
+
+        it('updates mode indicator when running', () => {
+            toolbar.setSimulationState(true, 2, 8);
+
+            expect(toolbar.elements.modeIndicator.textContent).toBe('Mode: Auto-Cycling Inputs');
+            expect(toolbar.elements.selectedComponent.textContent).toBe('Combination 3 / 8');
+        });
+
+        it('handles missing step buttons gracefully', () => {
+            toolbar.elements.prevStepBtn = null;
+            toolbar.elements.nextStepBtn = null;
+
+            expect(() => {
+                toolbar.setSimulationState(true, 0, 4);
+            }).not.toThrow();
+        });
+
+        it('handles missing simulate button gracefully', () => {
+            toolbar.elements.simulateBtn = null;
+
+            expect(() => {
+                toolbar.setSimulationState(true, 0, 4);
+            }).not.toThrow();
         });
     });
 });

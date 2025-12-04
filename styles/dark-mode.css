@@ -104,6 +104,11 @@ body.dark-mode .action-btn.active {
     color: #2a2a3e;
 }
 
+[data-theme="dark"] .step-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
 [data-theme="dark"] .step-btn:disabled:hover {
     background: #2a2a3e;
     color: #9b7dc4;
@@ -119,6 +124,11 @@ body.dark-mode .step-btn {
 body.dark-mode .step-btn:hover {
     background: #9b7dc4;
     color: #2a2a3e;
+}
+
+body.dark-mode .step-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
 }
 
 body.dark-mode .step-btn:disabled:hover {

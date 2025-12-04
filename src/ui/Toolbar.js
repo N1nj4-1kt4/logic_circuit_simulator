@@ -57,7 +57,9 @@ export class Toolbar {
             savedBoardsDropdown: null,
             savedBoardsSection: null,
             circuitNameDisplay: null,
-            simulateBtn: null
+            simulateBtn: null,
+            prevStepBtn: null,
+            nextStepBtn: null
         };
     }
 
@@ -87,6 +89,8 @@ export class Toolbar {
         this.elements.savedBoardsSection = document.getElementById('savedBoardsSection');
         this.elements.circuitNameDisplay = document.getElementById('currentCircuitName');
         this.elements.simulateBtn = document.getElementById('simulate');
+        this.elements.prevStepBtn = document.getElementById('prevStep');
+        this.elements.nextStepBtn = document.getElementById('nextStep');
     }
 
     /**
@@ -549,6 +553,14 @@ export class Toolbar {
      */
     setSimulationState(isRunning, currentIndex = 0, total = 0) {
         if (!this.elements.simulateBtn) return;
+
+        // Disable prev/next buttons when simulation is running
+        if (this.elements.prevStepBtn) {
+            this.elements.prevStepBtn.disabled = isRunning;
+        }
+        if (this.elements.nextStepBtn) {
+            this.elements.nextStepBtn.disabled = isRunning;
+        }
 
         if (isRunning) {
             this.elements.simulateBtn.textContent = '■ Simulation';
