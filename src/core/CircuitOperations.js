@@ -318,9 +318,17 @@ export class CircuitOperations {
         const storedTotalCombinations = this.state.getTotalCombinations();
 
         if (currentTotalCombinations !== storedTotalCombinations) {
-            // Input count changed - reset simulation state to avoid index/bit misalignment
+            // Input count changed - recalculate index to preserve current input state
+            // Convert current input values to the equivalent index in the new space
+            // New inputs default to 0, removed inputs are ignored
+            let newIndex = 0;
+            inputs.forEach((input, index) => {
+                const bitValue = input.value || 0;
+                newIndex = (newIndex << 1) | bitValue;
+            });
+
             this.state.setTotalCombinations(currentTotalCombinations);
-            this.state.setCurrentCycleIndex(0);
+            this.state.setCurrentCycleIndex(newIndex);
         }
 
         let currentCycleIndex = this.state.getCurrentCycleIndex();

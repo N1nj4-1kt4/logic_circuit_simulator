@@ -510,12 +510,17 @@ describe('CircuitOperations', () => {
                 }));
             });
 
-            it('resets cycle state when input count increases during simulation', () => {
-                // Start with 2 inputs
+            it('preserves input state when input count increases during simulation', () => {
+                // Start with 2 inputs (I1, I2)
                 operations.startAutoCycle();
                 expect(state.getTotalCombinations()).toBe(4); // 2^2 = 4
 
-                // Simulate some cycling
+                // Set inputs to specific values: I1=1, I2=0 (index 2 in 2-input space)
+                const inputsBefore = state.getComponents()
+                    .filter(c => c.type === 'INPUT')
+                    .sort((a, b) => a.label.localeCompare(b.label));
+                inputsBefore[0].value = 1; // I1
+                inputsBefore[1].value = 0; // I2
                 state.setCurrentCycleIndex(2);
 
                 // Add a third input while simulation is running
@@ -526,39 +531,56 @@ describe('CircuitOperations', () => {
 
                 // totalCombinations should be updated to 8 (2^3)
                 expect(state.getTotalCombinations()).toBe(8);
-                // currentCycleIndex should be reset to 0
-                expect(state.getCurrentCycleIndex()).toBe(1); // 0 + 1 after step
+
+                // The index should be calculated from current input values
+                // I1=1, I2=0, I3=0 (new input defaults to 0) = binary 100 = index 4
+                // After the step processes index 4 and increments, we should be at 5
+                expect(state.getCurrentCycleIndex()).toBe(5);
             });
 
-            it('resets cycle state when input count decreases during simulation', () => {
-                // Start with 2 inputs
+            it('preserves input state when input count decreases during simulation', () => {
+                // Start with 2 inputs (I1, I2)
                 operations.startAutoCycle();
                 expect(state.getTotalCombinations()).toBe(4); // 2^2 = 4
 
-                // Simulate some cycling
+                // Set inputs to specific values: I1=1, I2=1 (index 3 in 2-input space)
+                const inputsBefore = state.getComponents()
+                    .filter(c => c.type === 'INPUT')
+                    .sort((a, b) => a.label.localeCompare(b.label));
+                inputsBefore[0].value = 1; // I1
+                inputsBefore[1].value = 1; // I2
                 state.setCurrentCycleIndex(3);
 
-                // Remove one input while simulation is running
-                const inputs = state.getComponents().filter(c => c.type === 'INPUT');
-                state.removeComponent(inputs[0].id);
+                // Remove I1 while simulation is running
+                state.removeComponent(inputsBefore[0].id);
 
                 // Call autoCycleStep which should detect the change
                 operations.autoCycleStep();
 
                 // totalCombinations should be updated to 2 (2^1)
                 expect(state.getTotalCombinations()).toBe(2);
-                // currentCycleIndex should be reset to 0 then incremented
-                expect(state.getCurrentCycleIndex()).toBe(1); // 0 + 1 after step
+
+                // The remaining input I2 had value 1, so newIndex = 1
+                // Step processes index 1, then increments to 2
+                // The wrap check happens at the START of next step, not after increment
+                expect(state.getCurrentCycleIndex()).toBe(2);
             });
 
-            it('cycles through all combinations correctly after input added', () => {
+            it('continues from correct position after input added', () => {
                 // Start with 2 inputs
                 operations.startAutoCycle();
 
-                // Add a third input
+                // Manually set input values to I1=1, I2=1
+                const inputsBefore = state.getComponents()
+                    .filter(c => c.type === 'INPUT')
+                    .sort((a, b) => a.label.localeCompare(b.label));
+                inputsBefore[0].value = 1; // I1
+                inputsBefore[1].value = 1; // I2
+
+                // Add a third input (I3 starts at 0)
                 operations.placeComponent(100, 300, 'INPUT');
 
-                // Run one step to trigger the reset
+                // Run one step to trigger the recalculation
                 operations.autoCycleStep();
 
                 // Get inputs sorted by label
@@ -568,14 +590,10 @@ describe('CircuitOperations', () => {
 
                 expect(inputs).toHaveLength(3);
 
-                // After reset to 0 and one step, we should be at index 1
-                // Index 1 in binary for 3 inputs is 001 (I1=0, I2=0, I3=1)
-                // The step would have set index 0 values (000), then incremented to 1
-                // Actually, on reset currentCycleIndex becomes 0, then values are set for 0,
-                // then index is incremented to 1 for next iteration
-                // So after one autoCycleStep, the inputs should reflect index 0 values
-                expect(inputs[0].value).toBe(0); // I1
-                expect(inputs[1].value).toBe(0); // I2
+                // The step should have used index derived from I1=1, I2=1, I3=0 = 110 = 6
+                // So inputs should reflect index 6 values
+                expect(inputs[0].value).toBe(1); // I1
+                expect(inputs[1].value).toBe(1); // I2
                 expect(inputs[2].value).toBe(0); // I3
             });
         });
