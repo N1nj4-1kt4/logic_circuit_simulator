@@ -94,7 +94,7 @@ export const TRUTH_TABLE = {
 // ==================== TIMING ====================
 
 export const TIMING = {
-    AUTO_CYCLE_DELAY: 500, // ms
+    AUTO_CYCLE_DELAY: 750, // ms
     AUTO_SAVE_DEBOUNCE: 1000, // ms
     ANIMATION_DURATION: 300 // ms
 };

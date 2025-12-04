@@ -239,18 +239,7 @@ export class Toolbar {
             });
         }
 
-        // Close Truth Table button
-        const closeTruthTableBtn = document.getElementById('closeTruthTable');
-        if (closeTruthTableBtn) {
-            closeTruthTableBtn.addEventListener('click', () => {
-                // This is handled by the handler passed to onTruthTable
-                // Just hide the panel - CircuitSimulator will handle via truthTablePanel.hide()
-                const panel = document.getElementById('truthTablePanel');
-                if (panel) {
-                    panel.style.display = 'none';
-                }
-            });
-        }
+        // Note: Close Truth Table button is now managed by TruthTablePanel itself
     }
 
     /**

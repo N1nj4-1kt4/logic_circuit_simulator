@@ -16,14 +16,36 @@ export const messages = {
         // Component saving
         emptyCircuit: 'Please create a circuit before saving it as a component.',
         missingInputsOutputs: 'Your circuit must have at least one INPUT and one OUTPUT to be saved as a component.',
+        componentNeedsInputsOutputs: 'Your circuit must have at least one INPUT and one OUTPUT to be saved as a component.',
         componentNameRequired: 'Please enter a component name.',
+        componentSaved: (name) => `Component "${name}" saved successfully!`,
+        componentSaveFailed: 'Failed to save component. Please try again.',
+        componentLoadedForEditing: (name) => `Component "${name}" loaded for editing.`,
+        componentLoadFailed: (name) => `Failed to load component "${name}".`,
+        componentExported: (name) => `Component "${name}" exported successfully!`,
+        componentExportFailed: 'Failed to export component.',
+        componentImported: (name) => `Component "${name}" imported successfully!`,
+        componentImportFailed: 'Failed to import component. Please check the file format.',
+        invalidComponentFile: 'Invalid component file. Please select a valid component JSON file.',
+        customComponentNotFound: 'Custom component not found.',
 
         // Rename validation
         labelRequired: 'Please enter a label.',
 
         // Board management
         boardNameRequired: 'Please enter a board name.',
+        boardSaved: (name) => `Board "${name}" saved successfully!`,
+        boardSaveFailed: 'Failed to save board. Please try again.',
+        boardLoaded: (name) => `Board "${name}" loaded successfully!`,
+        boardLoadFailed: (name) => `Failed to load board "${name}".`,
+        boardDeleted: (name) => `Board "${name}" deleted successfully!`,
+        boardDeleteFailed: 'Failed to delete board.',
+        newBoardCreated: 'New board created successfully!',
         componentNameConflict: (name) => `A component with name "${name}" already exists. Please choose a different name.`,
+
+        // Simulation
+        noInputsToSimulate: 'Please add at least one INPUT component to simulate.',
+        noOutputsToSimulate: 'Please add at least one OUTPUT component to simulate.',
 
         // Export
         noComponentsToExport: 'No custom components available to export.'
@@ -45,7 +67,10 @@ export const messages = {
             title: 'Overwrite Board?',
             confirmLabel: 'Overwrite',
             cancelLabel: 'Cancel'
-        }
+        },
+
+        // Board deletion
+        deleteBoard: (name) => `Are you sure you want to delete board "${name}"? This action cannot be undone.`
     },
 
     // ==================== Dialog Content ====================

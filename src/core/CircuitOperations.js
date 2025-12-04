@@ -23,6 +23,7 @@ import {
     getOutputCount
 } from './circuitEvaluator.js';
 import { deepClone } from '../utils/serialization.js';
+import { TIMING } from '../constants.js';
 
 export class CircuitOperations {
     /**
@@ -42,8 +43,9 @@ export class CircuitOperations {
         this.componentLibrary = config.componentLibrary;
         this.callbacks = config.callbacks;
 
-        // Auto-save timer reference
+        // Auto-save debounce timer reference
         this.autoSaveTimer = null;
+        this.autoSaveDelay = 1000; // 1 second debounce delay
     }
 
     // ====================================
@@ -97,7 +99,7 @@ export class CircuitOperations {
         this.callbacks.defineComponentPorts(component);
 
         this.state.addComponent(component);
-        this.callbacks.redraw();
+        eventBus.emit(EVENT_TYPES.CANVAS_REDRAW);
     }
 
     // ====================================
@@ -108,9 +110,8 @@ export class CircuitOperations {
      * Handle connection between components
      * @param {number} x - X coordinate
      * @param {number} y - Y coordinate
-     * @param {Function} setConnectionStart - Toolbar callback to update connection start indicator
      */
-    handleConnect(x, y, setConnectionStart) {
+    handleConnect(x, y) {
         const port = this.callbacks.findPort(x, y);
         console.log('findPort result:', port);
 
@@ -130,7 +131,7 @@ export class CircuitOperations {
                     x: port.x,
                     y: port.y
                 });
-                setConnectionStart(true);
+                eventBus.emit(EVENT_TYPES.CONNECTION_START_CHANGED, true);
             } else {
                 console.log('Clicked port is not an output port');
             }
@@ -145,8 +146,8 @@ export class CircuitOperations {
                     toPort: port.portIndex
                 });
                 this.state.setConnectStart(null);
-                setConnectionStart(false);
-                this.callbacks.redraw();
+                eventBus.emit(EVENT_TYPES.CONNECTION_START_CHANGED, false);
+                eventBus.emit(EVENT_TYPES.CANVAS_REDRAW);
             } else {
                 console.log('Clicked port is not an input port');
             }
@@ -172,7 +173,7 @@ export class CircuitOperations {
         if (component) {
             console.log('Removing component');
             this.state.removeComponent(component.id);
-            this.callbacks.redraw();
+            eventBus.emit(EVENT_TYPES.CANVAS_REDRAW);
             return;
         }
 
@@ -183,7 +184,7 @@ export class CircuitOperations {
         if (connection) {
             console.log('Removing connection');
             this.state.removeConnection(connection);
-            this.callbacks.redraw();
+            eventBus.emit(EVENT_TYPES.CANVAS_REDRAW);
         }
     }
 
@@ -193,19 +194,17 @@ export class CircuitOperations {
 
     /**
      * Run simulation on the circuit
-     * @param {Function} updateTruthTableHighlight - Callback to update truth table highlighting
      */
-    simulate(updateTruthTableHighlight) {
+    simulate() {
         simulateCircuit(this.state.getComponents(), this.state.getConnections());
-        this.callbacks.redraw();
-        updateTruthTableHighlight(); // Update truth table highlighting after simulation
+        eventBus.emit(EVENT_TYPES.CANVAS_REDRAW);
+        eventBus.emit(EVENT_TYPES.TRUTH_TABLE_UPDATE_HIGHLIGHT);
     }
 
     /**
      * Start auto-cycling through all input combinations
-     * @param {Function} setSimulationState - Toolbar callback to update simulation state
      */
-    startAutoCycle(setSimulationState) {
+    startAutoCycle() {
         const components = this.state.getComponents();
         const inputs = components.filter(c => c.type === 'INPUT').sort((a, b) =>
             a.label.localeCompare(b.label));
@@ -228,21 +227,33 @@ export class CircuitOperations {
         }
 
         this.state.setAutoCycling(true);
-        this.state.setCurrentCycleIndex(0);
         const totalCombinations = Math.pow(2, inputs.length);
         this.state.setTotalCombinations(totalCombinations);
 
-        // Update toolbar simulation state
-        setSimulationState(true, 0, totalCombinations);
+        // Calculate starting index from current input state
+        const currentState = inputs.map(input => input.value || 0);
+        let startIndex = 0;
+        for (let i = 0; i < inputs.length; i++) {
+            startIndex = (startIndex << 1) | currentState[i];
+        }
+        // Advance to next combination immediately (user already sees current state)
+        startIndex = (startIndex + 1) % totalCombinations;
+        this.state.setCurrentCycleIndex(startIndex);
 
-        this.autoCycleStep(setSimulationState);
+        // Emit simulation state change
+        eventBus.emit(EVENT_TYPES.SIMULATION_STATE_CHANGED, {
+            isRunning: true,
+            currentIndex: 0,
+            totalCombinations: totalCombinations
+        });
+
+        this.autoCycleStep();
     }
 
     /**
      * Stop auto-cycling
-     * @param {Function} setSimulationState - Toolbar callback to update simulation state
      */
-    stopAutoCycle(setSimulationState) {
+    stopAutoCycle() {
         this.state.setAutoCycling(false);
         const autoCycleTimeout = this.state.getAutoCycleTimeout();
         if (autoCycleTimeout) {
@@ -250,16 +261,16 @@ export class CircuitOperations {
             this.state.setAutoCycleTimeout(null);
         }
 
-        // Reset toolbar simulation state
-        setSimulationState(false);
+        // Emit simulation state change
+        eventBus.emit(EVENT_TYPES.SIMULATION_STATE_CHANGED, {
+            isRunning: false
+        });
     }
 
     /**
      * Execute one step of auto-cycling
-     * @param {Function} setSimulationState - Toolbar callback to update simulation state
-     * @param {Function} updateTruthTableHighlight - Callback to update truth table highlighting
      */
-    autoCycleStep(setSimulationState, updateTruthTableHighlight) {
+    autoCycleStep() {
         if (!this.state.isAutoCyclingActive()) return;
 
         const components = this.state.getComponents();
@@ -282,29 +293,31 @@ export class CircuitOperations {
         });
 
         // Simulate circuit
-        this.simulate(updateTruthTableHighlight);
+        this.simulate();
 
         // Update cycle index
         currentCycleIndex++;
         this.state.setCurrentCycleIndex(currentCycleIndex);
 
-        // Update toolbar with current progress
-        setSimulationState(true, currentCycleIndex, totalCombinations);
+        // Emit simulation state change with current progress
+        eventBus.emit(EVENT_TYPES.SIMULATION_STATE_CHANGED, {
+            isRunning: true,
+            currentIndex: currentCycleIndex,
+            totalCombinations: totalCombinations
+        });
 
         // Schedule next step
         const timeout = setTimeout(() => {
-            this.autoCycleStep(setSimulationState, updateTruthTableHighlight);
-        }, 500); // 500ms delay between steps
+            this.autoCycleStep();
+        }, TIMING.AUTO_CYCLE_DELAY);
         this.state.setAutoCycleTimeout(timeout);
     }
 
     /**
      * Step through simulation manually
      * @param {number} direction - Direction to step (1 for next, -1 for previous)
-     * @param {Function} setSimulationState - Toolbar callback to update simulation state
-     * @param {Function} updateTruthTableHighlight - Callback to update truth table highlighting
      */
-    stepSimulation(direction, setSimulationState, updateTruthTableHighlight) {
+    stepSimulation(direction) {
         const components = this.state.getComponents();
         const inputs = components.filter(c => c.type === 'INPUT').sort((a, b) =>
             a.label.localeCompare(b.label));
@@ -360,18 +373,20 @@ export class CircuitOperations {
         });
 
         // Simulate circuit
-        this.simulate(updateTruthTableHighlight);
+        this.simulate();
 
-        // Update toolbar with current progress
-        setSimulationState(false, currentCycleIndex, totalCombinations);
+        // Emit simulation state change with current progress
+        eventBus.emit(EVENT_TYPES.SIMULATION_STATE_CHANGED, {
+            isRunning: false,
+            currentIndex: currentCycleIndex,
+            totalCombinations: totalCombinations
+        });
     }
 
     /**
      * Reset simulation to initial state (all inputs to 0)
-     * @param {Function} setSimulationState - Toolbar callback to update simulation state
-     * @param {Function} updateTruthTableHighlight - Callback to update truth table highlighting
      */
-    resetSimulation(setSimulationState, updateTruthTableHighlight) {
+    resetSimulation() {
         const components = this.state.getComponents();
         const inputs = components.filter(c => c.type === 'INPUT');
 
@@ -381,7 +396,7 @@ export class CircuitOperations {
 
         // Stop auto-cycle if running
         if (this.state.isAutoCyclingActive()) {
-            this.stopAutoCycle(setSimulationState);
+            this.stopAutoCycle();
         }
 
         // Reset all inputs to 0
@@ -395,10 +410,14 @@ export class CircuitOperations {
         this.state.setTotalCombinations(totalCombinations);
 
         // Simulate circuit
-        this.simulate(updateTruthTableHighlight);
+        this.simulate();
 
-        // Update toolbar
-        setSimulationState(false, 0, totalCombinations);
+        // Emit simulation state change
+        eventBus.emit(EVENT_TYPES.SIMULATION_STATE_CHANGED, {
+            isRunning: false,
+            currentIndex: 0,
+            totalCombinations: totalCombinations
+        });
     }
 
     // ====================================
@@ -422,14 +441,15 @@ export class CircuitOperations {
             components: this.state.getComponents(),
             connections: this.state.getConnections(),
             nextId: this.state.generateNextId() - 1,
-            customComponents: this.state.getCustomComponents()
+            customComponents: this.state.getCustomComponents(),
+            truthTableState: this.state.getTruthTableState()
         };
 
         const success = await this.boardManager.saveBoard(boardName, boardData);
 
         if (success) {
             // Update saved boards list
-            const boards = await this.boardManager.listBoards();
+            const boards = await this.boardManager.getAllBoards();
             this.state.setSavedBoards(boards);
 
             // Update current board name
@@ -439,6 +459,9 @@ export class CircuitOperations {
             // Update last saved state for change detection
             this.state.setLastSavedState(deepClone(this.state.getCurrentState()));
 
+            // Emit event to update toolbar displays
+            eventBus.emit(EVENT_TYPES.TOOLBAR_UPDATE_DISPLAYS);
+
             DialogFactory.showAlert({
                 message: messages.alerts.boardSaved(boardName),
                 type: 'success'
@@ -446,43 +469,24 @@ export class CircuitOperations {
 
             return true;
         } else {
-            DialogFactory.showAlert({
-                message: messages.alerts.boardSaveFailed,
-                type: 'error'
-            });
-            return false;
+            // Throw error so calling code can handle it
+            throw new Error('Failed to save board to storage');
         }
     }
 
     /**
      * Load a board from storage
      * @param {string} boardName - Name of the board to load
-     * @param {Function} updateToolbarDisplays - Callback to update toolbar displays
      */
-    async loadBoard(boardName, updateToolbarDisplays) {
+    async loadBoard(boardName) {
+        // Save current context's state before switching (including truth table changes)
+        await this._saveCurrentContext();
+
         const boardData = await this.boardManager.loadBoard(boardName);
 
         if (boardData) {
-            // Load board data into state
-            this.state.loadState({
-                components: boardData.components || [],
-                connections: boardData.connections || [],
-                nextId: (boardData.nextId || 0) + 1,
-                customComponents: boardData.customComponents || {}
-            });
-
-            // Set current board name
-            this.state.setCurrentBoardName(boardName);
-            this.state.setCurrentComponentName(null);
-
-            // Update last saved state
-            this.state.setLastSavedState(deepClone(this.state.getCurrentState()));
-
-            // Redraw canvas
-            this.callbacks.redraw();
-
-            // Update toolbar displays
-            updateToolbarDisplays();
+            // Load circuit context using common helper
+            this._loadCircuitContext(boardData, { type: 'board', name: boardName });
 
             DialogFactory.showAlert({
                 message: messages.alerts.boardLoaded(boardName),
@@ -501,36 +505,33 @@ export class CircuitOperations {
 
     /**
      * Create a new empty board
-     * @param {Function} showSaveOptionsDialog - Callback to show save options dialog
-     * @param {Function} updateToolbarDisplays - Callback to update toolbar displays
+     * @param {Function} showSaveOptionsDialog - Callback to show save options dialog (still needed for dialog flow)
      */
-    createNewBoard(showSaveOptionsDialog, updateToolbarDisplays) {
+    createNewBoard(showSaveOptionsDialog) {
         // Check for unsaved changes
         if (this.state.hasUnsavedChanges()) {
             showSaveOptionsDialog(() => {
-                this._createNewBoardInternal(updateToolbarDisplays);
+                this._createNewBoardInternal();
             });
         } else {
-            this._createNewBoardInternal(updateToolbarDisplays);
+            this._createNewBoardInternal();
         }
     }
 
     /**
      * Internal method to create a new board
-     * @param {Function} updateToolbarDisplays - Callback to update toolbar displays
      * @private
      */
-    _createNewBoardInternal(updateToolbarDisplays) {
+    _createNewBoardInternal() {
         // Clear the board
         this.state.clearComponents();
         this.state.setCurrentBoardName(null);
         this.state.setCurrentComponentName(null);
 
-        // Redraw canvas
-        this.callbacks.redraw();
-
-        // Update toolbar displays
-        updateToolbarDisplays();
+        // Emit events
+        eventBus.emit(EVENT_TYPES.BOARD_CLEARED);
+        eventBus.emit(EVENT_TYPES.CANVAS_REDRAW);
+        eventBus.emit(EVENT_TYPES.TOOLBAR_UPDATE_DISPLAYS);
 
         DialogFactory.showAlert({
             message: messages.alerts.newBoardCreated,
@@ -541,9 +542,8 @@ export class CircuitOperations {
     /**
      * Delete a board from storage
      * @param {string} boardName - Name of the board to delete
-     * @param {Function} updateToolbarDisplays - Callback to update toolbar displays
      */
-    async deleteBoard(boardName, updateToolbarDisplays) {
+    async deleteBoard(boardName) {
         const confirmed = await DialogFactory.showConfirm({
             message: messages.confirms.deleteBoard(boardName),
             type: 'warning'
@@ -557,7 +557,7 @@ export class CircuitOperations {
 
         if (success) {
             // Update saved boards list
-            const boards = await this.boardManager.listBoards();
+            const boards = await this.boardManager.getAllBoards();
             this.state.setSavedBoards(boards);
 
             // If we deleted the current board, clear it
@@ -565,11 +565,11 @@ export class CircuitOperations {
                 this.state.clearComponents();
                 this.state.setCurrentBoardName(null);
                 this.state.setCurrentComponentName(null);
-                this.callbacks.redraw();
+                eventBus.emit(EVENT_TYPES.CANVAS_REDRAW);
             }
 
-            // Update toolbar displays
-            updateToolbarDisplays();
+            // Emit event to update toolbar displays
+            eventBus.emit(EVENT_TYPES.TOOLBAR_UPDATE_DISPLAYS);
 
             DialogFactory.showAlert({
                 message: messages.alerts.boardDeleted(boardName),
@@ -594,9 +594,8 @@ export class CircuitOperations {
      * Save current circuit as a custom component
      * @param {string} name - Component name
      * @param {string} description - Component description
-     * @param {Function} updateToolbarDisplays - Callback to update toolbar displays
      */
-    async saveComponent(name, description, updateToolbarDisplays) {
+    async saveComponent(name, description) {
         const components = this.state.getComponents();
         const connections = this.state.getConnections();
 
@@ -627,7 +626,8 @@ export class CircuitOperations {
             components: deepClone(components),
             connections: deepClone(connections),
             inputPorts: inputs.map(input => ({ label: input.label, id: input.id })),
-            outputPorts: outputs.map(output => ({ label: output.label, id: output.id }))
+            outputPorts: outputs.map(output => ({ label: output.label, id: output.id })),
+            truthTableState: this.state.getTruthTableState()
         };
 
         // Save to component library
@@ -645,8 +645,8 @@ export class CircuitOperations {
             // Update last saved state
             this.state.setLastSavedState(deepClone(this.state.getCurrentState()));
 
-            // Update toolbar displays
-            updateToolbarDisplays();
+            // Emit event to update toolbar displays
+            eventBus.emit(EVENT_TYPES.TOOLBAR_UPDATE_DISPLAYS);
 
             DialogFactory.showAlert({
                 message: messages.alerts.componentSaved(name),
@@ -666,9 +666,8 @@ export class CircuitOperations {
     /**
      * Delete a component from the library
      * @param {string} name - Component name
-     * @param {Function} updateToolbarDisplays - Callback to update toolbar displays
      */
-    async deleteComponent(name, updateToolbarDisplays) {
+    async deleteComponent(name) {
         const success = await this.componentLibrary.deleteComponent(name);
 
         if (success) {
@@ -681,8 +680,8 @@ export class CircuitOperations {
                 this.state.setCurrentComponentName(null);
             }
 
-            // Update toolbar displays
-            updateToolbarDisplays();
+            // Emit event to update toolbar displays
+            eventBus.emit(EVENT_TYPES.TOOLBAR_UPDATE_DISPLAYS);
 
             return true;
         }
@@ -724,9 +723,8 @@ export class CircuitOperations {
     /**
      * Import component from file
      * @param {Event} event - File input change event
-     * @param {Function} updateToolbarDisplays - Callback to update toolbar displays
      */
-    async importComponent(event, updateToolbarDisplays) {
+    async importComponent(event) {
         const file = event.target.files[0];
         if (!file) return;
 
@@ -753,8 +751,8 @@ export class CircuitOperations {
                     const customComponents = await this.componentLibrary.listComponents();
                     this.state.setCustomComponents(customComponents);
 
-                    // Update toolbar displays
-                    updateToolbarDisplays();
+                    // Emit event to update toolbar displays
+                    eventBus.emit(EVENT_TYPES.TOOLBAR_UPDATE_DISPLAYS);
 
                     DialogFactory.showAlert({
                         message: messages.alerts.componentImported(componentDef.name),
@@ -779,32 +777,16 @@ export class CircuitOperations {
     /**
      * Load component for editing
      * @param {string} name - Component name
-     * @param {Function} updateToolbarDisplays - Callback to update toolbar displays
      */
-    async loadComponentForEditing(name, updateToolbarDisplays) {
+    async loadComponentForEditing(name) {
+        // Save current context's state before switching (including truth table changes)
+        await this._saveCurrentContext();
+
         const componentDef = await this.componentLibrary.loadComponent(name);
 
         if (componentDef) {
-            // Load component data into state
-            this.state.loadState({
-                components: componentDef.components || [],
-                connections: componentDef.connections || [],
-                nextId: Math.max(...(componentDef.components || []).map(c => c.id)) + 1,
-                customComponents: this.state.getCustomComponents()
-            });
-
-            // Set current component name
-            this.state.setCurrentComponentName(name);
-            this.state.setCurrentBoardName(null);
-
-            // Update last saved state
-            this.state.setLastSavedState(deepClone(this.state.getCurrentState()));
-
-            // Redraw canvas
-            this.callbacks.redraw();
-
-            // Update toolbar displays
-            updateToolbarDisplays();
+            // Load circuit context using common helper
+            this._loadCircuitContext(componentDef, { type: 'component', name });
 
             DialogFactory.showAlert({
                 message: messages.alerts.componentLoadedForEditing(name),
@@ -821,27 +803,135 @@ export class CircuitOperations {
         }
     }
 
+    /**
+     * Internal helper to save current context (board or component) before switching
+     * Ensures truth table state and other changes are persisted
+     * @private
+     */
+    async _saveCurrentContext() {
+        const currentBoardName = this.state.getCurrentBoardName();
+        const currentComponentName = this.state.getCurrentComponentName();
+
+        if (currentBoardName) {
+            console.log(`Auto-saving current board "${currentBoardName}" before switching...`);
+            const currentBoardData = {
+                components: this.state.getComponents(),
+                connections: this.state.getConnections(),
+                nextId: this.state.generateNextId() - 1,
+                customComponents: this.state.getCustomComponents(),
+                truthTableState: this.state.getTruthTableState()
+            };
+            await this.boardManager.saveBoard(currentBoardName, currentBoardData);
+        } else if (currentComponentName) {
+            console.log(`Auto-saving current component "${currentComponentName}" before switching...`);
+            // Load existing component to preserve its metadata
+            const existingComponent = await this.componentLibrary.loadComponent(currentComponentName);
+            if (existingComponent) {
+                // Update with current state including truth table
+                const updatedComponent = {
+                    ...existingComponent,
+                    components: this.state.getComponents(),
+                    connections: this.state.getConnections(),
+                    truthTableState: this.state.getTruthTableState()
+                };
+                await this.componentLibrary.saveComponent(currentComponentName, updatedComponent);
+            }
+        }
+    }
+
+    /**
+     * Internal helper to load circuit context and restore truth table state
+     * Used by both loadBoard() and loadComponentForEditing()
+     * @private
+     * @param {Object} circuitData - Circuit data with components, connections, etc.
+     * @param {Object} contextInfo - Context information (boardName or componentName)
+     * @param {string} contextInfo.type - 'board' or 'component'
+     * @param {string} contextInfo.name - Name of the board or component
+     */
+    _loadCircuitContext(circuitData, contextInfo) {
+        // Load circuit data into state
+        this.state.loadState({
+            components: circuitData.components || [],
+            connections: circuitData.connections || [],
+            nextId: (circuitData.nextId || 0) + 1,
+            customComponents: circuitData.customComponents || this.state.getCustomComponents()
+        });
+
+        // Set current context (board or component)
+        if (contextInfo.type === 'board') {
+            this.state.setCurrentBoardName(contextInfo.name);
+            this.state.setCurrentComponentName(null);
+        } else if (contextInfo.type === 'component') {
+            this.state.setCurrentComponentName(contextInfo.name);
+            this.state.setCurrentBoardName(null);
+        }
+
+        // Load truth table state for this context (or clear if none saved)
+        this.state.setTruthTableState(circuitData.truthTableState || null);
+
+        // Update last saved state
+        this.state.setLastSavedState(deepClone(this.state.getCurrentState()));
+
+        // Emit standard events for any circuit context switch
+        eventBus.emit(EVENT_TYPES.BOARD_LOADED);
+        eventBus.emit(EVENT_TYPES.CANVAS_REDRAW);
+        eventBus.emit(EVENT_TYPES.TOOLBAR_UPDATE_DISPLAYS);
+    }
+
     // ====================================
     // Auto-Save Functionality
     // ====================================
 
     /**
-     * Setup auto-save functionality
+     * Setup auto-save functionality using event-driven approach
+     * Listens to all board state change events and auto-saves with debouncing
      */
     setupAutoSave() {
-        // Save board state every 30 seconds
-        this.autoSaveTimer = setInterval(async () => {
-            await this.saveBoardState();
-        }, 30000);
+        // Create debounced save handler
+        this.debouncedSave = () => {
+            // Clear existing timer
+            if (this.autoSaveTimer) {
+                clearTimeout(this.autoSaveTimer);
+            }
+
+            // Set new timer
+            this.autoSaveTimer = setTimeout(async () => {
+                await this.saveBoardState();
+            }, this.autoSaveDelay);
+        };
+
+        // Listen to all events that modify board state
+        eventBus.on(EVENT_TYPES.BOARD_CHANGED, this.debouncedSave);
+        eventBus.on(EVENT_TYPES.BOARD_LOADED, this.debouncedSave);
+        eventBus.on(EVENT_TYPES.TRUTH_TABLE_STATE_CHANGED, this.debouncedSave);
+        eventBus.on(EVENT_TYPES.THEME_CHANGED, this.debouncedSave);
+
+        // When board is cleared, clear the auto-saved state immediately (no debounce)
+        this.handleBoardCleared = async () => {
+            await this.clearBoardState();
+        };
+        eventBus.on(EVENT_TYPES.BOARD_CLEARED, this.handleBoardCleared);
     }
 
     /**
-     * Clear auto-save timer
+     * Clear auto-save timer and event listeners
      */
     clearAutoSave() {
         if (this.autoSaveTimer) {
-            clearInterval(this.autoSaveTimer);
+            clearTimeout(this.autoSaveTimer);
             this.autoSaveTimer = null;
+        }
+
+        // Remove event listeners
+        if (this.debouncedSave) {
+            eventBus.off(EVENT_TYPES.BOARD_CHANGED, this.debouncedSave);
+            eventBus.off(EVENT_TYPES.BOARD_LOADED, this.debouncedSave);
+            eventBus.off(EVENT_TYPES.TRUTH_TABLE_STATE_CHANGED, this.debouncedSave);
+            eventBus.off(EVENT_TYPES.THEME_CHANGED, this.debouncedSave);
+        }
+
+        if (this.handleBoardCleared) {
+            eventBus.off(EVENT_TYPES.BOARD_CLEARED, this.handleBoardCleared);
         }
     }
 
@@ -860,7 +950,7 @@ export class CircuitOperations {
         };
 
         try {
-            await this.boardManager.storageAdapter.setItem('currentBoard', JSON.stringify(boardData));
+            await this.boardManager.storage.setItem('currentBoard', JSON.stringify(boardData));
             console.log('Board state auto-saved');
         } catch (error) {
             console.error('Error auto-saving board state:', error);
@@ -869,11 +959,10 @@ export class CircuitOperations {
 
     /**
      * Load board state from localStorage (on app start)
-     * @param {Function} updateToolbarDisplays - Callback to update toolbar displays
      */
-    async loadBoardState(updateToolbarDisplays) {
+    async loadBoardState() {
         try {
-            const savedState = await this.boardManager.storageAdapter.getItem('currentBoard');
+            const savedState = await this.boardManager.storage.getItem('currentBoard');
 
             if (savedState) {
                 const boardData = JSON.parse(savedState);
@@ -900,10 +989,8 @@ export class CircuitOperations {
 
                 console.log('Board state restored from auto-save');
 
-                // Update toolbar displays if callback provided
-                if (updateToolbarDisplays) {
-                    updateToolbarDisplays();
-                }
+                // Emit event to update toolbar displays
+                eventBus.emit(EVENT_TYPES.TOOLBAR_UPDATE_DISPLAYS);
             }
         } catch (error) {
             console.error('Error loading board state:', error);
@@ -915,7 +1002,7 @@ export class CircuitOperations {
      */
     async clearBoardState() {
         try {
-            await this.boardManager.storageAdapter.removeItem('currentBoard');
+            await this.boardManager.storage.removeItem('currentBoard');
             console.log('Auto-saved board state cleared');
         } catch (error) {
             console.error('Error clearing board state:', error);

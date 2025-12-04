@@ -100,6 +100,7 @@ export const EVENT_TYPES = {
     SIMULATION_RUN: 'simulation:run',
     SIMULATION_COMPLETED: 'simulation:completed',
     SIMULATION_RESET: 'simulation:reset',
+    SIMULATION_STATE_CHANGED: 'simulation:stateChanged',
 
     // Board events
     BOARD_SAVE: 'board:save',
@@ -113,6 +114,7 @@ export const EVENT_TYPES = {
     TRUTH_TABLE_SHOWN: 'truthTable:shown',
     TRUTH_TABLE_HIDDEN: 'truthTable:hidden',
     TRUTH_TABLE_STATE_CHANGED: 'truthTable:stateChanged',
+    TRUTH_TABLE_UPDATE_HIGHLIGHT: 'truthTable:updateHighlight',
 
     // Theme events
     THEME_CHANGED: 'theme:changed',
@@ -121,5 +123,12 @@ export const EVENT_TYPES = {
     CIRCUIT_CLEARED: 'circuit:cleared',
 
     // Mode events
-    MODE_EXIT_REQUEST: 'mode:exitRequest'
+    MODE_EXIT_REQUEST: 'mode:exitRequest',
+
+    // UI update events
+    TOOLBAR_UPDATE_DISPLAYS: 'toolbar:updateDisplays',
+    CONNECTION_START_CHANGED: 'connection:startChanged',
+
+    // Canvas events
+    CANVAS_REDRAW: 'canvas:redraw'
 };

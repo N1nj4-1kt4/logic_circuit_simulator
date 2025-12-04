@@ -129,11 +129,18 @@ class CircuitSimulator {
         this.setupEventListeners();
         // Truth table dragging now handled by TruthTablePanel + Interact.js
         this.operations.setupAutoSave();
-        await this.operations.loadBoardState(() => this.updateToolbarDisplays());
+        await this.operations.loadBoardState();
         // Update renderer with loaded components and connections
         this.canvasRenderer.updateComponents(this.state.getComponents());
         this.canvasRenderer.updateConnections(this.state.getConnections());
         this.canvasRenderer.render();
+
+        // Restore truth table if it was visible
+        const truthTableState = this.state.getTruthTableState();
+        if (truthTableState && truthTableState.visible) {
+            console.log('Restoring truth table from saved state...');
+            this.generateTruthTable();
+        }
 
         // Initialize toolbar (after DOM is ready)
         this.toolbar.init();
@@ -188,6 +195,8 @@ class CircuitSimulator {
             this.state.setCurrentBoardName(null);
             this.state.setCurrentComponentName(null);
             this.toolbar.updateCircuitNameDisplay(null, false);
+            // Emit event to close truth table and notify other components
+            eventBus.emit(EVENT_TYPES.BOARD_CLEARED);
             this.redraw();
         });
     }
@@ -222,8 +231,7 @@ class CircuitSimulator {
 
     handleNewBoard() {
         this.operations.createNewBoard(
-            (callback) => this.dialogManager.showSaveOptionsDialog(callback),
-            () => this.updateToolbarDisplays()
+            (callback) => this.dialogManager.showSaveOptionsDialog(callback)
         );
     }
 
@@ -234,34 +242,19 @@ class CircuitSimulator {
 
     handleSimulationStep(direction) {
         if (direction === 'next') {
-            this.operations.stepSimulation(
-                1,
-                (isRunning, index, total) => this.toolbar.setSimulationState(isRunning, index, total),
-                () => this.updateTruthTableHighlight()
-            );
+            this.operations.stepSimulation(1);
         } else if (direction === 'prev') {
-            this.operations.stepSimulation(
-                -1,
-                (isRunning, index, total) => this.toolbar.setSimulationState(isRunning, index, total),
-                () => this.updateTruthTableHighlight()
-            );
+            this.operations.stepSimulation(-1);
         } else if (direction === 'reset') {
-            this.operations.resetSimulation(
-                (isRunning, index, total) => this.toolbar.setSimulationState(isRunning, index, total),
-                () => this.updateTruthTableHighlight()
-            );
+            this.operations.resetSimulation();
         }
     }
 
     toggleSimulation() {
         if (this.state.isAutoCyclingActive()) {
-            this.operations.stopAutoCycle(
-                (isRunning) => this.toolbar.setSimulationState(isRunning)
-            );
+            this.operations.stopAutoCycle();
         } else {
-            this.operations.startAutoCycle(
-                (isRunning, index, total) => this.toolbar.setSimulationState(isRunning, index, total)
-            );
+            this.operations.startAutoCycle();
         }
     }
 
@@ -290,6 +283,58 @@ class CircuitSimulator {
             this.toolbar.exitToNeutralMode();
         });
 
+        // Canvas redraw event
+        eventBus.on(EVENT_TYPES.CANVAS_REDRAW, () => {
+            this.redraw();
+        });
+
+        // Toolbar update displays event
+        eventBus.on(EVENT_TYPES.TOOLBAR_UPDATE_DISPLAYS, () => {
+            this.updateToolbarDisplays();
+        });
+
+        // Truth table update highlight event
+        eventBus.on(EVENT_TYPES.TRUTH_TABLE_UPDATE_HIGHLIGHT, () => {
+            this.updateTruthTableHighlight();
+        });
+
+        // Simulation state changed event
+        eventBus.on(EVENT_TYPES.SIMULATION_STATE_CHANGED, (data) => {
+            this.toolbar.setSimulationState(data.isRunning, data.currentIndex, data.totalCombinations);
+        });
+
+        // Connection start changed event
+        eventBus.on(EVENT_TYPES.CONNECTION_START_CHANGED, (hasStart) => {
+            this.toolbar.setConnectionStart(hasStart);
+        });
+
+        // Board cleared event - destroy truth table to avoid stale data
+        eventBus.on(EVENT_TYPES.BOARD_CLEARED, () => {
+            if (this.truthTablePanel) {
+                console.log('BOARD_CLEARED: Destroying truth table panel');
+                this.truthTablePanel.hide();
+                // Don't remove the panel from DOM - it's part of static HTML and should remain
+                // Just destroy the TruthTablePanel object so it's regenerated with new board data
+                this.truthTablePanel = null;
+                // Clear truth table state for this board
+                this.state.setTruthTableState(null);
+                console.log('Truth table panel destroyed and state cleared');
+            }
+        });
+
+        // Board loaded event - destroy truth table to avoid stale data
+        eventBus.on(EVENT_TYPES.BOARD_LOADED, () => {
+            if (this.truthTablePanel) {
+                console.log('BOARD_LOADED: Destroying truth table panel');
+                this.truthTablePanel.hide();
+                // Don't remove the panel from DOM - it's part of static HTML and should remain
+                // Just destroy the TruthTablePanel object so it's regenerated with new board data
+                this.truthTablePanel = null;
+                // Note: Don't clear state here - board might have saved truth table state
+                console.log('Truth table panel destroyed');
+            }
+        });
+
         // NOTE: Theme toggle now handled by ThemeManager class
     }
 
@@ -301,7 +346,7 @@ class CircuitSimulator {
             this.operations.placeComponent(x, y, this.state.getSelectedTool());
         } else if (this.state.getMode() === 'connect') {
             console.log('Calling handleConnect');
-            this.operations.handleConnect(x, y, (hasStart) => this.toolbar.setConnectionStart(hasStart));
+            this.operations.handleConnect(x, y);
         } else if (this.state.getMode() === 'delete') {
             console.log('Calling handleDelete');
             this.operations.handleDelete(x, y, (x, y) => this.findConnection(x, y));
@@ -362,6 +407,8 @@ class CircuitSimulator {
 
     moveComponent(component, newX, newY) {
         // Update component position (snap to grid)
+        const oldX = component.x;
+        const oldY = component.y;
         component.x = Math.round(newX / 50) * 50;
         component.y = Math.round(newY / 50) * 50;
 
@@ -369,6 +416,16 @@ class CircuitSimulator {
         component.inputs = [];
         component.outputs = [];
         this.defineComponentPorts(component);
+
+        // Emit event if position actually changed
+        if (oldX !== component.x || oldY !== component.y) {
+            eventBus.emit(EVENT_TYPES.COMPONENT_MOVED, {
+                component,
+                oldState: { x: oldX, y: oldY },
+                updates: { x: component.x, y: component.y }
+            });
+            eventBus.emit(EVENT_TYPES.BOARD_CHANGED);
+        }
     }
 
     // handleConnect moved to CircuitOperations
@@ -379,7 +436,7 @@ class CircuitSimulator {
         const component = this.findComponent(x, y);
         if (component && component.type === 'INPUT') {
             component.value = component.value === 0 ? 1 : 0;
-            this.operations.simulate(() => this.updateTruthTableHighlight());
+            this.operations.simulate();
         }
     }
 
@@ -472,39 +529,57 @@ class CircuitSimulator {
     }
 
     simulate() {
-        this.operations.simulate(() => this.updateTruthTableHighlight());
+        this.operations.simulate();
     }
 
     generateTruthTable() {
-        // Initialize truth table panel if not already created
-        if (!this.truthTablePanel) {
+        console.log('generateTruthTable called, current panel:', this.truthTablePanel);
+        // Initialize truth table panel if not already created OR if DOM was removed
+        const needsNewPanel = !this.truthTablePanel ||
+                             (this.truthTablePanel.panel && !document.body.contains(this.truthTablePanel.panel));
+
+        if (needsNewPanel) {
+            if (this.truthTablePanel) {
+                console.log('Panel exists but DOM was removed, creating new one...');
+            } else {
+                console.log('Creating new TruthTablePanel...');
+            }
             this.truthTablePanel = new TruthTablePanel(
                 this.canvas,
                 this.state.getComponents(),
                 this.state.getConnections(),
                 this.simulate.bind(this)
             );
+            console.log('TruthTablePanel created:', this.truthTablePanel);
 
             // Hook up state persistence
             this.truthTablePanel.onStateChange = (state) => {
                 this.state.setTruthTableState(state);
-                this.operations.saveBoardState();
+                // Event system will trigger auto-save via TRUTH_TABLE_STATE_CHANGED event
             };
 
-            // Restore saved state if available
+            // Restore saved state if available (position, size, etc.)
             const truthTableState = this.state.getTruthTableState();
             if (truthTableState) {
+                console.log('Restoring truth table UI state:', truthTableState);
                 this.truthTablePanel.setState(truthTableState);
             }
+        } else {
+            console.log('Reusing existing TruthTablePanel');
         }
 
         // Generate and display truth table
+        console.log('Calling generate()...');
         const success = this.truthTablePanel.generate();
+        console.log('Generate returned:', success);
         if (success) {
+            console.log('Calling display()...');
             this.truthTablePanel.display();
 
             // Store reference for backward compatibility
             this.state.setTruthTableData(this.truthTablePanel.truthTableData);
+        } else {
+            console.error('Failed to generate truth table');
         }
     }
 
@@ -565,14 +640,14 @@ class CircuitSimulator {
      * Handle saving component - callback for DialogManager
      */
     async handleSaveComponent(name, description) {
-        await this.operations.saveComponent(name, description, () => this.updateToolbarDisplays());
+        await this.operations.saveComponent(name, description);
     }
 
     /**
      * Handle deleting component - callback for DialogManager
      */
     async handleDeleteComponent(name) {
-        await this.operations.deleteComponent(name, () => this.updateToolbarDisplays());
+        await this.operations.deleteComponent(name);
     }
 
     // Export/Import Methods
@@ -586,12 +661,12 @@ class CircuitSimulator {
     }
 
     async importComponentFromFile(event) {
-        await this.operations.importComponent(event, () => this.updateToolbarDisplays());
+        await this.operations.importComponent(event);
     }
 
     // Edit Component Method
     async loadComponentForEditing(name) {
-        await this.operations.loadComponentForEditing(name, () => this.updateToolbarDisplays());
+        await this.operations.loadComponentForEditing(name);
     }
 
     // stepSimulation and resetSimulation moved to CircuitOperations
@@ -648,19 +723,18 @@ class CircuitSimulator {
     }
 
     async saveCurrentBoard(boardName) {
+        // CircuitOperations.saveCurrentBoard already updates saved boards list
         await this.operations.saveCurrentBoard(boardName);
-        await this.loadSavedBoards();
-        this.updateToolbarDisplays();
     }
 
     async loadBoard(boardName) {
-        await this.operations.loadBoard(boardName, () => this.updateToolbarDisplays());
+        await this.operations.loadBoard(boardName);
     }
 
     // createNewBoard now called through operations.createNewBoard in handleNewBoard
 
     async deleteBoard(boardName) {
-        await this.operations.deleteBoard(boardName, () => this.updateToolbarDisplays());
+        await this.operations.deleteBoard(boardName);
     }
 }
 

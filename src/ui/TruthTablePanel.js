@@ -157,10 +157,36 @@ export class TruthTablePanel {
             console.log('ℹ️ No existing table to destroy');
         }
 
-        // Show panel first so Tabulator can measure dimensions
-        console.log('👀 Setting panel display to block...');
+        // Apply saved position BEFORE making panel visible to avoid flicker
+        if (this.state && !wasVisible) {
+            console.log('📍 Pre-positioning panel to avoid flicker...');
+            // Apply the saved position before showing the panel
+            if (this.state.width) {
+                this.panel.style.width = this.state.width;
+            }
+            if (this.state.height) {
+                this.panel.style.height = this.state.height;
+            }
+            if (this.state.x !== undefined && this.state.y !== undefined) {
+                this.panel.style.left = '0';
+                this.panel.style.top = '0';
+                this.panel.style.transform = `translate(${this.state.x}px, ${this.state.y}px)`;
+                this.panel.setAttribute('data-x', this.state.x);
+                this.panel.setAttribute('data-y', this.state.y);
+                console.log(`✅ Pre-positioned at (${this.state.x}, ${this.state.y})`);
+            }
+        }
+
+        // Show panel first (change from display: none to display: block)
+        console.log('👁️ Setting panel display to block...');
         this.panel.style.display = 'block';
-        console.log('✅ Panel display now:', this.panel.style.display);
+        console.log('✅ Panel display set to block');
+
+        // Panel in layout but invisible during construction (Tabulator can measure)
+        console.log('👀 Setting panel opacity to 0 and pointer-events to auto...');
+        this.panel.style.opacity = '0';
+        this.panel.style.pointerEvents = 'auto';
+        console.log('✅ Panel invisible but in layout for Tabulator measurement');
 
         // Generate Tabulator columns with groups
         console.log('📊 Generating columns...');
@@ -234,7 +260,9 @@ export class TruthTablePanel {
                     console.log('    - data-x:', this.panel.getAttribute('data-x'));
                     console.log('    - data-y:', this.panel.getAttribute('data-y'));
                 } else {
-                    console.log('💾 Restoring saved position:', this.state);
+                    // Position was already applied before display() to avoid flicker
+                    // Just validate it here with restoreState to ensure bounds checking
+                    console.log('💾 Validating pre-applied position:', this.state);
                     this.restoreState(this.state);
                 }
             } else {
@@ -245,6 +273,16 @@ export class TruthTablePanel {
             console.log('🎨 Updating highlight...');
             this.updateHighlight();
             console.log('✅ Highlight updated');
+
+            // Reveal panel with instant transition (table is fully constructed)
+            console.log('✨ Revealing fully-constructed table...');
+            this.panel.style.opacity = '1';
+            console.log('✅ Panel revealed instantly');
+
+            // Save state after showing the panel
+            console.log('💾 Saving state after showing panel...');
+            this.saveState();
+            console.log('✅ State saved');
         });
 
         // Listen for column reorder
@@ -384,10 +422,18 @@ export class TruthTablePanel {
     }
 
     /**
-     * Setup Interact.js for drag and resize
+     * Setup Interact.js for drag and resize, and close button listener
      */
     setupInteractions() {
         const panel = this.panel;
+
+        // Setup close button
+        const closeButton = document.getElementById('closeTruthTable');
+        if (closeButton) {
+            closeButton.addEventListener('click', () => {
+                this.hide();
+            });
+        }
 
         interact(panel)
             .draggable({
@@ -483,7 +529,7 @@ export class TruthTablePanel {
             height: this.panel.style.height,
             x: x,
             y: y,
-            visible: this.panel.style.display !== 'none'
+            visible: this.panel.style.opacity !== '0'
         };
 
         console.log('  📝 Saved state:', this.state);
@@ -583,6 +629,8 @@ export class TruthTablePanel {
         console.log('=== TruthTablePanel.hide() called ===');
         if (this.panel) {
             console.log('🙈 Hiding panel...');
+            this.panel.style.opacity = '0';
+            this.panel.style.pointerEvents = 'none';
             this.panel.style.display = 'none';
             console.log('💾 Saving state...');
             this.saveState();

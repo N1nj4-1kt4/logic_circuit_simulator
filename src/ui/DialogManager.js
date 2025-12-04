@@ -345,6 +345,8 @@ export class DialogManager {
             // Add edit handler
             item.querySelector('.edit-btn').addEventListener('click', () => {
                 this.callbacks.onLoadComponentForEditing(name);
+                // Close the manage components dialog after loading
+                DialogFactory.hideDialog(this.dialogs.manageComponents);
             });
 
             // Add export handler
@@ -609,20 +611,37 @@ export class DialogManager {
         const discardChanges = document.getElementById('discardChanges');
 
         saveAsCurrentBoard?.addEventListener('click', async () => {
+            console.log('💾 Update Current Board clicked');
             const currentBoardName = this.callbacks.getCurrentBoardName();
+            console.log('Current board name:', currentBoardName);
             if (currentBoardName) {
-                await this.callbacks.onSaveCurrentBoard(currentBoardName);
-            }
-            this.hideSaveOptionsDialog();
-            if (this.state.pendingActionAfterSave) {
-                this.state.pendingActionAfterSave();
-                this.state.pendingActionAfterSave = null;
+                try {
+                    console.log('Attempting to save current board:', currentBoardName);
+                    await this.callbacks.onSaveCurrentBoard(currentBoardName);
+                    console.log('Save completed successfully');
+                    this.hideSaveOptionsDialog();
+                    if (this.state.pendingActionAfterSave) {
+                        this.state.pendingActionAfterSave();
+                        this.state.pendingActionAfterSave = null;
+                    }
+                } catch (error) {
+                    console.error('Error saving current board:', error);
+                    const errorMessage = error.message || 'Unknown error occurred';
+                    DialogFactory.showAlert({
+                        message: `Failed to save board: ${errorMessage}`,
+                        type: 'error'
+                    });
+                }
+            } else {
+                console.warn('No current board name to save to');
+                this.hideSaveOptionsDialog();
             }
         });
 
         saveAsNewBoard?.addEventListener('click', () => {
             this.hideSaveOptionsDialog();
-            this.promptForBoardName(null, async (boardName) => {
+            // Pass the next board name as the default for "Save as New Board"
+            this.promptForBoardName(this.getNextBoardName(), async (boardName) => {
                 await this.callbacks.onSaveCurrentBoard(boardName);
                 if (this.state.pendingActionAfterSave) {
                     this.state.pendingActionAfterSave();
