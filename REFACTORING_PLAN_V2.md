@@ -11,16 +11,16 @@
 **Current State:**
 - 77% reduction in main file achieved
 - 32 modular source files (added hitDetection.js, errors.js, logger.js, naming.js)
-- 591 tests passing (~55% coverage by module)
+- 586 tests passing (~55% coverage by module)
 - Event bus foundation in place
 - Phase 10.1 completed ✅
 - Phase 10.2 completed ✅
 - Phase 10.3 completed ✅
 - Phase 10.4 completed ✅
 - Phase 10.5 completed ✅
+- Phase 10.6 completed ✅
 
 **Remaining Work:**
-- 1 separation of concerns violation (drag state in CircuitState)
 - ~55% test coverage (critical modules untested)
 - Event bus underutilized
 
@@ -406,46 +406,35 @@ export const UI = {
 
 ---
 
-### Phase 10.6: Move Drag State to Interaction Layer
+### Phase 10.6: Move Drag State to Interaction Layer ✅ COMPLETED
 
 **Goal:** UI interaction state should not be in core circuit state
 
-**Timeline:** 1 hour
+**Status:** ✅ Completed
 
-**Files to Modify:**
+**Files Modified:**
+- `src/interaction/ComponentDragger.js` - Added local `dragState` object with all drag properties:
+  - `isDragging` - Boolean flag
+  - `component` - Reference to component being dragged
+  - `offset` - `{x, y}` offset from mouse to component center
+  - `startPos` - Initial mouse position (for threshold detection)
+  - `hasMoved` - Whether movement threshold was exceeded
+  - Added `getHasMoved()` and `resetHasMoved()` methods for CanvasInteraction
 
-1. **`src/core/CircuitState.js`** - Remove drag properties (lines 43-48):
-   ```javascript
-   // REMOVE these properties:
-   this.isDraggingComponent = false;
-   this.draggedComponent = null;
-   this.dragOffset = { x: 0, y: 0 };
-   this.dragStartPos = { x: 0, y: 0 };
-   this.hasMoved = false;
-   ```
+- `src/interaction/CanvasInteraction.js` - Updated to use `componentDragger.getHasMoved()` and `resetHasMoved()` instead of accessing state directly
 
-2. **`src/interaction/CanvasInteraction.js`** - Add local drag state:
-   ```javascript
-   constructor(config) {
-       // ... existing code ...
+- `src/core/CircuitState.js` - Removed:
+  - Drag properties from constructor (5 properties)
+  - Drag state section with 10 methods (setDraggingState, isDragging, etc.)
+  - Drag state reset from `reset()` method
 
-       // Drag state (local to interaction layer)
-       this.dragState = {
-           isDragging: false,
-           component: null,
-           offset: { x: 0, y: 0 },
-           startPos: { x: 0, y: 0 },
-           hasMoved: false
-       };
-   }
-   ```
+- `tests/unit/core/CircuitState.test.js` - Removed drag state tests (5 tests)
 
-3. **`src/interaction/ComponentDragger.js`** - Update to use local state
-
-**Success Criteria:**
+**Results:**
+- All 586 tests pass
 - CircuitState contains only circuit-related state
-- Drag functionality unchanged
-- All tests pass
+- Drag functionality unchanged (encapsulated in ComponentDragger)
+- Clean separation: interaction state stays in interaction layer
 
 ---
 
@@ -634,7 +623,7 @@ eventBus.on(EVENT_TYPES.MODE_CHANGED, (mode) => this.handleModeChange(mode));
 | 10.3 Constants | MEDIUM | 1-2h | Maintainability | ✅ Done |
 | 10.4 Console Cleanup | HIGH | 1h | Production ready | ✅ Done |
 | 10.5 Remove Duplicates | MEDIUM | 30m | Single source of truth | ✅ Done |
-| 10.6 Move Drag State | MEDIUM | 1h | Clean architecture | Pending |
+| 10.6 Move Drag State | MEDIUM | 1h | Clean architecture | ✅ Done |
 | 11.1 CircuitOperations Tests | HIGH | 3-4h | Coverage | Pending |
 | 11.2 Interaction Tests | MEDIUM | 2h | Coverage | Pending |
 | 11.3 Rendering Tests | LOW | 2h | Coverage | Pending |
@@ -652,7 +641,7 @@ After completing Phase 10-11:
 | Test Coverage (modules) | 50% | 80% |
 | Console.log Statements | 0 ✅ | 0 |
 | Hardcoded Colors | 0 ✅ | 0 |
-| Separation Violations | 2 | 0 |
+| Separation Violations | 1 ✅ | 0 |
 | Files > 800 lines | 3 | 0 (Phase 12) |
 
 ---

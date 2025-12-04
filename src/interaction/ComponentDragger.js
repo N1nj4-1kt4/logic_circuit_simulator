@@ -1,14 +1,15 @@
 /**
  * ComponentDragger
  * Handles dragging of components on the canvas
+ *
+ * Drag state is managed locally in this class (not in CircuitState)
+ * since it's UI interaction state, not circuit state.
  */
-
-import { eventBus, EVENT_TYPES } from '../utils/eventBus.js';
 
 export class ComponentDragger {
     /**
      * @param {Object} params
-     * @param {CircuitState} params.state - The circuit state instance
+     * @param {CircuitState} params.state - The circuit state instance (for mode checks only)
      * @param {Function} params.findComponent - Function to find component at coordinates
      * @param {Function} params.moveComponent - Function to move a component
      * @param {Function} params.redraw - Function to redraw the canvas
@@ -18,6 +19,15 @@ export class ComponentDragger {
         this.findComponent = findComponent;
         this.moveComponent = moveComponent;
         this.redraw = redraw;
+
+        // Local drag state (UI interaction state, not circuit state)
+        this.dragState = {
+            isDragging: false,
+            component: null,
+            offset: { x: 0, y: 0 },
+            startPos: null,
+            hasMoved: false
+        };
     }
 
     /**
@@ -29,7 +39,7 @@ export class ComponentDragger {
      */
     handleMouseDown(x, y, canvas) {
         // Reset hasMoved flag for all clicks
-        this.state.setHasMoved(false);
+        this.dragState.hasMoved = false;
 
         // Only allow dragging if not in special modes and no tool selected for placement
         const isPlacementMode = this.state.getMode() === 'place' && this.state.getSelectedTool();
@@ -37,13 +47,13 @@ export class ComponentDragger {
             const component = this.findComponent(x, y);
             if (component) {
                 // If a component is clicked, prepare for potential drag
-                this.state.setDraggingState(false); // Don't set true yet
-                this.state.setDraggedComponent(component);
-                this.state.setDragStartPos({ x, y });
-                const dragOffset = this.state.getDragOffset();
-                dragOffset.x = x - component.x;
-                dragOffset.y = y - component.y;
-                this.state.setDragOffset(dragOffset);
+                this.dragState.isDragging = false; // Don't set true yet
+                this.dragState.component = component;
+                this.dragState.startPos = { x, y };
+                this.dragState.offset = {
+                    x: x - component.x,
+                    y: y - component.y
+                };
                 return true;
             }
         }
@@ -59,25 +69,24 @@ export class ComponentDragger {
      */
     handleMouseMove(x, y, canvas) {
         // Check if we should start dragging (movement threshold)
-        const draggedComponent = this.state.getDraggedComponent();
-        const dragStartPos = this.state.getDragStartPos();
+        const { component, startPos, isDragging } = this.dragState;
 
-        if (draggedComponent && !this.state.isDragging() && dragStartPos) {
-            const dx = Math.abs(x - dragStartPos.x);
-            const dy = Math.abs(y - dragStartPos.y);
+        if (component && !isDragging && startPos) {
+            const dx = Math.abs(x - startPos.x);
+            const dy = Math.abs(y - startPos.y);
             if (dx > 3 || dy > 3) { // 3px movement threshold
-                this.state.setDraggingState(true);
-                this.state.setHasMoved(true);
+                this.dragState.isDragging = true;
+                this.dragState.hasMoved = true;
                 canvas.style.cursor = 'grabbing';
             }
         }
 
         // Handle component dragging
-        if (this.state.isDragging() && draggedComponent) {
-            const dragOffset = this.state.getDragOffset();
-            const newX = x - dragOffset.x;
-            const newY = y - dragOffset.y;
-            this.moveComponent(draggedComponent, newX, newY);
+        if (this.dragState.isDragging && component) {
+            const { offset } = this.dragState;
+            const newX = x - offset.x;
+            const newY = y - offset.y;
+            this.moveComponent(component, newX, newY);
             this.redraw();
             return true;
         }
@@ -90,10 +99,10 @@ export class ComponentDragger {
      * @param {HTMLElement} canvas - Canvas element
      */
     handleMouseUp(canvas) {
-        // Reset drag state
-        this.state.setDraggingState(false);
-        this.state.setDraggedComponent(null);
-        this.state.setDragStartPos(null);
+        // Reset drag state (but preserve hasMoved for click detection)
+        this.dragState.isDragging = false;
+        this.dragState.component = null;
+        this.dragState.startPos = null;
         canvas.style.cursor = 'crosshair';
     }
 
@@ -102,6 +111,21 @@ export class ComponentDragger {
      * @returns {boolean}
      */
     isDragging() {
-        return this.state.isDragging();
+        return this.dragState.isDragging;
+    }
+
+    /**
+     * Check if component has moved (for click vs drag detection)
+     * @returns {boolean}
+     */
+    getHasMoved() {
+        return this.dragState.hasMoved;
+    }
+
+    /**
+     * Reset the hasMoved flag (called after click is processed)
+     */
+    resetHasMoved() {
+        this.dragState.hasMoved = false;
     }
 }

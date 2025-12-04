@@ -316,38 +316,8 @@ describe('CircuitState', () => {
         });
     });
 
-    describe('Drag State', () => {
-        it('should set and get dragging state', () => {
-            state.setDraggingState(true);
-            expect(state.isDragging()).toBe(true);
-        });
-
-        it('should set and get dragged component', () => {
-            const component = { id: 1, type: 'AND', x: 100, y: 100 };
-            state.setDraggedComponent(component);
-
-            expect(state.getDraggedComponent()).toEqual(component);
-        });
-
-        it('should set and get drag offset', () => {
-            const offset = { x: 10, y: 20 };
-            state.setDragOffset(offset);
-
-            expect(state.getDragOffset()).toEqual(offset);
-        });
-
-        it('should set and get drag start position', () => {
-            const pos = { x: 100, y: 100 };
-            state.setDragStartPos(pos);
-
-            expect(state.getDragStartPos()).toEqual(pos);
-        });
-
-        it('should set and get has moved flag', () => {
-            state.setHasMoved(true);
-            expect(state.getHasMoved()).toBe(true);
-        });
-    });
+    // Note: Drag state tests removed in Phase 10.6
+    // Drag state is now managed locally in ComponentDragger (interaction layer)
 
     describe('Bulk State Operations', () => {
         it('should load a complete state', () => {

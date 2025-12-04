@@ -152,8 +152,8 @@ export class CanvasInteraction {
      */
     handleClick(e) {
         // Don't process click if it was actually a drag
-        if (this.state.getHasMoved()) {
-            this.state.setHasMoved(false);
+        if (this.componentDragger.getHasMoved()) {
+            this.componentDragger.resetHasMoved();
             return;
         }
 

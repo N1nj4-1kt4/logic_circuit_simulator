@@ -42,13 +42,6 @@ export class CircuitState {
         this.autoCycleTimeout = null;
         this.currentCycleIndex = 0;
         this.totalCombinations = 0;
-
-        // Drag state (managed by interaction layer, but stored here)
-        this.isDraggingComponent = false;
-        this.draggedComponent = null;
-        this.dragOffset = { x: 0, y: 0 };
-        this.dragStartPos = null;
-        this.hasMoved = false;
     }
 
     // ====================================
@@ -512,90 +505,6 @@ export class CircuitState {
     }
 
     // ====================================
-    // Drag State
-    // ====================================
-
-    /**
-     * Set dragging state
-     * @param {boolean} isDragging - Whether dragging is active
-     */
-    setDraggingState(isDragging) {
-        this.isDraggingComponent = isDragging;
-    }
-
-    /**
-     * Get dragging state
-     * @returns {boolean} Whether dragging is active
-     */
-    isDragging() {
-        return this.isDraggingComponent;
-    }
-
-    /**
-     * Set dragged component
-     * @param {Object|null} component - Component being dragged
-     */
-    setDraggedComponent(component) {
-        this.draggedComponent = component;
-    }
-
-    /**
-     * Get dragged component
-     * @returns {Object|null} Component being dragged
-     */
-    getDraggedComponent() {
-        return this.draggedComponent;
-    }
-
-    /**
-     * Set drag offset
-     * @param {Object} offset - Drag offset {x, y}
-     */
-    setDragOffset(offset) {
-        this.dragOffset = offset;
-    }
-
-    /**
-     * Get drag offset
-     * @returns {Object} Drag offset
-     */
-    getDragOffset() {
-        return this.dragOffset;
-    }
-
-    /**
-     * Set drag start position
-     * @param {Object|null} pos - Drag start position {x, y} or null
-     */
-    setDragStartPos(pos) {
-        this.dragStartPos = pos;
-    }
-
-    /**
-     * Get drag start position
-     * @returns {Object|null} Drag start position
-     */
-    getDragStartPos() {
-        return this.dragStartPos;
-    }
-
-    /**
-     * Set has moved flag
-     * @param {boolean} hasMoved - Whether component has moved
-     */
-    setHasMoved(hasMoved) {
-        this.hasMoved = hasMoved;
-    }
-
-    /**
-     * Get has moved flag
-     * @returns {boolean} Whether component has moved
-     */
-    getHasMoved() {
-        return this.hasMoved;
-    }
-
-    // ====================================
     // Bulk State Operations
     // ====================================
 
@@ -639,11 +548,6 @@ export class CircuitState {
         this.autoCycleTimeout = null;
         this.currentCycleIndex = 0;
         this.totalCombinations = 0;
-        this.isDraggingComponent = false;
-        this.draggedComponent = null;
-        this.dragOffset = { x: 0, y: 0 };
-        this.dragStartPos = null;
-        this.hasMoved = false;
 
         eventBus.emit(EVENT_TYPES.BOARD_CLEARED);
     }
