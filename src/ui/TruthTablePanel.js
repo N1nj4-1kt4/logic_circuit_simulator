@@ -39,6 +39,9 @@ export class TruthTablePanel {
         // Interaction setup flag
         this.interactionsSetup = false;
 
+        // RAF handle for debounced resize
+        this.resizeRAF = null;
+
         // Callback for state changes (to trigger save)
         this.onStateChange = null;
     }
@@ -276,6 +279,22 @@ export class TruthTablePanel {
             this.updateHighlight();
             console.log('✅ Highlight updated');
 
+            // Apply saved height to Tabulator after table is built
+            // This ensures the table fills the panel on reload/regeneration
+            // Calculate from panel dimensions for accuracy
+            const panelHeader = this.panel.querySelector('.panel-header');
+            const headerHeight = panelHeader ? panelHeader.offsetHeight : 0;
+            const panelStyles = getComputedStyle(this.panel);
+            const paddingTop = parseFloat(panelStyles.paddingTop) || 0;
+            const paddingBottom = parseFloat(panelStyles.paddingBottom) || 0;
+            const panelHeight = this.panel.offsetHeight;
+            const availableHeight = panelHeight - headerHeight - paddingTop - paddingBottom;
+
+            if (availableHeight > 0) {
+                console.log('📐 Setting table height to:', availableHeight);
+                this.applyTableHeight(availableHeight);
+            }
+
             // Reveal panel with instant transition (table is fully constructed)
             console.log('✨ Revealing fully-constructed table...');
             this.panel.style.opacity = '1';
@@ -310,7 +329,6 @@ export class TruthTablePanel {
         const inputCols = inputs.map((input, i) => ({
             title: input.label || `I${i}`,
             field: `input${i}`,
-            width: 60,
             minWidth: 60,
             headerSort: false,
             formatter: (cell) => cell.getValue() ? '1' : '0',
@@ -320,7 +338,6 @@ export class TruthTablePanel {
         const outputCols = outputs.map((output, i) => ({
             title: output.label || `O${i}`,
             field: `output${i}`,
-            width: 60,
             minWidth: 60,
             headerSort: false,
             formatter: (cell) => {
@@ -424,6 +441,78 @@ export class TruthTablePanel {
     }
 
     /**
+     * Apply height to table, distributing space across rows
+     * Similar to fitColumns but for row heights
+     */
+    applyTableHeight(availableHeight) {
+        if (!this.table) return;
+
+        const content = document.getElementById('truthTableContent');
+        if (!content) return;
+
+        // Set container heights
+        content.style.height = availableHeight + 'px';
+        const tabulatorEl = content.querySelector('.tabulator');
+        if (tabulatorEl) {
+            tabulatorEl.style.height = availableHeight + 'px';
+        }
+
+        // Get the header height to calculate available space for rows
+        const headerEl = content.querySelector('.tabulator-header');
+        const headerHeight = headerEl ? headerEl.offsetHeight : 0;
+
+        // Calculate available height for rows
+        const rowAreaHeight = availableHeight - headerHeight;
+
+        // Set the tableholder and table heights explicitly
+        const tableholder = content.querySelector('.tabulator-tableholder');
+        if (tableholder) {
+            tableholder.style.height = rowAreaHeight + 'px';
+        }
+
+        const tableEl = content.querySelector('.tabulator-table');
+        if (tableEl) {
+            tableEl.style.height = rowAreaHeight + 'px';
+            // Don't change display - Tabulator handles row layout
+        }
+
+        // Get number of rows
+        const rows = this.table.getRows();
+        const rowCount = rows.length;
+
+        if (rowCount > 0 && rowAreaHeight > 0) {
+            // Calculate height per row (minimum 25px)
+            const minRowHeight = 25;
+            const rowHeight = Math.max(minRowHeight, Math.floor(rowAreaHeight / rowCount));
+
+            console.log('📊 Row calculation:', { availableHeight, headerHeight, rowAreaHeight, rowCount, rowHeight });
+
+            // Apply row height via CSS on the rows and cells
+            // Use setProperty to add !important without wiping existing styles
+            const rowElements = content.querySelectorAll('.tabulator-row');
+            rowElements.forEach(row => {
+                row.style.setProperty('height', rowHeight + 'px', 'important');
+                row.style.setProperty('min-height', rowHeight + 'px', 'important');
+                row.style.setProperty('max-height', rowHeight + 'px', 'important');
+
+                // Set cell heights within this row
+                // Calculate padding to vertically center content (assuming ~20px content height)
+                const contentHeight = 20;
+                const verticalPadding = Math.max(0, (rowHeight - contentHeight) / 2);
+
+                const cells = row.querySelectorAll('.tabulator-cell');
+                cells.forEach(cell => {
+                    cell.style.setProperty('height', 'auto', 'important');
+                    cell.style.setProperty('padding-top', verticalPadding + 'px', 'important');
+                    cell.style.setProperty('padding-bottom', verticalPadding + 'px', 'important');
+                });
+            });
+        }
+
+        // Don't call redraw() as it resets our styles
+    }
+
+    /**
      * Setup Interact.js for drag and resize, and close button listener
      */
     setupInteractions() {
@@ -499,11 +588,37 @@ export class TruthTablePanel {
         target.setAttribute('data-x', deltaX);
         target.setAttribute('data-y', deltaY);
 
-        // Force Tabulator to recalculate and redraw
-        if (this.table) {
-            // Use redraw(true) to force full redraw
-            this.table.redraw(true);
+        // Calculate available height from panel dimensions
+        // We can't rely on content.clientHeight as flex layout may not have updated yet
+        const panelHeader = target.querySelector('.panel-header');
+        const headerHeight = panelHeader ? panelHeader.offsetHeight : 0;
+        const panelStyles = getComputedStyle(target);
+        const paddingTop = parseFloat(panelStyles.paddingTop) || 0;
+        const paddingBottom = parseFloat(panelStyles.paddingBottom) || 0;
+        const availableHeight = event.rect.height - headerHeight - paddingTop - paddingBottom;
+
+        console.log('📏 resizeMoveListener:', {
+            'event.rect.height': event.rect.height,
+            'event.rect.width': event.rect.width,
+            headerHeight,
+            paddingTop,
+            paddingBottom,
+            availableHeight,
+            'this.table exists': !!this.table
+        });
+
+        // Debounce Tabulator redraw using requestAnimationFrame
+        if (this.resizeRAF) {
+            cancelAnimationFrame(this.resizeRAF);
         }
+        this.resizeRAF = requestAnimationFrame(() => {
+            console.log('🔄 RAF callback - setting height to:', availableHeight);
+            if (this.table && availableHeight > 0) {
+                this.applyTableHeight(availableHeight);
+            } else {
+                console.log('❌ this.table is null/undefined or invalid height');
+            }
+        });
     }
 
     /**
