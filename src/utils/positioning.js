@@ -158,26 +158,20 @@ export function positionPanelSmartly(panel, canvas, components) {
         });
     });
 
-    // Try right of components (within canvas)
+    // Edge-adjacent positions with overlap-based scoring
+    // These have HIGHER base priorities than corners because they're contextually
+    // better (closer to components) when they don't overlap
+    const edgePositions = [];
+
+    // Try right of components (within canvas) - preferred position
     if (componentBox.right + margin + panelWidth < canvasRight - margin) {
         const topPos = Math.max(canvasTop + margin, Math.min(componentBox.top, canvasBottom - panelHeight - margin));
         if (topPos + panelHeight <= canvasBottom - margin) {
-            positions.push({
+            edgePositions.push({
+                name: 'right-of-components',
                 left: componentBox.right + margin,
                 top: topPos,
-                score: 80
-            });
-        }
-    }
-
-    // Try left of components (within canvas)
-    if (componentBox.left - margin - panelWidth > canvasLeft + margin) {
-        const topPos = Math.max(canvasTop + margin, Math.min(componentBox.top, canvasBottom - panelHeight - margin));
-        if (topPos + panelHeight <= canvasBottom - margin) {
-            positions.push({
-                left: componentBox.left - panelWidth - margin,
-                top: topPos,
-                score: 75
+                basePriority: 110
             });
         }
     }
@@ -186,10 +180,24 @@ export function positionPanelSmartly(panel, canvas, components) {
     if (componentBox.bottom + margin + panelHeight < canvasBottom - margin) {
         const leftPos = Math.max(canvasLeft + margin, Math.min(componentBox.left, canvasRight - panelWidth - margin));
         if (leftPos + panelWidth <= canvasRight - margin) {
-            positions.push({
+            edgePositions.push({
+                name: 'below-components',
                 left: leftPos,
                 top: componentBox.bottom + margin,
-                score: 70
+                basePriority: 105
+            });
+        }
+    }
+
+    // Try left of components (within canvas)
+    if (componentBox.left - margin - panelWidth > canvasLeft + margin) {
+        const topPos = Math.max(canvasTop + margin, Math.min(componentBox.top, canvasBottom - panelHeight - margin));
+        if (topPos + panelHeight <= canvasBottom - margin) {
+            edgePositions.push({
+                name: 'left-of-components',
+                left: componentBox.left - panelWidth - margin,
+                top: topPos,
+                basePriority: 102
             });
         }
     }
@@ -198,13 +206,29 @@ export function positionPanelSmartly(panel, canvas, components) {
     if (componentBox.top - margin - panelHeight > canvasTop + margin) {
         const leftPos = Math.max(canvasLeft + margin, Math.min(componentBox.left, canvasRight - panelWidth - margin));
         if (leftPos + panelWidth <= canvasRight - margin) {
-            positions.push({
+            edgePositions.push({
+                name: 'above-components',
                 left: leftPos,
                 top: componentBox.top - panelHeight - margin,
-                score: 65
+                basePriority: 101
             });
         }
     }
+
+    // Score edge positions based on overlap (same as corners)
+    edgePositions.forEach(edge => {
+        const overlapInfo = calculateComponentOverlap(edge.left, edge.top, panelWidth, panelHeight);
+        const score = edge.basePriority - overlapInfo.total;
+
+        console.log(`Edge ${edge.name}: overlap=${overlapInfo.total.toFixed(1)}%, score=${score.toFixed(1)}`);
+
+        positions.push({
+            left: edge.left,
+            top: edge.top,
+            score: score,
+            overlap: overlapInfo.total
+        });
+    });
 
     console.log('Candidate positions found:', positions.length);
 
