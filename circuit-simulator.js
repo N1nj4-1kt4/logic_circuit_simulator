@@ -319,6 +319,13 @@ class CircuitSimulator {
             this.updateTruthTableHighlight();
         });
 
+        // Truth table computed event - refresh panel when cache is updated
+        eventBus.on(EVENT_TYPES.TRUTH_TABLE_COMPUTED, () => {
+            if (this.truthTablePanel) {
+                this.truthTablePanel.refresh();
+            }
+        });
+
         // Simulation state changed event
         eventBus.on(EVENT_TYPES.SIMULATION_STATE_CHANGED, (data) => {
             this.toolbar.setSimulationState(data.isRunning, data.currentIndex, data.totalCombinations);
@@ -341,6 +348,16 @@ class CircuitSimulator {
                 this.state.setTruthTableState(null);
                 console.log('Truth table panel destroyed and state cleared');
             }
+            // Reset the DOM panel's inline styles to prevent stale dimensions
+            // affecting new boards (DOM element persists, JS object is destroyed)
+            const panel = document.getElementById('truthTablePanel');
+            if (panel) {
+                panel.style.width = '';
+                panel.style.height = '';
+                panel.style.transform = '';
+                panel.removeAttribute('data-x');
+                panel.removeAttribute('data-y');
+            }
         });
 
         // Board loaded event - destroy truth table to avoid stale data
@@ -353,6 +370,16 @@ class CircuitSimulator {
                 this.truthTablePanel = null;
                 // Note: Don't clear state here - board might have saved truth table state
                 console.log('Truth table panel destroyed');
+            }
+            // Reset the DOM panel's inline styles to prevent stale dimensions
+            // The loaded board's saved state (if any) will be applied when the panel is opened
+            const panel = document.getElementById('truthTablePanel');
+            if (panel) {
+                panel.style.width = '';
+                panel.style.height = '';
+                panel.style.transform = '';
+                panel.removeAttribute('data-x');
+                panel.removeAttribute('data-y');
             }
         });
 
