@@ -277,6 +277,11 @@ class CircuitSimulator {
             }
         });
 
+        // Help button click handler
+        document.getElementById('helpBtn')?.addEventListener('click', () => {
+            this.dialogManager.showHelpDialog();
+        });
+
         // Event bus listener for mode exit request (from right-click)
         eventBus.on(EVENT_TYPES.MODE_EXIT_REQUEST, () => {
             console.log('Right-click detected - exiting to neutral mode');

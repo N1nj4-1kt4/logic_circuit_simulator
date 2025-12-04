@@ -185,6 +185,83 @@
     color: var(--color-primary);
 }
 
+.help-content h5 {
+    color: var(--text-dark);
+    margin: 15px 0 8px 0;
+    font-size: 0.95em;
+    font-weight: 600;
+}
+
+.help-content p {
+    margin: 10px 0;
+    line-height: 1.6;
+    color: var(--text-secondary);
+}
+
+.help-content ol {
+    padding-left: 25px;
+    margin: 10px 0;
+}
+
+.help-content ol li {
+    padding-left: 5px;
+    margin-bottom: 6px;
+}
+
+.help-content ol li:before {
+    content: none;
+}
+
+/* Gates Reference Table */
+.help-content .gates-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0;
+    font-size: 0.9em;
+}
+
+.help-content .gates-table th,
+.help-content .gates-table td {
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.help-content .gates-table th {
+    background: var(--bg-light);
+    font-weight: 600;
+    color: var(--color-primary);
+}
+
+.help-content .gates-table tr:hover {
+    background: var(--bg-light);
+}
+
+.help-content .gates-table td:first-child {
+    font-weight: 600;
+    color: var(--text-dark);
+}
+
+.help-content .gates-table td:nth-child(2) {
+    font-family: monospace;
+    color: var(--color-primary);
+}
+
+/* Keyboard Shortcuts Table */
+.help-content .shortcuts-table {
+    width: 100%;
+    margin: 10px 0;
+}
+
+.help-content .shortcuts-table td {
+    padding: 8px 12px;
+    vertical-align: middle;
+}
+
+.help-content .shortcuts-table td:first-child {
+    width: 120px;
+}
+
 /* ===== Keyboard Shortcut Styling ===== */
 kbd {
     background: var(--bg-light);

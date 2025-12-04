@@ -255,14 +255,16 @@ describe('CircuitState', () => {
         });
 
         it('should get current state', () => {
-            state.addComponent({ id: 1, type: 'AND', x: 100, y: 100 });
-            state.addConnection({ from: 1, to: 2, fromPort: 0, toPort: 0 });
+            // Use generateNextId to properly increment the ID counter
+            const id = state.generateNextId();
+            state.addComponent({ id, type: 'AND', x: 100, y: 100 });
+            state.addConnection({ from: id, to: 2, fromPort: 0, toPort: 0 });
 
             const currentState = state.getCurrentState();
 
             expect(currentState.components).toHaveLength(1);
             expect(currentState.connections).toHaveLength(1);
-            expect(currentState.nextId).toBe(2);
+            expect(currentState.nextId).toBe(2); // After generating id=1, nextId should be 2
         });
     });
 
@@ -412,6 +414,131 @@ describe('CircuitState', () => {
             state.setMode('connect');
 
             expect(handler).toHaveBeenCalledWith({ mode: 'connect', oldMode: 'place' });
+        });
+    });
+
+    describe('Connection Cleanup on Component Removal', () => {
+        it('should remove all connections TO a deleted component', () => {
+            const c1 = { id: 1, type: 'INPUT', x: 100, y: 100 };
+            const c2 = { id: 2, type: 'INPUT', x: 100, y: 200 };
+            const c3 = { id: 3, type: 'AND', x: 200, y: 150 };
+
+            state.addComponent(c1);
+            state.addComponent(c2);
+            state.addComponent(c3);
+
+            state.addConnection({ from: 1, fromPort: 0, to: 3, toPort: 0 });
+            state.addConnection({ from: 2, fromPort: 0, to: 3, toPort: 1 });
+
+            expect(state.getConnections()).toHaveLength(2);
+
+            // Remove the AND gate (all connections TO it should be removed)
+            state.removeComponent(3);
+
+            expect(state.getConnections()).toHaveLength(0);
+        });
+
+        it('should remove all connections FROM a deleted component', () => {
+            const input = { id: 1, type: 'INPUT', x: 100, y: 100 };
+            const out1 = { id: 2, type: 'OUTPUT', x: 200, y: 100 };
+            const out2 = { id: 3, type: 'OUTPUT', x: 200, y: 200 };
+
+            state.addComponent(input);
+            state.addComponent(out1);
+            state.addComponent(out2);
+
+            state.addConnection({ from: 1, fromPort: 0, to: 2, toPort: 0 });
+            state.addConnection({ from: 1, fromPort: 0, to: 3, toPort: 0 });
+
+            expect(state.getConnections()).toHaveLength(2);
+
+            // Remove the INPUT (all connections FROM it should be removed)
+            state.removeComponent(1);
+
+            expect(state.getConnections()).toHaveLength(0);
+        });
+
+        it('should only remove connections involving deleted component', () => {
+            const c1 = { id: 1, type: 'INPUT', x: 100, y: 100 };
+            const c2 = { id: 2, type: 'INPUT', x: 100, y: 200 };
+            const c3 = { id: 3, type: 'AND', x: 200, y: 100 };
+            const c4 = { id: 4, type: 'OUTPUT', x: 300, y: 100 };
+
+            state.addComponent(c1);
+            state.addComponent(c2);
+            state.addComponent(c3);
+            state.addComponent(c4);
+
+            state.addConnection({ from: 1, fromPort: 0, to: 3, toPort: 0 });
+            state.addConnection({ from: 2, fromPort: 0, to: 4, toPort: 0 }); // c2 -> c4 (not involving c3)
+            state.addConnection({ from: 3, fromPort: 0, to: 4, toPort: 1 });
+
+            expect(state.getConnections()).toHaveLength(3);
+
+            // Remove AND gate
+            state.removeComponent(3);
+
+            // Only connection c2 -> c4 should remain
+            expect(state.getConnections()).toHaveLength(1);
+            expect(state.getConnections()[0]).toEqual({ from: 2, fromPort: 0, to: 4, toPort: 0 });
+        });
+    });
+
+    describe('ID Counter Management', () => {
+        it('should reset nextId to 1 when clearComponents is called', () => {
+            state.addComponent({ id: state.generateNextId(), type: 'INPUT', x: 100, y: 100 });
+            state.addComponent({ id: state.generateNextId(), type: 'OUTPUT', x: 200, y: 100 });
+
+            expect(state.generateNextId()).toBe(3);
+
+            state.clearComponents();
+
+            expect(state.generateNextId()).toBe(1);
+        });
+
+        it('should not reset nextId on regular component removal', () => {
+            state.addComponent({ id: state.generateNextId(), type: 'INPUT', x: 100, y: 100 });
+            state.addComponent({ id: state.generateNextId(), type: 'OUTPUT', x: 200, y: 100 });
+
+            state.removeComponent(1);
+
+            // nextId should continue from 3, not reset
+            expect(state.generateNextId()).toBe(3);
+        });
+
+        it('should set nextId correctly via setNextId', () => {
+            state.setNextId(100);
+            expect(state.generateNextId()).toBe(100);
+            expect(state.generateNextId()).toBe(101);
+        });
+    });
+
+    describe('Concurrent State Modifications', () => {
+        it('should handle adding and removing components in same tick', () => {
+            const c1 = { id: 1, type: 'INPUT', x: 100, y: 100 };
+            const c2 = { id: 2, type: 'OUTPUT', x: 200, y: 100 };
+
+            state.addComponent(c1);
+            state.addComponent(c2);
+            state.removeComponent(1);
+            state.addComponent({ id: 3, type: 'AND', x: 150, y: 150 });
+            state.removeComponent(2);
+
+            expect(state.getComponents()).toHaveLength(1);
+            expect(state.getComponent(3)).not.toBeNull();
+        });
+
+        it('should handle multiple connection modifications', () => {
+            state.addComponent({ id: 1, type: 'INPUT', x: 100, y: 100 });
+            state.addComponent({ id: 2, type: 'OUTPUT', x: 200, y: 100 });
+
+            const conn = { from: 1, fromPort: 0, to: 2, toPort: 0 };
+
+            state.addConnection(conn);
+            state.removeConnection(conn);
+            state.addConnection({ from: 1, fromPort: 0, to: 2, toPort: 0 });
+
+            expect(state.getConnections()).toHaveLength(1);
         });
     });
 });

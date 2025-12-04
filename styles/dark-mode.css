@@ -204,8 +204,52 @@ body.dark-mode .info-box {
 
 /* ===== Help Dialog ===== */
 body.dark-mode .help-content h4 {
-    color: #53a8f4;
+    color: #ffd54f; /* Yellow for main headers - stands out against dark bg */
     border-bottom-color: #16213e;
+}
+
+body.dark-mode .help-content h5 {
+    color: #53a8f4; /* Blue for sub-headers */
+}
+
+body.dark-mode .help-content p {
+    color: #b3b3b3;
+}
+
+body.dark-mode .help-content li {
+    color: #e0e0e0;
+}
+
+body.dark-mode .help-content li:before {
+    color: #ffd54f; /* Yellow bullet points to match headers */
+}
+
+/* Gates Reference Table - Dark Mode */
+body.dark-mode .help-content .gates-table th {
+    background: #1a1a2e;
+    color: #ffd54f;
+    border-bottom-color: #53a8f4;
+}
+
+body.dark-mode .help-content .gates-table td {
+    border-bottom-color: #2a2a3e;
+}
+
+body.dark-mode .help-content .gates-table tr:hover {
+    background: #1a1a2e;
+}
+
+body.dark-mode .help-content .gates-table td:first-child {
+    color: #e9e9e9;
+}
+
+body.dark-mode .help-content .gates-table td:nth-child(2) {
+    color: #53a8f4;
+}
+
+/* Shortcuts Table - Dark Mode */
+body.dark-mode .help-content .shortcuts-table td {
+    color: #e0e0e0;
 }
 
 body.dark-mode kbd {

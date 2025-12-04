@@ -209,11 +209,45 @@ Chain 4 FullAdder components with appropriate carry connections.
 ## 🔧 Technical Details
 
 ### Architecture
-- Pure JavaScript (no frameworks required)
+- **Event-driven architecture** with centralized state management
+- Pure JavaScript ES6+ modules (no frameworks required)
 - HTML5 Canvas for rendering
 - Responsive flexbox layout
 - LocalStorage for persistence
-- Auto-save functionality
+- Auto-save with debouncing
+
+### Module Structure
+```
+src/
+├── core/               # Core logic
+│   ├── CircuitState.js      # Single source of truth for state
+│   ├── CircuitOperations.js # Business logic operations
+│   ├── gateLogic.js         # Gate evaluation functions
+│   └── circuitEvaluator.js  # Circuit simulation engine
+├── interaction/        # User interaction
+│   ├── CanvasInteraction.js # Canvas event handling
+│   └── ComponentDragger.js  # Drag and drop logic
+├── rendering/          # Canvas drawing
+│   ├── CanvasRenderer.js    # Main renderer
+│   ├── ComponentRenderer.js # Component drawing
+│   ├── ConnectionRenderer.js# Wire drawing
+│   └── GridRenderer.js      # Grid drawing
+├── storage/            # Data persistence
+│   ├── BoardManager.js      # Board CRUD operations
+│   ├── ComponentLibrary.js  # Component library
+│   └── LocalStorageAdapter.js # Storage adapter
+├── ui/                 # User interface
+│   ├── Toolbar.js           # Toolbar management
+│   ├── DialogManager.js     # Dialog management
+│   ├── DialogFactory.js     # Programmatic dialogs
+│   ├── TruthTablePanel.js   # Truth table panel
+│   ├── ThemeManager.js      # Theme toggling
+│   └── messages.js          # Centralized messages
+└── utils/              # Utilities
+    ├── eventBus.js          # Event pub/sub system
+    ├── geometry.js          # Geometry calculations
+    └── serialization.js     # JSON serialization
+```
 
 ### Simulation Engine
 - Automatic signal propagation
@@ -232,8 +266,22 @@ Chain 4 FullAdder components with appropriate carry connections.
 - Boards saved to LocalStorage
 - Components saved to LocalStorage
 - Truth Table customization persisted
-- Auto-save on circuit changes
+- Auto-save on circuit changes (1000ms debounce)
 - Export/import via JSON files
+
+### Testing
+- **453 automated tests** covering:
+  - Storage layer (60 tests)
+  - Gate logic (58 tests)
+  - Circuit simulation (30 tests)
+  - State management (68 tests)
+  - Validation (47 tests)
+  - Edge cases (23 tests)
+  - Event bus consistency (30 tests)
+  - Auto-save (15 tests)
+  - Full workflows (122 tests)
+
+Run tests with: `npm test`
 
 ## 🌐 Browser Compatibility
 
@@ -248,8 +296,26 @@ Requires modern browser with HTML5 Canvas and LocalStorage support.
 ## 📁 Files
 
 - `index.html` - Application structure and UI layout
-- `styles.css` - Styling, themes, and responsive design
-- `circuit-simulator.js` - Core simulation engine and logic
+- `styles/` - Modular CSS files (variables, toolbar, canvas, dialogs, etc.)
+- `src/` - Modular JavaScript (see Module Structure above)
+- `circuit-simulator.js` - Main application coordinator
+- `tests/` - Comprehensive test suite (453 tests)
+
+### Development
+
+```bash
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+
+# Run tests
+npm test
+
+# Build for production
+npm run build
+```
 
 ## 💡 Tips & Best Practices
 

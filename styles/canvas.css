@@ -33,8 +33,15 @@
     flex: 1;
 }
 
-/* ===== Theme Toggle Button ===== */
-.theme-toggle {
+/* ===== Header Buttons Container ===== */
+.header-buttons {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+/* ===== Header Button Base Style ===== */
+.header-btn {
     background: var(--color-primary);
     color: var(--text-white);
     border: none;
@@ -45,11 +52,25 @@
     cursor: pointer;
     transition: all var(--transition-normal);
     box-shadow: var(--shadow-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.theme-toggle:hover {
+.header-btn:hover {
     transform: scale(1.1);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* ===== Help Button ===== */
+.help-btn {
+    font-weight: 700;
+    font-family: Georgia, 'Times New Roman', serif;
+}
+
+/* ===== Theme Toggle Button ===== */
+.theme-toggle {
+    /* Inherits from .header-btn */
 }
 
 /* ===== Breadboard Canvas ===== */

@@ -834,77 +834,184 @@ export class DialogManager {
             <section>
                 <h4>🎯 Getting Started</h4>
                 <ul>
-                    <li><strong>Select a component:</strong> Click any gate or I/O button in the left panel</li>
-                    <li><strong>Place on canvas:</strong> Click on the circuit board to place the selected component</li>
-                    <li><strong>Exit mode:</strong> Press <kbd>ESC</kbd> or <kbd>Right-click</kbd>, or click the same button again</li>
+                    <li><strong>Select a component:</strong> Click any gate or I/O button in the left toolbar</li>
+                    <li><strong>Place on canvas:</strong> Click on the breadboard to place the component</li>
+                    <li><strong>Exit mode:</strong> Press <kbd>ESC</kbd>, <kbd>Right-click</kbd>, or click the same button again</li>
+                    <li><strong>Grid alignment:</strong> Components snap to a 50px grid for clean alignment</li>
                 </ul>
             </section>
 
             <section>
                 <h4>🔌 Building Circuits</h4>
+                <h5>Adding Inputs and Outputs</h5>
                 <ul>
-                    <li><strong>Add INPUT:</strong> Select INPUT and place on canvas - click to toggle 0/1 values</li>
-                    <li><strong>Add OUTPUT:</strong> Select OUTPUT and place on canvas - displays circuit results</li>
-                    <li><strong>Connect components:</strong> Click "Connect" button, then click source output port, then target input port</li>
-                    <li><strong>Simulate:</strong> Click "Simulate" to see circuit output with current input values</li>
+                    <li><strong>INPUT:</strong> Place on canvas, click to toggle between 0 (red) and 1 (green)</li>
+                    <li><strong>OUTPUT:</strong> Place on canvas, displays circuit results automatically</li>
+                    <li><strong>Rename:</strong> Double-click any INPUT/OUTPUT to give it a meaningful label (e.g., "A", "Sum", "CarryOut")</li>
+                </ul>
+                <h5>Connecting Components</h5>
+                <ul>
+                    <li>Click "Connect" button to enter connection mode</li>
+                    <li>Click source component's <strong>output port</strong> (green dot)</li>
+                    <li>Click target component's <strong>input port</strong> (blue dot)</li>
+                    <li>Connection lines show signal values: <span style="color: green;">green=1</span>, <span style="color: red;">red=0</span>, <span style="color: gray;">gray=undefined</span></li>
+                </ul>
+                <h5>Port Locations</h5>
+                <ul>
+                    <li><strong>Inputs:</strong> One output port on the right</li>
+                    <li><strong>Outputs:</strong> One input port on the left</li>
+                    <li><strong>NOT Gate:</strong> One input (left), one output (right)</li>
+                    <li><strong>Two-input Gates:</strong> Two inputs (left top/bottom), one output (right)</li>
+                    <li><strong>Custom Components:</strong> Labeled ports showing signal names</li>
                 </ul>
             </section>
 
             <section>
-                <h4>✏️ Editing</h4>
+                <h4>⚡ Simulation</h4>
+                <h5>Auto-Cycle Simulation</h5>
                 <ul>
-                    <li><strong>Move:</strong> Click and drag any component to reposition it</li>
-                    <li><strong>Delete:</strong> Click "Delete" button, then click component or connection to remove</li>
-                    <li><strong>Rename:</strong> Double-click an INPUT or OUTPUT to change its label</li>
+                    <li>Click "Simulate" to automatically cycle through all input combinations</li>
+                    <li>Combination counter shows progress (e.g., "3 / 8")</li>
+                    <li>Connections change color to show signal propagation</li>
+                    <li>Click "Stop Simulation" to stop</li>
+                </ul>
+                <h5>Manual Simulation Controls</h5>
+                <ul>
+                    <li><strong>Next ▶:</strong> Step to next input combination</li>
+                    <li><strong>◀ Previous:</strong> Step to previous combination</li>
+                    <li><strong>Reset:</strong> Reset all inputs to 0</li>
+                    <li>Perfect for debugging specific patterns at your own pace</li>
                 </ul>
             </section>
 
             <section>
-                <h4>💾 Saving & Loading</h4>
+                <h4>✏️ Editing & Organizing</h4>
                 <ul>
-                    <li><strong>New Board:</strong> Creates a blank work-in-progress board</li>
-                    <li><strong>Save Board:</strong> Saves current circuit as a reusable board</li>
-                    <li><strong>Load Board:</strong> Opens a previously saved board for editing</li>
-                    <li><strong>Save as Component:</strong> Converts circuit into a reusable component (INPUTs become input ports, OUTPUTs become output ports)</li>
+                    <li><strong>Move:</strong> Click and drag any component to reposition</li>
+                    <li><strong>Delete Mode:</strong> Click "Delete" button, then click components or connections to remove</li>
+                    <li><strong>Rename:</strong> Double-click INPUT/OUTPUT for meaningful labels</li>
+                    <li><strong>Clear Board:</strong> Remove all components and connections</li>
+                </ul>
+            </section>
+
+            <section>
+                <h4>💾 Board Management</h4>
+                <h5>Boards vs Components</h5>
+                <ul>
+                    <li><strong>Board:</strong> Work-in-progress circuit (like a scratch pad)</li>
+                    <li><strong>Component:</strong> Finalized, reusable circuit building block</li>
+                </ul>
+                <h5>Workflow</h5>
+                <ul>
+                    <li><strong>New Board:</strong> Start fresh blank canvas</li>
+                    <li><strong>Save Board:</strong> Save current work-in-progress</li>
+                    <li><strong>Load Board:</strong> Resume work on previously saved board</li>
+                    <li><strong>Save as Component:</strong> Finalize circuit as reusable component</li>
+                </ul>
+                <h5>Smart Save Options</h5>
+                <p>When making changes, an intelligent save prompt offers: Update existing board, Save as new board, Save as component, or Discard changes.</p>
+            </section>
+
+            <section>
+                <h4>🔧 Custom Components</h4>
+                <h5>Creating Components</h5>
+                <ul>
+                    <li>Build and test a circuit with INPUTs and OUTPUTs</li>
+                    <li>Click "Save as Component" and enter name/description</li>
+                    <li>All INPUTs become input ports, OUTPUTs become output ports</li>
+                    <li>Component appears in Custom Components section</li>
+                </ul>
+                <h5>Using Components</h5>
+                <ul>
+                    <li>Select your custom component from toolbar and place like any gate</li>
+                    <li>Port labels show signal names (from INPUT/OUTPUT labels)</li>
+                    <li>Connect and simulate normally</li>
+                    <li>Multi-output components fully supported</li>
+                </ul>
+                <h5>Managing Library</h5>
+                <ul>
+                    <li><strong>Manage Library:</strong> View all saved components</li>
+                    <li><strong>Edit:</strong> Load component for modifications</li>
+                    <li><strong>Export:</strong> Download as .json file for backup/sharing</li>
+                    <li><strong>Import:</strong> Load .json files from others</li>
+                    <li><strong>Delete:</strong> Remove unused components</li>
                 </ul>
             </section>
 
             <section>
                 <h4>📊 Truth Table</h4>
+                <h5>Basic Usage</h5>
                 <ul>
-                    <li><strong>Generate:</strong> Click "Truth Table" to see all input/output combinations</li>
-                    <li><strong>Active row highlighting:</strong> The row matching current input values is highlighted</li>
-                    <li><strong>Reposition:</strong> Drag the title bar to move the table</li>
-                    <li><strong>Resize:</strong> Drag corner handles to resize</li>
-                    <li><strong>Reorder columns:</strong> Drag column headers to rearrange (Inputs stay in Input section, Outputs stay in Output section)</li>
-                    <li><strong>Persistence:</strong> Table position, size, and column order are saved with your board/component</li>
+                    <li>Build a circuit with inputs and outputs</li>
+                    <li>Click "Truth Table" button to generate</li>
+                    <li>Table shows all input/output combinations</li>
                 </ul>
+                <h5>Advanced Features</h5>
+                <ul>
+                    <li><strong>Active Row Highlighting:</strong> Current input combination highlighted in real-time</li>
+                    <li><strong>Drag to Reposition:</strong> Drag title bar to move table anywhere</li>
+                    <li><strong>Resize:</strong> Drag corner handles to resize the table</li>
+                    <li><strong>Reorder Columns:</strong> Drag column headers to rearrange (Inputs stay in Input section, Outputs stay in Output section)</li>
+                    <li><strong>Smart Positioning:</strong> Table automatically avoids overlapping your circuit</li>
+                    <li><strong>State Persistence:</strong> Position, size, and column order saved with board/component</li>
+                </ul>
+            </section>
+
+            <section>
+                <h4>🎛️ Logic Gates Reference</h4>
+                <table class="gates-table">
+                    <tr><th>Gate</th><th>Function</th><th>Description</th></tr>
+                    <tr><td>AND</td><td>A ∧ B</td><td>Output is 1 only if both inputs are 1</td></tr>
+                    <tr><td>OR</td><td>A ∨ B</td><td>Output is 1 if at least one input is 1</td></tr>
+                    <tr><td>NOT</td><td>¬A</td><td>Output is the inverse of the input</td></tr>
+                    <tr><td>XOR</td><td>A ⊕ B</td><td>Output is 1 if inputs are different</td></tr>
+                    <tr><td>NAND</td><td>¬(A ∧ B)</td><td>Output is 0 only if both inputs are 1</td></tr>
+                    <tr><td>NOR</td><td>¬(A ∨ B)</td><td>Output is 0 if at least one input is 1</td></tr>
+                    <tr><td>XNOR</td><td>¬(A ⊕ B)</td><td>Output is 1 if inputs are the same</td></tr>
+                </table>
             </section>
 
             <section>
                 <h4>🎨 Theme & Display</h4>
                 <ul>
-                    <li><strong>Dark mode:</strong> Click the 🌙 button to toggle light/dark theme</li>
-                    <li><strong>Smart positioning:</strong> Truth Table automatically positions to avoid overlapping your circuit</li>
+                    <li><strong>Dark Mode:</strong> Click the 🌙 button to toggle light/dark theme</li>
+                    <li><strong>Maximized Canvas:</strong> Optimized layout for maximum work space</li>
+                    <li><strong>Auto-save:</strong> Your work is automatically saved as you make changes</li>
                 </ul>
             </section>
 
             <section>
                 <h4>⌨️ Keyboard Shortcuts</h4>
-                <ul>
-                    <li><kbd>ESC</kbd> or <kbd>Right-click</kbd> - Exit current mode</li>
-                    <li><kbd>?</kbd> - Open this Help dialog</li>
-                </ul>
+                <table class="shortcuts-table">
+                    <tr><td><kbd>ESC</kbd></td><td>Exit current mode, return to neutral</td></tr>
+                    <tr><td><kbd>Right-click</kbd></td><td>Exit current mode (alternative to ESC)</td></tr>
+                    <tr><td><kbd>?</kbd></td><td>Open this Help dialog</td></tr>
+                </table>
             </section>
 
             <section>
-                <h4>💡 Tips</h4>
+                <h4>💡 Tips & Best Practices</h4>
+                <h5>Circuit Design</h5>
                 <ul>
-                    <li>Build complex circuits by saving them as components, then use those components in larger designs</li>
-                    <li>Label your inputs and outputs clearly for better readability</li>
-                    <li>Use the Truth Table to verify circuit logic before saving</li>
-                    <li>Export components to share with others or backup your work</li>
+                    <li>Label your inputs/outputs clearly for readability</li>
+                    <li>Build and test small circuits before combining</li>
+                    <li>Use Truth Table to verify logic before saving</li>
+                    <li>Save circuits as components for reuse</li>
                 </ul>
+                <h5>Organization</h5>
+                <ul>
+                    <li>Use meaningful component names (e.g., "HalfAdder", "FullAdder")</li>
+                    <li>Add descriptions when saving components</li>
+                    <li>Export important components for backup</li>
+                </ul>
+                <h5>Hierarchical Design</h5>
+                <p>Build complex systems from tested building blocks:</p>
+                <ol>
+                    <li>Create <strong>HalfAdder</strong> (XOR + AND gates)</li>
+                    <li>Build <strong>FullAdder</strong> using 2 HalfAdders</li>
+                    <li>Create <strong>4-bit Adder</strong> using 4 FullAdders</li>
+                    <li>Design complete ALU using adder components!</li>
+                </ol>
             </section>
         `;
 

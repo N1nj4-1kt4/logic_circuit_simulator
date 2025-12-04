@@ -134,10 +134,10 @@ describe('Geometry Utils', () => {
 
             const bbox = getComponentsBoundingBox(components, mockCanvas);
 
-            expect(bbox.left).toBe(55);  // 100 - 45
-            expect(bbox.top).toBe(55);   // 100 - 45
-            expect(bbox.right).toBe(145); // 100 + 45
-            expect(bbox.bottom).toBe(145); // 100 + 45
+            expect(bbox.left).toBeCloseTo(55, 5);  // 100 - 45
+            expect(bbox.top).toBeCloseTo(55, 5);   // 100 - 45
+            expect(bbox.right).toBeCloseTo(145, 5); // 100 + 45
+            expect(bbox.bottom).toBeCloseTo(145, 5); // 100 + 45
         });
 
         it('should calculate bounding box for single NOT gate', () => {
@@ -147,9 +147,9 @@ describe('Geometry Utils', () => {
 
             const bbox = getComponentsBoundingBox(components, mockCanvas);
 
-            expect(bbox.left).toBe(77.5);  // 100 - 22.5
+            expect(bbox.left).toBeCloseTo(77.5, 5);  // 100 - 22.5
             expect(bbox.top).toBe(80);     // 100 - 20
-            expect(bbox.right).toBe(122.5); // 100 + 22.5
+            expect(bbox.right).toBeCloseTo(122.5, 5); // 100 + 22.5
             expect(bbox.bottom).toBe(120);  // 100 + 20
         });
 
@@ -164,7 +164,7 @@ describe('Geometry Utils', () => {
             expect(bbox.left).toBe(75);   // min x - halfWidth
             expect(bbox.top).toBe(80);    // min y - halfHeight
             expect(bbox.right).toBe(325); // max x + halfWidth
-            expect(bbox.bottom).toBe(220); // max y + halfHeight
+            expect(bbox.bottom).toBeCloseTo(220, 5); // max y + halfHeight
         });
 
         it('should handle mixed component types', () => {
