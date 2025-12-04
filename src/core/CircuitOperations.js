@@ -372,16 +372,16 @@ export class CircuitOperations {
             this.simulate();
         }
 
-        // Update cycle index
-        currentCycleIndex++;
-        this.state.setCurrentCycleIndex(currentCycleIndex);
-
-        // Emit simulation state change with current progress
+        // Emit simulation state change with current progress (before incrementing)
         eventBus.emit(EVENT_TYPES.SIMULATION_STATE_CHANGED, {
             isRunning: true,
             currentIndex: currentCycleIndex,
             totalCombinations: totalCombinations
         });
+
+        // Update cycle index for next iteration
+        currentCycleIndex++;
+        this.state.setCurrentCycleIndex(currentCycleIndex);
 
         // Schedule next step
         const timeout = setTimeout(() => {
