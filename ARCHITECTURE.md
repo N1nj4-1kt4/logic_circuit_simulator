@@ -88,7 +88,7 @@ canvasOperations.checkDeletionImpact(x, y, findConnection);
 
 #### BoardOperations
 
-Handles board CRUD operations (save, load, create, delete).
+Handles board CRUD operations (save, load, create, delete, revert).
 
 ```javascript
 const boardOperations = new BoardOperations({
@@ -97,9 +97,10 @@ const boardOperations = new BoardOperations({
     contextManager
 });
 
-await boardOperations.saveCurrentBoard('MyBoard');
+await boardOperations.saveCurrentBoard('MyBoard');  // Updates lastSavedState
 await boardOperations.loadBoard('MyBoard');
-boardOperations.createNewBoard(showSaveOptionsDialog, onCreated);
+boardOperations.createNewBoard(showSaveOptionsDialog, onCreated);  // Sets lastSavedState to null
+boardOperations.revertToSaved();  // Restores from lastSavedState
 await boardOperations.deleteBoard('MyBoard');
 ```
 
@@ -151,6 +152,7 @@ truthTableManager.destroy();               // Cleanup event listeners
 #### AutoSaveManager
 
 Event-driven auto-save with debouncing. Subscribes to BOARD_CHANGED, TRUTH_TABLE_STATE_CHANGED, etc.
+Persists both working state and `lastSavedState` for revert functionality.
 
 ```javascript
 const autoSaveManager = new AutoSaveManager({
@@ -160,9 +162,20 @@ const autoSaveManager = new AutoSaveManager({
 
 autoSaveManager.setupAutoSave();    // Start listening to events
 autoSaveManager.clearAutoSave();    // Stop auto-save
-await autoSaveManager.saveBoardState();
-await autoSaveManager.loadBoardState();
-await autoSaveManager.clearBoardState();
+await autoSaveManager.saveBoardState();   // Saves working + lastSavedState
+await autoSaveManager.loadBoardState();   // Restores both, handles migration
+await autoSaveManager.clearBoardState();  // Removes all persisted state
+```
+
+**Data structure persisted:**
+```javascript
+{
+  // Working state (updated on every change)
+  components, connections, nextId, customComponents,
+  truthTableState, currentBoardName, currentComponentName,
+  // Base state for revert (updated only on explicit save/load)
+  lastSavedState: { components, connections, nextId, truthTableState } | null
+}
 ```
 
 #### CircuitValidityManager

@@ -9,6 +9,7 @@
  * - Event handling for all toolbar buttons
  */
 import { COLORS } from '../constants.js';
+import { eventBus, EVENT_TYPES } from '../utils/eventBus.js';
 
 export class Toolbar {
     /**
@@ -26,6 +27,8 @@ export class Toolbar {
      * @param {Function} callbacks.onSaveBoard - Called when save board is clicked
      * @param {Function} callbacks.onLoadBoard - Called when a board is selected from dropdown
      * @param {Function} callbacks.onSimulationStep - Called when simulation step button is clicked
+     * @param {Function} callbacks.onRevertToSaved - Called when revert to saved is clicked
+     * @param {Function} callbacks.hasUnsavedChanges - Returns true if there are unsaved changes
      */
     constructor(callbacks) {
         // Callback functions for toolbar actions
@@ -42,6 +45,8 @@ export class Toolbar {
         this.onSaveBoard = callbacks.onSaveBoard;
         this.onLoadBoard = callbacks.onLoadBoard;
         this.onSimulationStep = callbacks.onSimulationStep;
+        this.onRevertToSaved = callbacks.onRevertToSaved;
+        this.hasUnsavedChanges = callbacks.hasUnsavedChanges;
 
         // State (managed by Toolbar, read by CircuitSimulator via getters)
         this.selectedTool = null;
@@ -59,8 +64,12 @@ export class Toolbar {
             circuitNameDisplay: null,
             simulateBtn: null,
             prevStepBtn: null,
-            nextStepBtn: null
+            nextStepBtn: null,
+            revertBtn: null
         };
+
+        // Bound event handlers for cleanup
+        this._boundUpdateRevertButton = null;
     }
 
     /**
@@ -74,6 +83,7 @@ export class Toolbar {
         this.setupComponentButtons();
         this.setupBoardButtons();
         this.setupSimulationControls();
+        this.setupRevertButton();
         this.updateModeIndicator();
     }
 
@@ -91,6 +101,7 @@ export class Toolbar {
         this.elements.simulateBtn = document.getElementById('simulate');
         this.elements.prevStepBtn = document.getElementById('prevStep');
         this.elements.nextStepBtn = document.getElementById('nextStep');
+        this.elements.revertBtn = document.getElementById('revertToSaved');
     }
 
     /**
@@ -362,6 +373,41 @@ export class Toolbar {
                 }
             });
         }
+    }
+
+    /**
+     * Setup Revert to Saved button with enable/disable based on unsaved changes
+     */
+    setupRevertButton() {
+        if (!this.elements.revertBtn) return;
+
+        // Click handler
+        this.elements.revertBtn.addEventListener('click', () => {
+            if (this.onRevertToSaved) {
+                this.onRevertToSaved();
+            }
+        });
+
+        // Create bound handler for event subscriptions
+        this._boundUpdateRevertButton = () => this.updateRevertButtonState();
+
+        // Subscribe to events that affect unsaved changes state
+        eventBus.on(EVENT_TYPES.BOARD_CHANGED, this._boundUpdateRevertButton);
+        eventBus.on(EVENT_TYPES.BOARD_LOADED, this._boundUpdateRevertButton);
+        eventBus.on(EVENT_TYPES.TRUTH_TABLE_STATE_CHANGED, this._boundUpdateRevertButton);
+
+        // Initial state
+        this.updateRevertButtonState();
+    }
+
+    /**
+     * Update Revert to Saved button enabled/disabled state
+     */
+    updateRevertButtonState() {
+        if (!this.elements.revertBtn || !this.hasUnsavedChanges) return;
+
+        const hasChanges = this.hasUnsavedChanges();
+        this.elements.revertBtn.disabled = !hasChanges;
     }
 
     /**

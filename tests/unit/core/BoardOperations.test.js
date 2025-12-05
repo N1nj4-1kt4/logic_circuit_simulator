@@ -128,6 +128,22 @@ describe('BoardOperations', () => {
                 })
             );
         });
+
+        it('updates lastSavedState after successful save', async () => {
+            state.addComponent({
+                id: 1, type: 'INPUT', x: 100, y: 100,
+                inputs: [], outputs: [], value: 0, label: 'I1'
+            });
+            state.setTruthTableState({ width: 400 });
+            mockBoardManager.saveBoard.mockResolvedValue(true);
+
+            await operations.saveCurrentBoard('TestBoard');
+
+            const lastSavedState = state.getLastSavedState();
+            expect(lastSavedState).not.toBeNull();
+            expect(lastSavedState.components).toHaveLength(1);
+            expect(lastSavedState.truthTableState).toEqual({ width: 400 });
+        });
     });
 
     // ====================================
@@ -260,6 +276,160 @@ describe('BoardOperations', () => {
             operations.createNewBoard(vi.fn(), onCreated);
 
             expect(onCreated).toHaveBeenCalled();
+        });
+
+        it('sets lastSavedState to null for new board', () => {
+            // Set up an existing saved state
+            state.setLastSavedState({
+                components: [{ id: 1, type: 'INPUT' }],
+                connections: [],
+                nextId: 2
+            });
+
+            operations.createNewBoard(vi.fn());
+
+            // New board should have no saved state (never saved)
+            expect(state.getLastSavedState()).toBeNull();
+        });
+    });
+
+    // ====================================
+    // Revert to Saved Tests
+    // ====================================
+
+    describe('Revert to Saved', () => {
+        it('returns false when no lastSavedState exists', () => {
+            // Ensure no saved state
+            state.setLastSavedState(null);
+
+            const result = operations.revertToSaved();
+
+            expect(result).toBe(false);
+        });
+
+        it('restores working state from lastSavedState', () => {
+            // Set up saved state
+            const savedState = {
+                components: [
+                    { id: 1, type: 'INPUT', x: 100, y: 100, label: 'I1' },
+                    { id: 2, type: 'OUTPUT', x: 200, y: 100, label: 'O1' }
+                ],
+                connections: [{ from: 1, fromPort: 0, to: 2, toPort: 0 }],
+                nextId: 3,
+                truthTableState: { width: 400, height: 300 }
+            };
+            state.setLastSavedState(savedState);
+
+            // Make changes to working state
+            state.addComponent({
+                id: 5, type: 'AND', x: 300, y: 200,
+                inputs: [null, null], inputPorts: [{}, {}], outputPorts: [{}]
+            });
+
+            const result = operations.revertToSaved();
+
+            expect(result).toBe(true);
+            expect(state.getComponents()).toHaveLength(2);
+            expect(state.getConnections()).toHaveLength(1);
+            expect(state.getTruthTableState()).toEqual({ width: 400, height: 300 });
+        });
+
+        it('emits BOARD_LOADED event', () => {
+            const handler = vi.fn();
+            eventBus.on(EVENT_TYPES.BOARD_LOADED, handler);
+
+            state.setLastSavedState({
+                components: [],
+                connections: [],
+                nextId: 1
+            });
+
+            operations.revertToSaved();
+
+            expect(handler).toHaveBeenCalled();
+        });
+
+        it('emits CANVAS_REDRAW event', () => {
+            const handler = vi.fn();
+            eventBus.on(EVENT_TYPES.CANVAS_REDRAW, handler);
+
+            state.setLastSavedState({
+                components: [],
+                connections: [],
+                nextId: 1
+            });
+
+            operations.revertToSaved();
+
+            expect(handler).toHaveBeenCalled();
+        });
+
+        it('emits TOOLBAR_UPDATE_DISPLAYS event', () => {
+            const handler = vi.fn();
+            eventBus.on(EVENT_TYPES.TOOLBAR_UPDATE_DISPLAYS, handler);
+
+            state.setLastSavedState({
+                components: [],
+                connections: [],
+                nextId: 1
+            });
+
+            operations.revertToSaved();
+
+            expect(handler).toHaveBeenCalled();
+        });
+
+        it('preserves truth table state from lastSavedState', () => {
+            const truthTableState = {
+                width: 500,
+                height: 400,
+                columnOrder: ['I1', 'O1'],
+                visible: true
+            };
+            state.setLastSavedState({
+                components: [],
+                connections: [],
+                nextId: 1,
+                truthTableState
+            });
+
+            operations.revertToSaved();
+
+            expect(state.getTruthTableState()).toEqual(truthTableState);
+        });
+
+        it('handles lastSavedState with no truthTableState', () => {
+            state.setLastSavedState({
+                components: [{ id: 1, type: 'INPUT', x: 100, y: 100 }],
+                connections: [],
+                nextId: 2
+                // No truthTableState
+            });
+
+            // Set current truth table state
+            state.setTruthTableState({ width: 300 });
+
+            const result = operations.revertToSaved();
+
+            expect(result).toBe(true);
+            // Should have restored components
+            expect(state.getComponents()).toHaveLength(1);
+        });
+
+        it('does not modify lastSavedState after revert', () => {
+            const savedState = {
+                components: [{ id: 1, type: 'INPUT', x: 100, y: 100, label: 'I1' }],
+                connections: [],
+                nextId: 2
+            };
+            state.setLastSavedState(savedState);
+
+            operations.revertToSaved();
+
+            // lastSavedState should remain unchanged
+            const currentSavedState = state.getLastSavedState();
+            expect(currentSavedState.components).toHaveLength(1);
+            expect(currentSavedState.nextId).toBe(2);
         });
     });
 

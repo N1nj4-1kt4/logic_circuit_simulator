@@ -141,13 +141,13 @@ describe('AutoSaveManager', () => {
             expect(mockStorage.setItem).toHaveBeenCalledTimes(1);
         });
 
-        it('clears board state on BOARD_CLEARED event immediately', async () => {
+        it('saves board state on BOARD_CLEARED event immediately (preserves lastSavedState for revert)', async () => {
             eventBus.emit(EVENT_TYPES.BOARD_CLEARED);
 
-            // BOARD_CLEARED triggers immediately (no debounce)
+            // BOARD_CLEARED triggers immediate save (no debounce) to preserve lastSavedState
             await vi.runAllTimersAsync();
 
-            expect(mockStorage.removeItem).toHaveBeenCalledWith('currentBoard');
+            expect(mockStorage.setItem).toHaveBeenCalledWith('currentBoard', expect.any(String));
         });
     });
 
@@ -180,6 +180,32 @@ describe('AutoSaveManager', () => {
 
             // Should not throw
             await expect(manager.saveBoardState()).resolves.not.toThrow();
+        });
+
+        it('persists lastSavedState alongside working state', async () => {
+            // Set up state with a lastSavedState (stored separately, not in working state)
+            const lastSaved = {
+                components: [{ id: 1, type: 'AND', x: 50, y: 50 }],
+                connections: [],
+                nextId: 2,
+                truthTableState: null
+            };
+            state.setLastSavedState(lastSaved);
+
+            // Add a component to working state (this is a separate change from lastSaved)
+            state.addComponent({
+                id: 2, type: 'INPUT', x: 100, y: 100,
+                inputs: [], outputs: [], value: 0, label: 'I1'
+            });
+
+            await manager.saveBoardState();
+
+            const savedData = JSON.parse(mockStorage.setItem.mock.calls[0][1]);
+            // lastSavedState should be persisted as-is (for revert functionality)
+            expect(savedData.lastSavedState).toEqual(lastSaved);
+            // Working state has 1 component (the one we just added)
+            // Note: lastSavedState is a separate snapshot, not part of working state
+            expect(savedData.components).toHaveLength(1);
         });
     });
 
@@ -242,6 +268,44 @@ describe('AutoSaveManager', () => {
 
             // Should not throw
             await expect(manager.loadBoardState()).resolves.not.toThrow();
+        });
+
+        it('restores lastSavedState when present', async () => {
+            const lastSaved = {
+                components: [{ id: 1, type: 'AND', x: 50, y: 50 }],
+                connections: [],
+                nextId: 2,
+                truthTableState: null
+            };
+            const savedState = JSON.stringify({
+                components: [{ id: 1, type: 'AND', x: 50, y: 50 }, { id: 2, type: 'INPUT', x: 100, y: 100 }],
+                connections: [],
+                nextId: 3,
+                lastSavedState: lastSaved
+            });
+            mockStorage.getItem.mockResolvedValue(savedState);
+
+            await manager.loadBoardState();
+
+            expect(state.getLastSavedState()).toEqual(lastSaved);
+            expect(state.getComponents()).toHaveLength(2); // Working state has 2 components
+        });
+
+        it('sets lastSavedState to null when migrating from old format (no lastSavedState)', async () => {
+            // Old format: no lastSavedState field
+            const savedState = JSON.stringify({
+                components: [{ id: 1, type: 'INPUT', x: 100, y: 100, label: 'I1' }],
+                connections: [],
+                nextId: 2,
+                currentBoardName: 'OldBoard'
+            });
+            mockStorage.getItem.mockResolvedValue(savedState);
+
+            await manager.loadBoardState();
+
+            // Migration: treat as never saved
+            expect(state.getLastSavedState()).toBeNull();
+            expect(state.getComponents()).toHaveLength(1);
         });
 
         it('handles invalid JSON gracefully', async () => {

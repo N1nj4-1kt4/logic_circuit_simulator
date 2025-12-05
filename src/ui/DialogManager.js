@@ -687,10 +687,33 @@ export class DialogManager {
         });
 
         discardChanges?.addEventListener('click', () => {
-            this.hideSaveOptionsDialog();
-            if (this.state.pendingActionAfterSave) {
-                this.state.pendingActionAfterSave();
-                this.state.pendingActionAfterSave = null;
+            // Check if board has ever been saved
+            const lastSavedState = this.callbacks.getLastSavedState ? this.callbacks.getLastSavedState() : null;
+
+            if (!lastSavedState) {
+                // Board has never been saved - show confirmation
+                const confirmConfig = messages.confirms.discardNeverSaved;
+                DialogFactory.showConfirm({
+                    message: confirmConfig.message,
+                    title: confirmConfig.title,
+                    confirmLabel: confirmConfig.confirmLabel,
+                    cancelLabel: confirmConfig.cancelLabel,
+                    type: 'warning',
+                    onConfirm: () => {
+                        this.hideSaveOptionsDialog();
+                        if (this.state.pendingActionAfterSave) {
+                            this.state.pendingActionAfterSave();
+                            this.state.pendingActionAfterSave = null;
+                        }
+                    }
+                });
+            } else {
+                // Board has been saved - just proceed
+                this.hideSaveOptionsDialog();
+                if (this.state.pendingActionAfterSave) {
+                    this.state.pendingActionAfterSave();
+                    this.state.pendingActionAfterSave = null;
+                }
             }
         });
     }

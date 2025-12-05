@@ -6,7 +6,6 @@
  */
 
 import { eventBus, EVENT_TYPES } from '../utils/eventBus.js';
-import { deepClone } from '../utils/serialization.js';
 
 export class AutoSaveManager {
     /**
@@ -51,9 +50,10 @@ export class AutoSaveManager {
         eventBus.on(EVENT_TYPES.TRUTH_TABLE_STATE_CHANGED, this.debouncedSave);
         eventBus.on(EVENT_TYPES.THEME_CHANGED, this.debouncedSave);
 
-        // When board is cleared, clear the auto-saved state immediately (no debounce)
+        // When board is cleared, save immediately (no debounce) to persist the cleared state
+        // This preserves lastSavedState so user can still revert to the saved version
         this.handleBoardCleared = async () => {
-            await this.clearBoardState();
+            await this.saveBoardState();
         };
         eventBus.on(EVENT_TYPES.BOARD_CLEARED, this.handleBoardCleared);
     }
@@ -82,16 +82,20 @@ export class AutoSaveManager {
 
     /**
      * Save current board state to localStorage (auto-save)
+     * Persists both working state and lastSavedState for revert functionality
      */
     async saveBoardState() {
         const boardData = {
+            // Working state
             components: this.state.getComponents(),
             connections: this.state.getConnections(),
             nextId: this.state.generateNextId() - 1,
             currentBoardName: this.state.getCurrentBoardName(),
             currentComponentName: this.state.getCurrentComponentName(),
             customComponents: this.state.getCustomComponents(),
-            truthTableState: this.state.getTruthTableState()
+            truthTableState: this.state.getTruthTableState(),
+            // Base state for revert (persisted from CircuitState)
+            lastSavedState: this.state.getLastSavedState()
         };
 
         try {
@@ -103,6 +107,7 @@ export class AutoSaveManager {
 
     /**
      * Load board state from localStorage (on app start)
+     * Handles migration from old format (no lastSavedState) to new format
      * @param {TruthTableManager} truthTableManager - Optional truth table manager for recomputation
      */
     async loadBoardState(truthTableManager = null) {
@@ -112,7 +117,7 @@ export class AutoSaveManager {
             if (savedState) {
                 const boardData = JSON.parse(savedState);
 
-                // Load state
+                // Load working state
                 this.state.loadState({
                     components: boardData.components || [],
                     connections: boardData.connections || [],
@@ -134,8 +139,14 @@ export class AutoSaveManager {
                     truthTableManager.recomputeTruthTable();
                 }
 
-                // Update last saved state
-                this.state.setLastSavedState(deepClone(this.state.getCurrentState()));
+                // Restore lastSavedState if present, otherwise null (migration case)
+                // Migration: old format has no lastSavedState, treat as never saved
+                if (boardData.lastSavedState !== undefined) {
+                    this.state.setLastSavedState(boardData.lastSavedState);
+                } else {
+                    // Migration: no lastSavedState in old format
+                    this.state.setLastSavedState(null);
+                }
 
                 // Emit event to update toolbar displays
                 eventBus.emit(EVENT_TYPES.TOOLBAR_UPDATE_DISPLAYS);
@@ -146,7 +157,10 @@ export class AutoSaveManager {
     }
 
     /**
-     * Clear auto-saved board state
+     * Clear auto-saved board state completely from storage
+     * Note: This removes ALL state including lastSavedState.
+     * For normal "Clear Board" operation, use saveBoardState() instead
+     * to preserve lastSavedState for revert functionality.
      */
     async clearBoardState() {
         try {

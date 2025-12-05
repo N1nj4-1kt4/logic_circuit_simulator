@@ -116,10 +116,47 @@ export class BoardOperations {
         this.state.setCurrentBoardName(null);
         this.state.setCurrentComponentName(null);
 
+        // New board has no saved state (never saved)
+        this.state.setLastSavedState(null);
+
         // Emit events
         eventBus.emit(EVENT_TYPES.BOARD_CLEARED);
         eventBus.emit(EVENT_TYPES.CANVAS_REDRAW);
         eventBus.emit(EVENT_TYPES.TOOLBAR_UPDATE_DISPLAYS);
+    }
+
+    /**
+     * Revert current board to last saved state
+     * Restores from lastSavedState and stays on the same board
+     * @returns {boolean} True if revert was successful, false if no saved state exists
+     */
+    revertToSaved() {
+        const lastSavedState = this.state.getLastSavedState();
+
+        if (!lastSavedState) {
+            // No saved state to revert to (board was never saved)
+            return false;
+        }
+
+        // Restore working state from lastSavedState
+        this.state.loadState({
+            components: lastSavedState.components || [],
+            connections: lastSavedState.connections || [],
+            nextId: lastSavedState.nextId || 1,
+            truthTableState: lastSavedState.truthTableState || null
+        });
+
+        // Restore truth table state if present
+        if (lastSavedState.truthTableState) {
+            this.state.setTruthTableState(lastSavedState.truthTableState);
+        }
+
+        // Emit events to update UI
+        eventBus.emit(EVENT_TYPES.BOARD_LOADED);
+        eventBus.emit(EVENT_TYPES.CANVAS_REDRAW);
+        eventBus.emit(EVENT_TYPES.TOOLBAR_UPDATE_DISPLAYS);
+
+        return true;
     }
 
     /**

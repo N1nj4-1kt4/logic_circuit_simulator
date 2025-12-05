@@ -378,14 +378,15 @@ describe('Auto-Save Event Triggers', () => {
         expect(saveSpy).toHaveBeenCalled();
     });
 
-    it('should call clearBoardState on BOARD_CLEARED event', () => {
-        const clearSpy = vi.spyOn(autoSaveManager, 'clearBoardState');
+    it('should call saveBoardState on BOARD_CLEARED event (preserves lastSavedState for revert)', () => {
+        const saveSpy = vi.spyOn(autoSaveManager, 'saveBoardState');
 
         // Trigger the event
         eventBus.emit(EVENT_TYPES.BOARD_CLEARED);
 
         // The handler should have been called (even though it's async)
-        expect(clearSpy).toHaveBeenCalled();
+        // This saves state instead of clearing to preserve lastSavedState for revert functionality
+        expect(saveSpy).toHaveBeenCalled();
     });
 
     it('should stop auto-save when clearAutoSave is called', () => {

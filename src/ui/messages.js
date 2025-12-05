@@ -78,6 +78,14 @@ export const messages = {
             title: 'Stop Simulation?',
             confirmLabel: 'Delete Anyway',
             cancelLabel: 'Cancel'
+        },
+
+        // Discard changes for never-saved board
+        discardNeverSaved: {
+            message: 'This board has never been saved. Would you like to clear it and proceed?',
+            title: 'Discard Unsaved Work?',
+            confirmLabel: 'Clear & Proceed',
+            cancelLabel: 'Cancel'
         }
     },
 

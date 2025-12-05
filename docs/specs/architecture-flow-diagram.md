@@ -52,6 +52,10 @@ This document visualizes the event-driven architecture implemented for live circ
 │  │                                  (play/stop button, disable step btns)   │    │
 │  │  • SIMULATION_STEP_COMPLETED ──▶ setSimulationProgress(idx, total)      │    │
 │  │                                  (step counter "Combination X / Y")      │    │
+│  │  • BOARD_CHANGED ─────────────▶ updateRevertButtonState()               │    │
+│  │  • BOARD_LOADED ──────────────▶ updateRevertButtonState()               │    │
+│  │  • TRUTH_TABLE_STATE_CHANGED ─▶ updateRevertButtonState()               │    │
+│  │                                  (enable/disable Revert button)          │    │
 │  └─────────────────────────────────────────────────────────────────────────┘    │
 │                                                                                  │
 │  ┌─────────────────────────────────────────────────────────────────────────┐    │
@@ -291,13 +295,14 @@ Events describe what happened, not what listeners should do:
 | `SimulationController`    | Owns simulation lifecycle (autocycleStart/Stop, manualStep, onToggleInput) |
 | `CircuitValidityManager`  | Owns validity state, emits changes          |
 | `CanvasOperations`        | Canvas-level component manipulation (place, connect, delete) |
-| `BoardOperations`         | Board CRUD operations (save, load, create, delete) |
+| `BoardOperations`         | Board CRUD operations (save, load, create, delete, revert) |
 | `ComponentLibraryOperations` | Custom component library management      |
 | `ContextManager`          | Save/load circuit contexts when switching   |
 | `TruthTableManager`       | Truth table computation and caching         |
-| `AutoSaveManager`         | Event-driven auto-save with debouncing      |
+| `AutoSaveManager`         | Event-driven auto-save (working + lastSavedState) |
 | `CircuitTransaction`      | Predictive analysis before destructive ops  |
 | `TruthTablePanel`         | Subscribes to events, decides own response  |
+| `Toolbar`                 | Button states, Revert button enable/disable |
 
 ### Transaction Pattern
 
@@ -322,6 +327,70 @@ Events describe what happened, not what listeners should do:
 | `CircuitTransaction`      | `src/core/CircuitTransaction.js`            |
 | `TruthTablePanel`         | `src/ui/TruthTablePanel.js`                 |
 | Event Types               | `src/utils/eventBus.js`                     |
+
+## Revert to Saved Flow
+
+```
+  User clicks "Revert to Saved" button
+           │
+           ▼
+  BoardOperations.revertToSaved()
+           │
+           ├──▶ Check state.getLastSavedState()
+           │         │
+           │         ├──▶ If null: return false (board never saved)
+           │         │
+           │         └──▶ If exists: continue
+           │
+           ├──▶ state.loadState(lastSavedState)
+           │    (components, connections, nextId, truthTableState)
+           │
+           ├──▶ Emit BOARD_LOADED ─────────────▶ TruthTableManager recomputes
+           │
+           ├──▶ Emit CANVAS_REDRAW ────────────▶ CanvasRenderer.redraw()
+           │
+           └──▶ Emit TOOLBAR_UPDATE_DISPLAYS ──▶ Toolbar updates button states
+                                                  (Revert button becomes disabled)
+```
+
+## Auto-Save Data Structure
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                        localStorage: 'currentBoard'                              │
+│                                                                                  │
+│  {                                                                               │
+│    // Working state (updated on every change via debounced auto-save)            │
+│    components: [...],                                                            │
+│    connections: [...],                                                           │
+│    nextId: number,                                                               │
+│    customComponents: {...},                                                      │
+│    truthTableState: { width, height, columnOrder, visible, position },           │
+│    currentBoardName: string | null,                                              │
+│    currentComponentName: string | null,                                          │
+│                                                                                  │
+│    // Base state for revert (updated only on explicit save/load)                 │
+│    lastSavedState: {                                                             │
+│      components: [...],                                                          │
+│      connections: [...],                                                         │
+│      nextId: number,                                                             │
+│      truthTableState: {...}                                                      │
+│    } | null                                                                      │
+│  }                                                                               │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### State Transitions
+
+| Action | Working State | lastSavedState |
+|--------|---------------|----------------|
+| Load saved board | Set to board data | Set to board data |
+| Make changes | Updated (auto-saved) | Unchanged |
+| Save board | Unchanged | Updated to match current |
+| Revert to Saved | Restored from lastSavedState | Unchanged |
+| Clear Board | Cleared | Unchanged (can still revert) |
+| New Board | Empty | Set to null |
+| Page refresh | Preserved | Preserved |
 
 ## Related Documentation
 

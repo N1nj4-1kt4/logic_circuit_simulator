@@ -107,7 +107,9 @@ class CircuitSimulator {
             onNewBoard: () => this.handleNewBoard(),
             onSaveBoard: () => this.handleSaveBoard(),
             onLoadBoard: (boardName) => this.loadBoard(boardName),
-            onSimulationStep: (direction) => this.handleSimulationStep(direction)
+            onSimulationStep: (direction) => this.handleSimulationStep(direction),
+            onRevertToSaved: () => this.handleRevertToSaved(),
+            hasUnsavedChanges: () => this.state.hasUnsavedChanges()
         });
 
         // Initialize dialog manager with callbacks
@@ -125,7 +127,8 @@ class CircuitSimulator {
             getCurrentComponentName: () => this.state.getCurrentComponentName(),
             getCustomComponents: () => this.state.getCustomComponents(),
             getSavedBoards: () => this.state.getSavedBoards(),
-            getCircuitData: () => ({ components: this.state.getComponents(), connections: this.state.getConnections() })
+            getCircuitData: () => ({ components: this.state.getComponents(), connections: this.state.getConnections() }),
+            getLastSavedState: () => this.state.getLastSavedState()
         });
 
         // Initialize refactored operations modules
@@ -339,6 +342,17 @@ class CircuitSimulator {
         this.dialogManager.showSaveOptionsDialog(null);
     }
 
+    handleRevertToSaved() {
+        const success = this.boardOperations.revertToSaved();
+        if (!success) {
+            // No saved state to revert to - this shouldn't happen if button is properly disabled
+            DialogFactory.showAlert({
+                message: 'No saved version to revert to.',
+                type: 'warning'
+            });
+        }
+    }
+
     handleSimulationStep(direction) {
         try {
             if (direction === 'next') {
@@ -474,6 +488,12 @@ class CircuitSimulator {
                 panel.style.transform = '';
                 panel.removeAttribute('data-x');
                 panel.removeAttribute('data-y');
+            }
+
+            // Restore truth table if it was visible in the loaded board
+            const truthTableState = this.state.getTruthTableState();
+            if (truthTableState && truthTableState.visible) {
+                this.generateTruthTable();
             }
         });
 
