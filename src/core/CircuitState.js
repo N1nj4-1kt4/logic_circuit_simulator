@@ -136,6 +136,15 @@ export class CircuitState {
     }
 
     /**
+     * Get the current next ID value without incrementing
+     * Use this when saving state - NOT generateNextId() which has side effects
+     * @returns {number} Current nextId value
+     */
+    getNextId() {
+        return this.nextId;
+    }
+
+    /**
      * Set the next ID (useful when loading saved circuits)
      * @param {number} id - ID to set
      */
@@ -354,12 +363,6 @@ export class CircuitState {
         const savedState = typeof this.lastSavedState === 'string'
             ? this.lastSavedState
             : JSON.stringify(this.lastSavedState);
-
-        console.log('[DEBUG CircuitState] hasUnsavedChanges check');
-        console.log('[DEBUG CircuitState] currentState truthTableState:', this.getCurrentState().truthTableState);
-        console.log('[DEBUG CircuitState] lastSavedState type:', typeof this.lastSavedState);
-        console.log('[DEBUG CircuitState] lastSavedState truthTableState:', this.lastSavedState?.truthTableState);
-        console.log('[DEBUG CircuitState] states match:', currentState === savedState);
 
         return currentState !== savedState;
     }

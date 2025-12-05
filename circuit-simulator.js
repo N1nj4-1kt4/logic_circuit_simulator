@@ -478,16 +478,13 @@ class CircuitSimulator {
 
         // Board loaded event - destroy truth table to avoid stale data
         eventBus.on(EVENT_TYPES.BOARD_LOADED, () => {
-            console.log('[DEBUG circuit-simulator] BOARD_LOADED handler called');
             // Read the loaded board's truth table state BEFORE destroying panel
             // (hide() would overwrite the state with current position)
             const truthTableState = this.state.getTruthTableState();
-            console.log('[DEBUG circuit-simulator] truthTableState from state:', truthTableState);
 
             if (this.truthTablePanel) {
                 // Don't call hide() here - it would save current position and overwrite the loaded state
                 // Just destroy the panel directly
-                console.log('[DEBUG circuit-simulator] Destroying existing truthTablePanel');
                 this.truthTablePanel.destroy();
                 this.truthTablePanel = null;
             }
@@ -507,10 +504,7 @@ class CircuitSimulator {
 
             // Restore truth table if it was visible in the loaded board
             if (truthTableState && truthTableState.visible) {
-                console.log('[DEBUG circuit-simulator] Restoring truth table, position:', { x: truthTableState.x, y: truthTableState.y });
-                this.generateTruthTable();
-            } else {
-                console.log('[DEBUG circuit-simulator] NOT restoring truth table, visible:', truthTableState?.visible);
+                this.generateTruthTable({ isRestoring: true });
             }
         });
 
@@ -692,8 +686,9 @@ class CircuitSimulator {
         this.simulationController.onToggleInput();
     }
 
-    generateTruthTable() {
-        console.log('generateTruthTable called, current panel:', this.truthTablePanel);
+    generateTruthTable(options = {}) {
+        const { isRestoring = false } = options;
+        console.log('generateTruthTable called, current panel:', this.truthTablePanel, 'isRestoring:', isRestoring);
         // Initialize truth table panel if not already created OR if DOM was removed
         const needsNewPanel = !this.truthTablePanel ||
                              (this.truthTablePanel.panel && !document.body.contains(this.truthTablePanel.panel));
@@ -734,7 +729,7 @@ class CircuitSimulator {
         console.log('Generate returned:', success);
         if (success) {
             console.log('Calling display()...');
-            this.truthTablePanel.display();
+            this.truthTablePanel.display({ isRestoring });
 
             // Store reference for backward compatibility
             this.state.setTruthTableData(this.truthTablePanel.truthTableData);
@@ -919,14 +914,13 @@ class CircuitSimulator {
 
     async loadBoard(boardName) {
         // Check for unsaved changes before loading
-        if (this.state.hasUnsavedChanges()) {
-            console.log('[DEBUG circuit-simulator] loadBoard: hasUnsavedChanges=true, showing save dialog');
+        const hasChanges = this.state.hasUnsavedChanges();
+        if (hasChanges) {
             this.dialogManager.showSaveOptionsDialog(async () => {
                 // User chose to proceed (either saved or discarded)
                 await this._loadBoardInternal(boardName);
             });
         } else {
-            console.log('[DEBUG circuit-simulator] loadBoard: hasUnsavedChanges=false, loading directly');
             await this._loadBoardInternal(boardName);
         }
     }

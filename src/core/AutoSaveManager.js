@@ -89,7 +89,7 @@ export class AutoSaveManager {
             // Working state
             components: this.state.getComponents(),
             connections: this.state.getConnections(),
-            nextId: this.state.generateNextId() - 1,
+            nextId: this.state.getNextId(),
             currentBoardName: this.state.getCurrentBoardName(),
             currentComponentName: this.state.getCurrentComponentName(),
             customComponents: this.state.getCustomComponents(),

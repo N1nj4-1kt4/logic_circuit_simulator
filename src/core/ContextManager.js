@@ -36,7 +36,7 @@ export class ContextManager {
             const currentBoardData = {
                 components: this.state.getComponents(),
                 connections: this.state.getConnections(),
-                nextId: this.state.generateNextId() - 1,
+                nextId: this.state.getNextId(),
                 customComponents: this.state.getCustomComponents(),
                 truthTableState: this.state.getTruthTableState()
             };
@@ -66,15 +66,12 @@ export class ContextManager {
      * @param {string} contextInfo.name - Name of the board or component
      */
     loadCircuitContext(circuitData, contextInfo) {
-        console.log('[DEBUG ContextManager] loadCircuitContext called');
-        console.log('[DEBUG ContextManager] circuitData.truthTableState:', circuitData.truthTableState);
-
         // Load circuit data into state
         // IMPORTANT: Include truthTableState so BOARD_LOADED handler gets correct position
         this.state.loadState({
             components: circuitData.components || [],
             connections: circuitData.connections || [],
-            nextId: (circuitData.nextId || 0) + 1,
+            nextId: circuitData.nextId || 1,
             customComponents: circuitData.customComponents || this.state.getCustomComponents(),
             truthTableState: circuitData.truthTableState || null
         });

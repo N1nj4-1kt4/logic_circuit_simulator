@@ -169,8 +169,13 @@ export class TruthTablePanel {
 
     /**
      * Display the truth table panel
+     * @param {Object} options - Display options
+     * @param {boolean} options.isRestoring - If true, skip saveState on initial display (restoring from saved state)
      */
-    display() {
+    display(options = {}) {
+        const { isRestoring = false } = options;
+        this._isRestoring = isRestoring;
+
         if (!this.truthTableData) {
             return;
         }
@@ -328,8 +333,13 @@ export class TruthTablePanel {
             // Reveal panel with instant transition (table is fully constructed)
             this.panel.style.opacity = '1';
 
-            // Save state after showing the panel
-            this.saveState();
+            // Save state after showing the panel, but NOT when restoring from saved state
+            // (restoring shouldn't trigger a change detection false positive)
+            if (!this._isRestoring) {
+                this.saveState();
+            }
+            // Clear the restoring flag after initial display
+            this._isRestoring = false;
         });
 
         // Listen for column reorder

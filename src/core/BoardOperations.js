@@ -39,7 +39,7 @@ export class BoardOperations {
         const boardData = {
             components: this.state.getComponents(),
             connections: this.state.getConnections(),
-            nextId: this.state.generateNextId() - 1,
+            nextId: this.state.getNextId(),
             customComponents: this.state.getCustomComponents(),
             truthTableState: this.state.getTruthTableState()
         };
@@ -77,9 +77,6 @@ export class BoardOperations {
         // If the user wants to save changes before switching boards, they should
         // explicitly save first. Auto-saving would overwrite saved state with
         // unsaved changes, breaking the "Revert to Saved" concept.
-        console.log('[DEBUG BoardOperations] loadBoard called for:', boardName);
-        console.log('[DEBUG BoardOperations] NOT calling saveCurrentContext (user should explicitly save)');
-
         const boardData = await this.boardManager.loadBoard(boardName);
 
         if (boardData) {
