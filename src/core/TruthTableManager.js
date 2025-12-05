@@ -25,6 +25,7 @@ export class TruthTableManager {
         this._handleBoardChanged = this._handleBoardChanged.bind(this);
         this._handleLabelChanged = this._handleLabelChanged.bind(this);
         this._handleBoardCleared = this._handleBoardCleared.bind(this);
+        this._handleBoardLoaded = this._handleBoardLoaded.bind(this);
 
         // Subscribe to circuit changes for truth table recomputation
         this._setupTruthTableRecomputation();
@@ -44,6 +45,9 @@ export class TruthTableManager {
 
         // Clear cache on board cleared
         eventBus.on(EVENT_TYPES.BOARD_CLEARED, this._handleBoardCleared);
+
+        // Recompute truth table when board is loaded (including revert to saved)
+        eventBus.on(EVENT_TYPES.BOARD_LOADED, this._handleBoardLoaded);
     }
 
     /**
@@ -69,6 +73,14 @@ export class TruthTableManager {
      */
     _handleBoardCleared() {
         this.state.setTruthTableCache(null);
+    }
+
+    /**
+     * Handle BOARD_LOADED event - recompute for loaded/reverted circuit
+     * @private
+     */
+    _handleBoardLoaded() {
+        this.recomputeTruthTable();
     }
 
     /**
@@ -124,5 +136,6 @@ export class TruthTableManager {
         eventBus.off(EVENT_TYPES.BOARD_CHANGED, this._handleBoardChanged);
         eventBus.off(EVENT_TYPES.COMPONENT_LABEL_CHANGED, this._handleLabelChanged);
         eventBus.off(EVENT_TYPES.BOARD_CLEARED, this._handleBoardCleared);
+        eventBus.off(EVENT_TYPES.BOARD_LOADED, this._handleBoardLoaded);
     }
 }

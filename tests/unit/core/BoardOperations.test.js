@@ -168,7 +168,7 @@ describe('BoardOperations', () => {
             );
         });
 
-        it('saves current context before loading', async () => {
+        it('does not auto-save current context before loading (user should explicitly save)', async () => {
             mockBoardManager.loadBoard.mockResolvedValue({
                 components: [],
                 connections: []
@@ -176,7 +176,10 @@ describe('BoardOperations', () => {
 
             await operations.loadBoard('TestBoard');
 
-            expect(mockContextManager.saveCurrentContext).toHaveBeenCalled();
+            // We intentionally do NOT call saveCurrentContext on load.
+            // Auto-saving would overwrite the saved state with unsaved changes,
+            // breaking the "Revert to Saved" concept.
+            expect(mockContextManager.saveCurrentContext).not.toHaveBeenCalled();
         });
 
         it('throws BoardLoadError when board not found', async () => {
@@ -414,6 +417,50 @@ describe('BoardOperations', () => {
             expect(result).toBe(true);
             // Should have restored components
             expect(state.getComponents()).toHaveLength(1);
+        });
+
+        it('preserves current board name after revert', () => {
+            // Set up a board context
+            state.setCurrentBoardName('TestBoard');
+            state.setLastSavedState({
+                components: [{ id: 1, type: 'INPUT', x: 100, y: 100 }],
+                connections: [],
+                nextId: 2
+            });
+
+            // Make changes
+            state.addComponent({
+                id: 5, type: 'AND', x: 300, y: 200,
+                inputs: [null, null], inputPorts: [{}, {}], outputPorts: [{}]
+            });
+
+            operations.revertToSaved();
+
+            // Board name should be preserved
+            expect(state.getCurrentBoardName()).toBe('TestBoard');
+        });
+
+        it('preserves current component name after revert', () => {
+            // Set up a component editing context
+            state.setCurrentBoardName(null);
+            state.setCurrentComponentName('MyGate');
+            state.setLastSavedState({
+                components: [{ id: 1, type: 'INPUT', x: 100, y: 100 }],
+                connections: [],
+                nextId: 2
+            });
+
+            // Make changes
+            state.addComponent({
+                id: 5, type: 'OUTPUT', x: 300, y: 200,
+                inputs: [null], inputPorts: [{}], outputPorts: []
+            });
+
+            operations.revertToSaved();
+
+            // Component name should be preserved, board name should remain null
+            expect(state.getCurrentComponentName()).toBe('MyGate');
+            expect(state.getCurrentBoardName()).toBe(null);
         });
 
         it('does not modify lastSavedState after revert', () => {

@@ -349,7 +349,19 @@ export class CircuitState {
         }
 
         const currentState = JSON.stringify(this.getCurrentState());
-        return currentState !== this.lastSavedState;
+        // lastSavedState may be an object (from deepClone) or a string
+        // Normalize to string for comparison
+        const savedState = typeof this.lastSavedState === 'string'
+            ? this.lastSavedState
+            : JSON.stringify(this.lastSavedState);
+
+        console.log('[DEBUG CircuitState] hasUnsavedChanges check');
+        console.log('[DEBUG CircuitState] currentState truthTableState:', this.getCurrentState().truthTableState);
+        console.log('[DEBUG CircuitState] lastSavedState type:', typeof this.lastSavedState);
+        console.log('[DEBUG CircuitState] lastSavedState truthTableState:', this.lastSavedState?.truthTableState);
+        console.log('[DEBUG CircuitState] states match:', currentState === savedState);
+
+        return currentState !== savedState;
     }
 
     /**

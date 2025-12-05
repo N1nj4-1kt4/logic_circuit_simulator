@@ -207,8 +207,10 @@ export class ComponentLibraryOperations {
      * @returns {Promise<string>} Component name on success for notification
      */
     async loadComponentForEditing(name) {
-        // Save current context's state before switching (including truth table changes)
-        await this.contextManager.saveCurrentContext();
+        // Note: We intentionally do NOT call saveCurrentContext() here.
+        // If the user wants to save changes before switching contexts, they should
+        // explicitly save first. Auto-saving would overwrite saved state with
+        // unsaved changes, breaking the "Revert to Saved" concept.
 
         const componentDef = await this.componentLibrary.loadComponent(name);
 

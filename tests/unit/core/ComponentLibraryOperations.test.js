@@ -254,7 +254,7 @@ describe('ComponentLibraryOperations', () => {
             );
         });
 
-        it('saves current context before loading', async () => {
+        it('does not auto-save current context before loading (user should explicitly save)', async () => {
             mockComponentLibrary.loadComponent.mockResolvedValue({
                 name: 'TestComp',
                 components: [],
@@ -263,7 +263,10 @@ describe('ComponentLibraryOperations', () => {
 
             await operations.loadComponentForEditing('TestComp');
 
-            expect(mockContextManager.saveCurrentContext).toHaveBeenCalled();
+            // We intentionally do NOT call saveCurrentContext on load.
+            // Auto-saving would overwrite the saved state with unsaved changes,
+            // breaking the "Revert to Saved" concept.
+            expect(mockContextManager.saveCurrentContext).not.toHaveBeenCalled();
         });
 
         it('throws ComponentNotFoundError when component not found', async () => {

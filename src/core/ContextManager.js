@@ -66,12 +66,17 @@ export class ContextManager {
      * @param {string} contextInfo.name - Name of the board or component
      */
     loadCircuitContext(circuitData, contextInfo) {
+        console.log('[DEBUG ContextManager] loadCircuitContext called');
+        console.log('[DEBUG ContextManager] circuitData.truthTableState:', circuitData.truthTableState);
+
         // Load circuit data into state
+        // IMPORTANT: Include truthTableState so BOARD_LOADED handler gets correct position
         this.state.loadState({
             components: circuitData.components || [],
             connections: circuitData.connections || [],
             nextId: (circuitData.nextId || 0) + 1,
-            customComponents: circuitData.customComponents || this.state.getCustomComponents()
+            customComponents: circuitData.customComponents || this.state.getCustomComponents(),
+            truthTableState: circuitData.truthTableState || null
         });
 
         // Set current context (board or component)
@@ -83,7 +88,8 @@ export class ContextManager {
             this.state.setCurrentBoardName(null);
         }
 
-        // Load truth table state for this context (or clear if none saved)
+        // Truth table state is now set via loadState() above
+        // This line is now redundant but kept for backwards compatibility with any direct callers
         this.state.setTruthTableState(circuitData.truthTableState || null);
 
         // Clear and recompute truth table cache for the new circuit

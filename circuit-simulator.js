@@ -286,15 +286,24 @@ class CircuitSimulator {
     }
 
     handleClearBoard() {
-        this.dialogManager.showSaveOptionsDialog(() => {
-            this.state.clearComponents();
-            this.state.setCurrentBoardName(null);
-            this.state.setCurrentComponentName(null);
-            this.toolbar.updateCircuitNameDisplay(null, false);
-            // Emit event to close truth table and notify other components
-            eventBus.emit(EVENT_TYPES.BOARD_CLEARED);
-            this.redraw();
-        });
+        // Check for unsaved changes before clearing
+        if (this.state.hasUnsavedChanges()) {
+            this.dialogManager.showSaveOptionsDialog(() => {
+                this._clearBoardInternal();
+            });
+        } else {
+            this._clearBoardInternal();
+        }
+    }
+
+    _clearBoardInternal() {
+        this.state.clearComponents();
+        this.state.setCurrentBoardName(null);
+        this.state.setCurrentComponentName(null);
+        this.toolbar.updateCircuitNameDisplay(null, false);
+        // Emit event to close truth table and notify other components
+        eventBus.emit(EVENT_TYPES.BOARD_CLEARED);
+        this.redraw();
     }
 
     // Helper method to update toolbar displays
@@ -469,15 +478,18 @@ class CircuitSimulator {
 
         // Board loaded event - destroy truth table to avoid stale data
         eventBus.on(EVENT_TYPES.BOARD_LOADED, () => {
+            console.log('[DEBUG circuit-simulator] BOARD_LOADED handler called');
+            // Read the loaded board's truth table state BEFORE destroying panel
+            // (hide() would overwrite the state with current position)
+            const truthTableState = this.state.getTruthTableState();
+            console.log('[DEBUG circuit-simulator] truthTableState from state:', truthTableState);
+
             if (this.truthTablePanel) {
-                console.log('BOARD_LOADED: Destroying truth table panel');
-                this.truthTablePanel.hide();
+                // Don't call hide() here - it would save current position and overwrite the loaded state
+                // Just destroy the panel directly
+                console.log('[DEBUG circuit-simulator] Destroying existing truthTablePanel');
                 this.truthTablePanel.destroy();
-                // Don't remove the panel from DOM - it's part of static HTML and should remain
-                // Just destroy the TruthTablePanel object so it's regenerated with new board data
                 this.truthTablePanel = null;
-                // Note: Don't clear state here - board might have saved truth table state
-                console.log('Truth table panel destroyed');
             }
             // Reset the DOM panel's inline styles to prevent stale dimensions
             // The loaded board's saved state (if any) will be applied when the panel is opened
@@ -486,14 +498,19 @@ class CircuitSimulator {
                 panel.style.width = '';
                 panel.style.height = '';
                 panel.style.transform = '';
+                panel.style.opacity = '0';
+                panel.style.display = 'none';
+                panel.classList.add('hidden');
                 panel.removeAttribute('data-x');
                 panel.removeAttribute('data-y');
             }
 
             // Restore truth table if it was visible in the loaded board
-            const truthTableState = this.state.getTruthTableState();
             if (truthTableState && truthTableState.visible) {
+                console.log('[DEBUG circuit-simulator] Restoring truth table, position:', { x: truthTableState.x, y: truthTableState.y });
                 this.generateTruthTable();
+            } else {
+                console.log('[DEBUG circuit-simulator] NOT restoring truth table, visible:', truthTableState?.visible);
             }
         });
 
@@ -901,6 +918,20 @@ class CircuitSimulator {
     }
 
     async loadBoard(boardName) {
+        // Check for unsaved changes before loading
+        if (this.state.hasUnsavedChanges()) {
+            console.log('[DEBUG circuit-simulator] loadBoard: hasUnsavedChanges=true, showing save dialog');
+            this.dialogManager.showSaveOptionsDialog(async () => {
+                // User chose to proceed (either saved or discarded)
+                await this._loadBoardInternal(boardName);
+            });
+        } else {
+            console.log('[DEBUG circuit-simulator] loadBoard: hasUnsavedChanges=false, loading directly');
+            await this._loadBoardInternal(boardName);
+        }
+    }
+
+    async _loadBoardInternal(boardName) {
         try {
             const loadedName = await this.operations.loadBoard(boardName);
             DialogFactory.showAlert({

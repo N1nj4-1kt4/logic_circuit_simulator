@@ -165,6 +165,28 @@ describe('TruthTableManager', () => {
             // Should only compute once due to debouncing
             expect(handler).toHaveBeenCalledTimes(1);
         });
+
+        it('recomputes truth table immediately on BOARD_LOADED event', () => {
+            const handler = vi.fn();
+            eventBus.on(EVENT_TYPES.TRUTH_TABLE_COMPUTED, handler);
+
+            // Emit board loaded event (simulating revert to saved or board load)
+            eventBus.emit(EVENT_TYPES.BOARD_LOADED);
+
+            // Should compute immediately without debouncing
+            expect(handler).toHaveBeenCalled();
+        });
+
+        it('recomputes truth table on BOARD_LOADED even with no prior cache', () => {
+            // Clear any existing cache
+            state.setTruthTableCache(null);
+
+            // Emit board loaded event
+            eventBus.emit(EVENT_TYPES.BOARD_LOADED);
+
+            // Cache should now be populated
+            expect(state.getTruthTableCache()).not.toBeNull();
+        });
     });
 
     describe('Cleanup', () => {

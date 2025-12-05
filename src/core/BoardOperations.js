@@ -73,8 +73,12 @@ export class BoardOperations {
      * @returns {Promise<string>} Board name on success for notification
      */
     async loadBoard(boardName) {
-        // Save current context's state before switching (including truth table changes)
-        await this.contextManager.saveCurrentContext();
+        // Note: We intentionally do NOT call saveCurrentContext() here.
+        // If the user wants to save changes before switching boards, they should
+        // explicitly save first. Auto-saving would overwrite saved state with
+        // unsaved changes, breaking the "Revert to Saved" concept.
+        console.log('[DEBUG BoardOperations] loadBoard called for:', boardName);
+        console.log('[DEBUG BoardOperations] NOT calling saveCurrentContext (user should explicitly save)');
 
         const boardData = await this.boardManager.loadBoard(boardName);
 
@@ -139,11 +143,14 @@ export class BoardOperations {
         }
 
         // Restore working state from lastSavedState
+        // Preserve current context (board/component name) since we're reverting within the same context
         this.state.loadState({
             components: lastSavedState.components || [],
             connections: lastSavedState.connections || [],
             nextId: lastSavedState.nextId || 1,
-            truthTableState: lastSavedState.truthTableState || null
+            truthTableState: lastSavedState.truthTableState || null,
+            currentBoardName: this.state.getCurrentBoardName(),
+            currentComponentName: this.state.getCurrentComponentName()
         });
 
         // Restore truth table state if present
@@ -152,7 +159,7 @@ export class BoardOperations {
         }
 
         // Emit events to update UI
-        eventBus.emit(EVENT_TYPES.BOARD_LOADED);
+        // Note: BOARD_LOADED is already emitted by loadState(), so we only emit the other events
         eventBus.emit(EVENT_TYPES.CANVAS_REDRAW);
         eventBus.emit(EVENT_TYPES.TOOLBAR_UPDATE_DISPLAYS);
 
