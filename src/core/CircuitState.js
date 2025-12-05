@@ -528,12 +528,14 @@ export class CircuitState {
      * @param {Object} state - State to load
      */
     loadState(state) {
-        this.components = state.components || [];
-        this.connections = state.connections || [];
+        // Deep clone components and connections to prevent mutation of the source
+        // (e.g., lastSavedState should not be modified when user moves components)
+        this.components = state.components ? JSON.parse(JSON.stringify(state.components)) : [];
+        this.connections = state.connections ? JSON.parse(JSON.stringify(state.connections)) : [];
         this.nextId = state.nextId || 1;
         this.currentBoardName = state.currentBoardName || null;
         this.currentComponentName = state.currentComponentName || null;
-        this.truthTableState = state.truthTableState || null;
+        this.truthTableState = state.truthTableState ? JSON.parse(JSON.stringify(state.truthTableState)) : null;
 
         if (this.truthTableState && this.truthTableState.columnOrder) {
             this.truthTableColumnOrder = [...this.truthTableState.columnOrder];
