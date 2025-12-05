@@ -503,8 +503,9 @@ class CircuitSimulator {
             }
 
             // Restore truth table if it was visible in the loaded board
+            // setState() in generateTruthTable() will set _isRestoring flag
             if (truthTableState && truthTableState.visible) {
-                this.generateTruthTable({ isRestoring: true });
+                this.generateTruthTable();
             }
         });
 
@@ -686,26 +687,18 @@ class CircuitSimulator {
         this.simulationController.onToggleInput();
     }
 
-    generateTruthTable(options = {}) {
-        const { isRestoring = false } = options;
-        console.log('generateTruthTable called, current panel:', this.truthTablePanel, 'isRestoring:', isRestoring);
+    generateTruthTable() {
         // Initialize truth table panel if not already created OR if DOM was removed
         const needsNewPanel = !this.truthTablePanel ||
                              (this.truthTablePanel.panel && !document.body.contains(this.truthTablePanel.panel));
 
         if (needsNewPanel) {
-            if (this.truthTablePanel) {
-                console.log('Panel exists but DOM was removed, creating new one...');
-            } else {
-                console.log('Creating new TruthTablePanel...');
-            }
             this.truthTablePanel = new TruthTablePanel(
                 this.canvas,
                 this.state.getComponents(),
                 this.state.getConnections(),
                 this.state
             );
-            console.log('TruthTablePanel created:', this.truthTablePanel);
 
             // Hook up state persistence
             this.truthTablePanel.onStateChange = (state) => {
@@ -714,27 +707,20 @@ class CircuitSimulator {
             };
 
             // Restore saved state if available (position, size, etc.)
+            // setState() sets _isRestoring flag to skip saveState() during initial display
             const truthTableState = this.state.getTruthTableState();
             if (truthTableState) {
-                console.log('Restoring truth table UI state:', truthTableState);
                 this.truthTablePanel.setState(truthTableState);
             }
-        } else {
-            console.log('Reusing existing TruthTablePanel');
         }
 
         // Generate and display truth table
-        console.log('Calling generate()...');
         const success = this.truthTablePanel.generate();
-        console.log('Generate returned:', success);
         if (success) {
-            console.log('Calling display()...');
-            this.truthTablePanel.display({ isRestoring });
+            this.truthTablePanel.display();
 
             // Store reference for backward compatibility
             this.state.setTruthTableData(this.truthTablePanel.truthTableData);
-        } else {
-            console.error('Failed to generate truth table');
         }
     }
 

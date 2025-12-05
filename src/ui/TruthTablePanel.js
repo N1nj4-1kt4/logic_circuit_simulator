@@ -52,6 +52,9 @@ export class TruthTablePanel {
         // Callback for state changes (to trigger save)
         this.onStateChange = null;
 
+        // Flag to skip saveState() during restore (set by setState())
+        this._isRestoring = false;
+
         // Bound event handlers for cleanup
         this._boundHandleStepCompleted = this._handleStepCompleted.bind(this);
         this._boundHandleValidityChanged = this._handleValidityChanged.bind(this);
@@ -169,13 +172,9 @@ export class TruthTablePanel {
 
     /**
      * Display the truth table panel
-     * @param {Object} options - Display options
-     * @param {boolean} options.isRestoring - If true, skip saveState on initial display (restoring from saved state)
+     * Note: _isRestoring flag is set by setState() when restoring from saved state
      */
-    display(options = {}) {
-        const { isRestoring = false } = options;
-        this._isRestoring = isRestoring;
-
+    display() {
         if (!this.truthTableData) {
             return;
         }
@@ -1062,10 +1061,12 @@ export class TruthTablePanel {
 
     /**
      * Set state (for loading from localStorage)
+     * Also sets _isRestoring flag to skip saveState() during initial display
      */
     setState(state) {
         if (!state) {
             this.state = null;
+            this._isRestoring = false;
             return;
         }
 
@@ -1085,6 +1086,7 @@ export class TruthTablePanel {
         delete sanitizedState.transform;
 
         this.state = sanitizedState;
+        this._isRestoring = true;  // Skip saveState() in tableBuilt when restoring
         if (sanitizedState.columnOrder) {
             this.columnOrder = sanitizedState.columnOrder;
         }
