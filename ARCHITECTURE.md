@@ -36,7 +36,15 @@ Pure business logic with no DOM or Canvas dependencies.
 | File | Purpose | Key Exports |
 |------|---------|-------------|
 | `CircuitState.js` | State container for all circuit data | `CircuitState` class |
-| `CircuitOperations.js` | Business logic orchestration | `CircuitOperations` class |
+| `CanvasOperations.js` | Canvas-level component manipulation | `CanvasOperations` class |
+| `BoardOperations.js` | Board CRUD operations | `BoardOperations` class |
+| `ComponentLibraryOperations.js` | Custom component library management | `ComponentLibraryOperations` class |
+| `ContextManager.js` | Save/load circuit contexts (boards vs components) | `ContextManager` class |
+| `TruthTableManager.js` | Truth table computation and caching | `TruthTableManager` class |
+| `AutoSaveManager.js` | Event-driven auto-save with debouncing | `AutoSaveManager` class |
+| `CircuitValidityManager.js` | Single source of truth for circuit validity | `CircuitValidityManager`, `VALIDITY_STATES` |
+| `SimulationController.js` | Simulation lifecycle management | `SimulationController`, `SIMULATION_STATES` |
+| `CircuitTransaction.js` | Predictive analysis for destructive operations | `CircuitTransaction` |
 | `circuitEvaluator.js` | Circuit simulation engine | `simulateCircuit()` |
 | `gateLogic.js` | Gate truth tables | `evaluateGate()` |
 
@@ -58,27 +66,174 @@ state.addComponent(component)  // Emits COMPONENT_ADDED, BOARD_CHANGED
 state.setMode('connect')       // Emits mode:changed
 ```
 
-#### CircuitOperations
+#### CanvasOperations
 
-Orchestrates business logic using callbacks for integration:
+Handles canvas-level component manipulation (placement, connection, deletion).
 
 ```javascript
-const operations = new CircuitOperations({
+const canvasOperations = new CanvasOperations({
     state,
-    boardManager,
-    componentLibrary,
     callbacks: {
-        redraw: () => canvasRenderer.draw(),
         defineComponentPorts: (component) => { /* ... */ },
         findComponent: (x, y) => { /* ... */ },
         findPort: (x, y) => { /* ... */ }
     }
 });
 
-// Operations emit events and use callbacks
-operations.placeComponent(x, y, 'AND');
-operations.simulate();
-operations.saveCurrentBoard('MyBoard');
+canvasOperations.placeComponent(x, y, 'AND');
+canvasOperations.handleConnect(x, y);
+canvasOperations.handleDelete(x, y, findConnection, options);
+canvasOperations.checkDeletionImpact(x, y, findConnection);
+```
+
+#### BoardOperations
+
+Handles board CRUD operations (save, load, create, delete).
+
+```javascript
+const boardOperations = new BoardOperations({
+    state,
+    boardManager,
+    contextManager
+});
+
+await boardOperations.saveCurrentBoard('MyBoard');
+await boardOperations.loadBoard('MyBoard');
+boardOperations.createNewBoard(showSaveOptionsDialog, onCreated);
+await boardOperations.deleteBoard('MyBoard');
+```
+
+#### ComponentLibraryOperations
+
+Manages custom component library (save, load, delete, export, import).
+
+```javascript
+const componentLibraryOperations = new ComponentLibraryOperations({
+    state,
+    componentLibrary,
+    contextManager
+});
+
+await componentLibraryOperations.saveComponent('HalfAdder', 'A half adder circuit');
+await componentLibraryOperations.loadComponentForEditing('HalfAdder');
+await componentLibraryOperations.deleteComponent('HalfAdder');
+await componentLibraryOperations.exportComponent('HalfAdder');
+await componentLibraryOperations.importComponent(fileEvent);
+```
+
+#### ContextManager
+
+Handles save/load of circuit contexts when switching between boards and components.
+
+```javascript
+const contextManager = new ContextManager({
+    state,
+    boardManager,
+    componentLibrary,
+    truthTableManager
+});
+
+await contextManager.saveCurrentContext();  // Save before switching
+contextManager.loadCircuitContext(circuitData, { type: 'board', name: 'MyBoard' });
+```
+
+#### TruthTableManager
+
+Manages truth table computation with debouncing. Subscribes to BOARD_CHANGED events.
+
+```javascript
+const truthTableManager = new TruthTableManager({ state });
+
+truthTableManager.recomputeTruthTable();  // Manual recompute
+truthTableManager.destroy();               // Cleanup event listeners
+```
+
+#### AutoSaveManager
+
+Event-driven auto-save with debouncing. Subscribes to BOARD_CHANGED, TRUTH_TABLE_STATE_CHANGED, etc.
+
+```javascript
+const autoSaveManager = new AutoSaveManager({
+    state,
+    storage: storageAdapter
+});
+
+autoSaveManager.setupAutoSave();    // Start listening to events
+autoSaveManager.clearAutoSave();    // Stop auto-save
+await autoSaveManager.saveBoardState();
+await autoSaveManager.loadBoardState();
+await autoSaveManager.clearBoardState();
+```
+
+#### CircuitValidityManager
+
+Owns circuit validity state and emits declarative events when validity changes:
+
+```javascript
+const validityManager = new CircuitValidityManager(circuitState);
+
+// Check validity
+validityManager.canSimulate()  // true if circuit can be simulated
+validityManager.getValidity()  // { state: 'valid'|'incomplete'|'empty', reason: string|null }
+
+// Revalidate after changes (called automatically via BOARD_CHANGED)
+validityManager.revalidate()   // Emits CIRCUIT_VALIDITY_CHANGED if state changed
+
+// Predictive validation (used by CircuitTransaction)
+validityManager.wouldBeValidAfter(components, connections)
+```
+
+#### SimulationController
+
+Owns simulation lifecycle with state machine (IDLE → RUNNING).
+This is the **primary simulation controller** used by the main application (`circuit-simulator.js`).
+Automatically syncs with `CircuitState.setAutoCycling()` for backward compatibility.
+
+```javascript
+const controller = new SimulationController({
+    circuitState,
+    validityManager
+});
+
+// Auto-cycling control
+controller.autocycleStart()  // Begin auto-cycling through combinations
+controller.autocycleStop()   // Stop and return to IDLE
+
+// Manual stepping (prev/next buttons)
+controller.manualStep(1)     // Step forward one combination
+controller.manualStep(-1)    // Step backward one combination
+
+// Input toggle (when user clicks INPUT component)
+controller.onToggleInput()   // Simulate after manual input toggle
+
+// Reset
+controller.reset()           // Reset all inputs to 0
+
+// State queries
+controller.isRunning()       // true if auto-cycling
+controller.getState()        // { state, cycleIndex, totalCombinations }
+```
+
+#### CircuitTransaction
+
+Enables predictive analysis before committing destructive changes:
+
+```javascript
+const transaction = new CircuitTransaction(circuitState, validityManager);
+
+// Stage changes (doesn't affect real state)
+transaction.removeComponent(componentId);
+transaction.removeConnection(connectionIndex);
+
+// Analyze impact
+const impact = transaction.analyze();
+// { wouldBeValid: boolean, newValidity: {...}, affectedComponents: [...] }
+
+// Commit or abandon
+if (userConfirmed) {
+    transaction.commit();  // Apply to real state
+}
+// Otherwise transaction is garbage collected
 ```
 
 ### Rendering (`src/rendering/`)
@@ -170,6 +325,9 @@ The event bus is the primary communication mechanism between modules.
 
 ### Event Types
 
+Events are **declarative** - they describe what happened, not what listeners should do.
+This enables loose coupling where emitters don't know who's listening.
+
 ```javascript
 import { eventBus, EVENT_TYPES } from './utils/eventBus.js';
 
@@ -182,10 +340,16 @@ EVENT_TYPES.COMPONENT_MOVED       // { component, oldX, oldY }
 EVENT_TYPES.CONNECTION_ADDED      // { connection }
 EVENT_TYPES.CONNECTION_REMOVED    // { connection }
 
-// Simulation
-EVENT_TYPES.SIMULATION_RUN        // {}
-EVENT_TYPES.SIMULATION_COMPLETED  // {}
-EVENT_TYPES.SIMULATION_RESET      // {}
+// Circuit validity (declarative)
+EVENT_TYPES.CIRCUIT_VALIDITY_CHANGED  // { from, to, canSimulate, reason, inputs, outputs }
+EVENT_TYPES.IO_STRUCTURE_CHANGED      // { previousInputCount, newInputCount, previousOutputCount, newOutputCount }
+
+// Simulation lifecycle (declarative)
+EVENT_TYPES.SIMULATION_STARTED        // { cycleIndex, totalCombinations, inputValues }
+EVENT_TYPES.SIMULATION_STOPPED        // { cycleIndex, totalCombinations }
+EVENT_TYPES.SIMULATION_PAUSED         // { reason, cycleIndex, canResume }
+EVENT_TYPES.SIMULATION_STEP_COMPLETED // { cycleIndex, totalCombinations, inputValues }
+EVENT_TYPES.SIMULATION_STATE_CHANGED  // { isRunning, currentIndex, totalCombinations }
 
 // Board operations
 EVENT_TYPES.BOARD_SAVE            // { boardName }
@@ -193,11 +357,27 @@ EVENT_TYPES.BOARD_LOADED          // { boardName }
 EVENT_TYPES.BOARD_CHANGED         // {}
 EVENT_TYPES.BOARD_CLEARED         // {}
 
+// Truth table
+EVENT_TYPES.TRUTH_TABLE_COMPUTED  // { table, inputs, outputs }
+
 // UI updates
 EVENT_TYPES.CANVAS_REDRAW         // {}
 EVENT_TYPES.TOOLBAR_UPDATE_DISPLAYS // {}
-EVENT_TYPES.TRUTH_TABLE_UPDATE_HIGHLIGHT // {}
 ```
+
+### Declarative vs Imperative Events
+
+| ✓ Good (Declarative)           | ✗ Bad (Imperative)              |
+|--------------------------------|----------------------------------|
+| `SIMULATION_STEP_COMPLETED`    | `UPDATE_TRUTH_TABLE_HIGHLIGHT`   |
+| `CIRCUIT_VALIDITY_CHANGED`     | `REFRESH_PANEL`                  |
+| `IO_STRUCTURE_CHANGED`         | `REBUILD_TABLE`                  |
+
+**Why declarative events matter:**
+- **Decoupling**: Emitters don't know or care who's listening
+- **Extensibility**: New components subscribe without modifying emitters
+- **Testability**: Events describe state changes, easy to verify
+- **Single responsibility**: Each listener decides its own response
 
 ### Usage Pattern
 
@@ -225,7 +405,7 @@ User clicks canvas
     ↓
 CanvasInteraction.handleClick()
     ↓
-CircuitOperations.placeComponent(x, y, type)
+CanvasOperations.placeComponent(x, y, type)
     ↓
 CircuitState.addComponent(component)
     ↓
@@ -235,19 +415,81 @@ eventBus.emit(BOARD_CHANGED)
 CanvasRenderer.draw() [subscribes to CANVAS_REDRAW]
 ```
 
-### Simulation
+### Simulation (Auto-Cycle)
 
 ```
-User clicks "Simulate"
+User clicks "Play"
     ↓
-CircuitOperations.simulate()
+SimulationController.autocycleStart()
     ↓
-simulateCircuit(components, connections)
+Validate circuit (via validityManager)
     ↓
-evaluateGate() for each gate (topological order)
+Set state = RUNNING, sync CircuitState.setAutoCycling(true)
     ↓
-eventBus.emit(CANVAS_REDRAW)
-eventBus.emit(TRUTH_TABLE_UPDATE_HIGHLIGHT)
+eventBus.emit(AUTOCYCLE_STATE_CHANGED)  ──▶ Toolbar.setAutocycleState('running')
+    ↓
+Schedule _executeAutoCycleStep() timer
+    ↓
+[On each timer tick]
+    ↓
+_executeAutoCycleStep()
+    ↓
+_applyInputsForIndex(cycleIndex)
+    ↓
+_simulateAndEmit()
+    ↓
+eventBus.emit(CANVAS_REDRAW)  ──▶ CanvasRenderer.redraw()
+eventBus.emit(SIMULATION_STEP_COMPLETED)  ──▶ TruthTablePanel.highlightRowByIndex()
+                                              Toolbar.setSimulationProgress()
+```
+
+### Input Toggle
+
+```
+User clicks on INPUT component
+    ↓
+toggleInput(x, y)
+    ↓
+component.value = 1 - component.value
+    ↓
+SimulationController.onToggleInput()
+    ↓
+Calculate cycleIndex from current input values
+    ↓
+_simulateAndEmit()
+    ↓
+eventBus.emit(CANVAS_REDRAW)  ──▶ CanvasRenderer.redraw()
+eventBus.emit(SIMULATION_STEP_COMPLETED)  ──▶ TruthTablePanel.highlightRowByIndex()
+                                              Toolbar.setSimulationProgress()
+```
+
+### Deletion with Transaction
+
+```
+User clicks delete on component
+    ↓
+CanvasOperations.checkDeletionImpact(x, y, findConnection)
+    ↓
+Create CircuitTransaction
+    ↓
+transaction.removeComponent(id)
+transaction.analyze()  ──▶ { wouldBeValid, newValidity, affectedComponents }
+    ↓
+If simulation running && !wouldBeValid:
+    ↓
+    Show confirmation dialog
+    ↓
+    On confirm: transaction.commit()
+Else:
+    transaction.commit() directly
+    ↓
+CircuitState updated
+    ↓
+eventBus.emit(BOARD_CHANGED)
+    ↓
+CircuitValidityManager.revalidate()
+    ↓
+eventBus.emit(CIRCUIT_VALIDITY_CHANGED)  ──▶ All subscribers react
 ```
 
 ### Board Save/Load
@@ -257,7 +499,7 @@ User clicks "Save Board"
     ↓
 DialogManager.showSaveDialog()
     ↓
-CircuitOperations.saveCurrentBoard(name)
+BoardOperations.saveCurrentBoard(name)
     ↓
 BoardManager.saveBoard(name, data)
     ↓
@@ -379,6 +621,11 @@ npm run build    # Production build to dist/
 npm run preview  # Preview production build
 npm test         # Run unit tests
 ```
+
+## Related Documentation
+
+- [Architecture Flow Diagram](docs/specs/architecture-flow-diagram.md) - Visual flow diagrams for the event-driven architecture
+- [Architecture Evolution Proposal](docs/specs/architecture-evolution-proposal.md) - Original design document for live editing
 
 ## Future Improvements
 

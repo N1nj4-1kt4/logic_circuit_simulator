@@ -5,7 +5,10 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { CircuitState } from '../../src/core/CircuitState.js';
-import { CircuitOperations } from '../../src/core/CircuitOperations.js';
+import { AutoSaveManager } from '../../src/core/AutoSaveManager.js';
+import { BoardOperations } from '../../src/core/BoardOperations.js';
+import { ContextManager } from '../../src/core/ContextManager.js';
+import { TruthTableManager } from '../../src/core/TruthTableManager.js';
 import { eventBus, EVENT_TYPES } from '../../src/utils/eventBus.js';
 import { BoardManager } from '../../src/storage/BoardManager.js';
 import { ComponentLibrary } from '../../src/storage/ComponentLibrary.js';
@@ -27,22 +30,9 @@ function createLocalStorageMock() {
 
 describe('Auto-Save Debouncing', () => {
     let state;
-    let operations;
+    let autoSaveManager;
     let mockStorage;
     let storageAdapter;
-    let boardManager;
-    let componentLibrary;
-
-    const mockCallbacks = {
-        redraw: vi.fn(),
-        defineComponentPorts: vi.fn((component) => {
-            component.inputs = component.type === 'INPUT' ? [] : [null];
-            component.inputPorts = component.type === 'INPUT' ? [] : [{}];
-            component.outputPorts = component.type === 'OUTPUT' ? [] : [{}];
-        }),
-        findComponent: vi.fn(),
-        findPort: vi.fn()
-    };
 
     beforeEach(() => {
         vi.useFakeTimers();
@@ -54,26 +44,22 @@ describe('Auto-Save Debouncing', () => {
 
         state = new CircuitState();
         storageAdapter = new LocalStorageAdapter();
-        boardManager = new BoardManager(storageAdapter);
-        componentLibrary = new ComponentLibrary(storageAdapter);
 
-        operations = new CircuitOperations({
+        autoSaveManager = new AutoSaveManager({
             state,
-            boardManager,
-            componentLibrary,
-            callbacks: mockCallbacks
+            storage: storageAdapter
         });
 
-        operations.setupAutoSave();
+        autoSaveManager.setupAutoSave();
     });
 
     afterEach(() => {
-        operations.clearAutoSave();
+        autoSaveManager.clearAutoSave();
         vi.useRealTimers();
     });
 
     it('should debounce auto-save on rapid changes', () => {
-        const saveSpy = vi.spyOn(operations, 'saveBoardState');
+        const saveSpy = vi.spyOn(autoSaveManager, 'saveBoardState');
 
         // Make 5 rapid changes
         for (let i = 0; i < 5; i++) {
@@ -91,7 +77,7 @@ describe('Auto-Save Debouncing', () => {
     });
 
     it('should reset debounce timer on each change', () => {
-        const saveSpy = vi.spyOn(operations, 'saveBoardState');
+        const saveSpy = vi.spyOn(autoSaveManager, 'saveBoardState');
 
         state.addComponent({ id: 1, type: 'INPUT', x: 100, y: 100 });
 
@@ -129,22 +115,9 @@ describe('Auto-Save Debouncing', () => {
 
 describe('Auto-Save State Persistence', () => {
     let state;
-    let operations;
+    let autoSaveManager;
     let mockStorage;
     let storageAdapter;
-    let boardManager;
-    let componentLibrary;
-
-    const mockCallbacks = {
-        redraw: vi.fn(),
-        defineComponentPorts: vi.fn((component) => {
-            component.inputs = component.type === 'INPUT' ? [] : [null];
-            component.inputPorts = component.type === 'INPUT' ? [] : [{}];
-            component.outputPorts = component.type === 'OUTPUT' ? [] : [{}];
-        }),
-        findComponent: vi.fn(),
-        findPort: vi.fn()
-    };
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -155,14 +128,10 @@ describe('Auto-Save State Persistence', () => {
 
         state = new CircuitState();
         storageAdapter = new LocalStorageAdapter();
-        boardManager = new BoardManager(storageAdapter);
-        componentLibrary = new ComponentLibrary(storageAdapter);
 
-        operations = new CircuitOperations({
+        autoSaveManager = new AutoSaveManager({
             state,
-            boardManager,
-            componentLibrary,
-            callbacks: mockCallbacks
+            storage: storageAdapter
         });
     });
 
@@ -174,7 +143,7 @@ describe('Auto-Save State Persistence', () => {
         state.setCurrentBoardName('TestBoard');
         state.setTruthTableState({ width: 400, height: 300 });
 
-        await operations.saveBoardState();
+        await autoSaveManager.saveBoardState();
 
         // Data is double-stringified (saveBoardState JSON.stringifys, then setItem JSON.stringifys again)
         // getItem from our mock does a JSON.parse, so we need one more parse
@@ -207,7 +176,7 @@ describe('Auto-Save State Persistence', () => {
         // setItem receives JSON.stringify(boardData), then does JSON.stringify again
         mockStorage._storage.set('currentBoard', JSON.stringify(JSON.stringify(savedState)));
 
-        await operations.loadBoardState();
+        await autoSaveManager.loadBoardState();
 
         expect(state.getComponents()).toHaveLength(2);
         expect(state.getConnections()).toHaveLength(1);
@@ -221,7 +190,7 @@ describe('Auto-Save State Persistence', () => {
         expect(mockStorage.getItem('currentBoard')).toBeNull();
 
         // Should not throw
-        await expect(operations.loadBoardState()).resolves.not.toThrow();
+        await expect(autoSaveManager.loadBoardState()).resolves.not.toThrow();
 
         // State should remain empty
         expect(state.getComponents()).toHaveLength(0);
@@ -230,12 +199,12 @@ describe('Auto-Save State Persistence', () => {
     it('should clear auto-save state when board is cleared', async () => {
         // Save some state
         state.addComponent({ id: 1, type: 'INPUT', x: 100, y: 100 });
-        await operations.saveBoardState();
+        await autoSaveManager.saveBoardState();
 
         expect(mockStorage._storage.has('currentBoard')).toBe(true);
 
         // Clear board state
-        await operations.clearBoardState();
+        await autoSaveManager.clearBoardState();
 
         expect(mockStorage._storage.has('currentBoard')).toBe(false);
     });
@@ -243,22 +212,11 @@ describe('Auto-Save State Persistence', () => {
 
 describe('Context Switching', () => {
     let state;
-    let operations;
+    let boardOperations;
     let mockStorage;
     let storageAdapter;
     let boardManager;
     let componentLibrary;
-
-    const mockCallbacks = {
-        redraw: vi.fn(),
-        defineComponentPorts: vi.fn((component) => {
-            component.inputs = component.type === 'INPUT' ? [] : [null];
-            component.inputPorts = component.type === 'INPUT' ? [] : [{}];
-            component.outputPorts = component.type === 'OUTPUT' ? [] : [{}];
-        }),
-        findComponent: vi.fn(),
-        findPort: vi.fn()
-    };
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -272,18 +230,25 @@ describe('Context Switching', () => {
         boardManager = new BoardManager(storageAdapter);
         componentLibrary = new ComponentLibrary(storageAdapter);
 
-        operations = new CircuitOperations({
+        const truthTableManager = new TruthTableManager({ state });
+        const contextManager = new ContextManager({
             state,
             boardManager,
             componentLibrary,
-            callbacks: mockCallbacks
+            truthTableManager
+        });
+
+        boardOperations = new BoardOperations({
+            state,
+            boardManager,
+            contextManager
         });
     });
 
     it('should save current board before loading another', async () => {
         // Create and save Board A
         state.addComponent({ id: 1, type: 'INPUT', x: 100, y: 100, label: 'I1', inputs: [], inputPorts: [], outputPorts: [{}] });
-        await operations.saveCurrentBoard('BoardA');
+        await boardOperations.saveCurrentBoard('BoardA');
 
         // Verify Board A exists
         const boardA = await boardManager.loadBoard('BoardA');
@@ -296,10 +261,10 @@ describe('Context Switching', () => {
         state.clearComponents();
         state.setCurrentBoardName(null);
         state.addComponent({ id: 1, type: 'AND', x: 150, y: 150, inputs: [null, null], inputPorts: [{}, {}], outputPorts: [{}] });
-        await operations.saveCurrentBoard('BoardB');
+        await boardOperations.saveCurrentBoard('BoardB');
 
         // Load Board A (should trigger auto-save of current context via _saveCurrentContext)
-        await operations.loadBoard('BoardA');
+        await boardOperations.loadBoard('BoardA');
 
         // Board A should have 1 component (original saved state)
         expect(state.getComponents()).toHaveLength(1);
@@ -311,14 +276,14 @@ describe('Context Switching', () => {
         state.addComponent({ id: 1, type: 'INPUT', x: 100, y: 100, label: 'I1', inputs: [], inputPorts: [], outputPorts: [{}] });
         state.addComponent({ id: 2, type: 'OUTPUT', x: 200, y: 100, label: 'O1', inputs: [null], inputPorts: [{}], outputPorts: [] });
         state.setTruthTableState({ width: 400, height: 300, columnOrder: ['I1', 'O1'] });
-        await operations.saveCurrentBoard('BoardWithTable');
+        await boardOperations.saveCurrentBoard('BoardWithTable');
 
         // Clear and reload
         state.clearComponents();
         state.setCurrentBoardName(null);
         state.setTruthTableState(null);
 
-        await operations.loadBoard('BoardWithTable');
+        await boardOperations.loadBoard('BoardWithTable');
 
         expect(state.getTruthTableState()).toEqual({
             width: 400,
@@ -330,11 +295,11 @@ describe('Context Switching', () => {
     it('should not overwrite board when loading same board', async () => {
         // Create and save board
         state.addComponent({ id: 1, type: 'INPUT', x: 100, y: 100, label: 'I1', inputs: [], inputPorts: [], outputPorts: [{}] });
-        await operations.saveCurrentBoard('SameBoard');
+        await boardOperations.saveCurrentBoard('SameBoard');
 
         // Load the same board - this is essentially a no-op/refresh
         // The _saveCurrentContext will save current state (which is same as saved)
-        await operations.loadBoard('SameBoard');
+        await boardOperations.loadBoard('SameBoard');
 
         // Should still have same data
         expect(state.getComponents()).toHaveLength(1);
@@ -344,7 +309,7 @@ describe('Context Switching', () => {
     it('should clear board name to prevent accidental overwrite', async () => {
         // Save a board
         state.addComponent({ id: 1, type: 'INPUT', x: 100, y: 100, label: 'I1', inputs: [], inputPorts: [], outputPorts: [{}] });
-        await operations.saveCurrentBoard('OriginalBoard');
+        await boardOperations.saveCurrentBoard('OriginalBoard');
 
         // Clear for new work
         state.clearComponents();
@@ -365,22 +330,9 @@ describe('Context Switching', () => {
 
 describe('Auto-Save Event Triggers', () => {
     let state;
-    let operations;
+    let autoSaveManager;
     let mockStorage;
     let storageAdapter;
-    let boardManager;
-    let componentLibrary;
-
-    const mockCallbacks = {
-        redraw: vi.fn(),
-        defineComponentPorts: vi.fn((component) => {
-            component.inputs = component.type === 'INPUT' ? [] : [null];
-            component.inputPorts = component.type === 'INPUT' ? [] : [{}];
-            component.outputPorts = component.type === 'OUTPUT' ? [] : [{}];
-        }),
-        findComponent: vi.fn(),
-        findPort: vi.fn()
-    };
 
     beforeEach(() => {
         vi.useFakeTimers();
@@ -392,26 +344,22 @@ describe('Auto-Save Event Triggers', () => {
 
         state = new CircuitState();
         storageAdapter = new LocalStorageAdapter();
-        boardManager = new BoardManager(storageAdapter);
-        componentLibrary = new ComponentLibrary(storageAdapter);
 
-        operations = new CircuitOperations({
+        autoSaveManager = new AutoSaveManager({
             state,
-            boardManager,
-            componentLibrary,
-            callbacks: mockCallbacks
+            storage: storageAdapter
         });
 
-        operations.setupAutoSave();
+        autoSaveManager.setupAutoSave();
     });
 
     afterEach(() => {
-        operations.clearAutoSave();
+        autoSaveManager.clearAutoSave();
         vi.useRealTimers();
     });
 
     it('should trigger auto-save on BOARD_CHANGED event', () => {
-        const saveSpy = vi.spyOn(operations, 'saveBoardState');
+        const saveSpy = vi.spyOn(autoSaveManager, 'saveBoardState');
 
         eventBus.emit(EVENT_TYPES.BOARD_CHANGED);
 
@@ -421,7 +369,7 @@ describe('Auto-Save Event Triggers', () => {
     });
 
     it('should trigger auto-save on TRUTH_TABLE_STATE_CHANGED event', () => {
-        const saveSpy = vi.spyOn(operations, 'saveBoardState');
+        const saveSpy = vi.spyOn(autoSaveManager, 'saveBoardState');
 
         state.setTruthTableState({ width: 500 });
 
@@ -431,7 +379,7 @@ describe('Auto-Save Event Triggers', () => {
     });
 
     it('should call clearBoardState on BOARD_CLEARED event', () => {
-        const clearSpy = vi.spyOn(operations, 'clearBoardState');
+        const clearSpy = vi.spyOn(autoSaveManager, 'clearBoardState');
 
         // Trigger the event
         eventBus.emit(EVENT_TYPES.BOARD_CLEARED);
@@ -441,12 +389,12 @@ describe('Auto-Save Event Triggers', () => {
     });
 
     it('should stop auto-save when clearAutoSave is called', () => {
-        const saveSpy = vi.spyOn(operations, 'saveBoardState');
+        const saveSpy = vi.spyOn(autoSaveManager, 'saveBoardState');
 
         state.addComponent({ id: 1, type: 'INPUT', x: 100, y: 100 });
 
         // Clear auto-save before timer fires
-        operations.clearAutoSave();
+        autoSaveManager.clearAutoSave();
 
         vi.advanceTimersByTime(2000);
 

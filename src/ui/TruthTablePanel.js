@@ -6,6 +6,7 @@ import { positionPanelSmartly } from '../utils/positioning.js';
 import { DialogFactory } from './DialogFactory.js';
 import { UI } from '../constants.js';
 import { eventBus, EVENT_TYPES } from '../utils/eventBus.js';
+import { logger } from '../utils/logger.js';
 
 /**
  * TruthTablePanel - Manages the truth table UI using Tabulator.js
@@ -16,6 +17,10 @@ import { eventBus, EVENT_TYPES } from '../utils/eventBus.js';
  * - Highlight rows matching current circuit state
  * - Provide drag/resize functionality via Interact.js
  * - Persist panel state (position, size, column order)
+ *
+ * Subscribes to declarative events:
+ * - SIMULATION_STEP_COMPLETED: Highlights row by cycle index
+ * - CIRCUIT_VALIDITY_CHANGED: Shows invalid message when circuit becomes incomplete
  */
 export class TruthTablePanel {
     /**
@@ -46,6 +51,79 @@ export class TruthTablePanel {
 
         // Callback for state changes (to trigger save)
         this.onStateChange = null;
+
+        // Bound event handlers for cleanup
+        this._boundHandleStepCompleted = this._handleStepCompleted.bind(this);
+        this._boundHandleValidityChanged = this._handleValidityChanged.bind(this);
+
+        // Subscribe to declarative events
+        this._setupEventListeners();
+    }
+
+    /**
+     * Setup event listeners for declarative events
+     * @private
+     */
+    _setupEventListeners() {
+        // Highlight row when simulation steps
+        eventBus.on(EVENT_TYPES.SIMULATION_STEP_COMPLETED, this._boundHandleStepCompleted);
+
+        // Show invalid message when circuit becomes incomplete
+        eventBus.on(EVENT_TYPES.CIRCUIT_VALIDITY_CHANGED, this._boundHandleValidityChanged);
+    }
+
+    /**
+     * Handle simulation step completed event
+     * @private
+     */
+    _handleStepCompleted(data) {
+        if (this.isVisible()) {
+            this.highlightRowByIndex(data.cycleIndex);
+        }
+    }
+
+    /**
+     * Handle circuit validity changed event
+     * @private
+     */
+    _handleValidityChanged(data) {
+        // Only act if panel is visible and circuit became invalid
+        if (this.isVisible() && !data.canSimulate && this.truthTableData) {
+            // Update truthTableData to reflect invalid state
+            this.truthTableData.isValid = false;
+            this.truthTableData.reason = data.reason;
+
+            // If we have no table data, show invalid message
+            if (this.truthTableData.table.length === 0) {
+                this.displayInvalidMessage(true);
+            }
+        }
+    }
+
+    /**
+     * Check if panel is visible
+     * @returns {boolean}
+     */
+    isVisible() {
+        return this.panel &&
+               !this.panel.classList.contains('hidden') &&
+               this.panel.style.display !== 'none';
+    }
+
+    /**
+     * Highlight row by cycle index (used by SIMULATION_STEP_COMPLETED)
+     * @param {number} index - The row index to highlight
+     */
+    highlightRowByIndex(index) {
+        if (!this.table) return;
+
+        this.table.deselectRow();
+
+        const rows = this.table.getRows();
+        if (rows[index]) {
+            rows[index].select();
+            rows[index].scrollTo();
+        }
     }
 
     /**
@@ -68,9 +146,10 @@ export class TruthTablePanel {
         const { inputs, outputs, table, isValid, reason } = cache;
 
         // Store truth table data from cache (including invalid circuits)
+        // Deep copy inputs/outputs to capture current labels (avoid reference issues)
         this.truthTableData = {
-            inputs: inputs || [],
-            outputs: outputs || [],
+            inputs: (inputs || []).map(inp => ({ ...inp })),
+            outputs: (outputs || []).map(out => ({ ...out })),
             table: table || [],
             isValid: isValid,
             reason: reason
@@ -776,17 +855,25 @@ export class TruthTablePanel {
      * Called when TRUTH_TABLE_COMPUTED event fires
      */
     refresh() {
+        logger.debug('[TruthTablePanel] refresh() called');
+
         // Don't refresh if panel doesn't exist
         if (!this.panel) {
+            logger.debug('[TruthTablePanel] refresh() - panel does not exist, returning');
             return;
         }
 
         // Don't refresh if panel is hidden
         if (this.panel.classList.contains('hidden')) {
+            logger.debug('[TruthTablePanel] refresh() - panel is hidden, returning');
             return;
         }
 
         const cache = this.circuitState.getTruthTableCache();
+        logger.debug('[TruthTablePanel] refresh() - cache:', {
+            inputLabels: cache?.inputs?.map(i => i.label),
+            outputLabels: cache?.outputs?.map(o => o.label)
+        });
 
         // Hide panel only if no cache at all
         if (!cache) {
@@ -798,9 +885,10 @@ export class TruthTablePanel {
 
         // If no table data (no inputs or no outputs), show invalid message
         if (!table || table.length === 0) {
+            // Deep copy inputs/outputs to capture current labels (avoid reference issues)
             this.truthTableData = {
-                inputs: inputs || [],
-                outputs: outputs || [],
+                inputs: (inputs || []).map(inp => ({ ...inp })),
+                outputs: (outputs || []).map(out => ({ ...out })),
                 table: [],
                 isValid: false,
                 reason: reason
@@ -813,14 +901,33 @@ export class TruthTablePanel {
         const hadNoTable = this.truthTableData && this.truthTableData.table.length === 0;
 
         // Check if column structure changed (inputs/outputs added/removed)
-        const structureChanged =
+        const countChanged =
             hadNoTable ||
             !this.truthTableData ||
             inputs.length !== this.truthTableData.inputs.length ||
             outputs.length !== this.truthTableData.outputs.length;
 
-        if (structureChanged) {
-            // Full rebuild needed - structure has changed
+        // Check if labels changed (need to update column headers)
+        const labelsChanged = !countChanged && this.truthTableData && (
+            inputs.some((input, i) => input.label !== this.truthTableData.inputs[i]?.label) ||
+            outputs.some((output, i) => output.label !== this.truthTableData.outputs[i]?.label)
+        );
+
+        logger.debug('[TruthTablePanel] refresh() - change detection:', {
+            countChanged,
+            labelsChanged,
+            currentLabels: {
+                inputs: this.truthTableData?.inputs?.map(i => i.label),
+                outputs: this.truthTableData?.outputs?.map(o => o.label)
+            },
+            newLabels: {
+                inputs: inputs.map(i => i.label),
+                outputs: outputs.map(o => o.label)
+            }
+        });
+
+        if (countChanged) {
+            // Full rebuild needed - column count has changed
             // Save current position before rebuild
             this.saveState();
 
@@ -837,14 +944,39 @@ export class TruthTablePanel {
             this.panel.style.height = '';
 
             // Update data and reset column order for new structure
-            this.truthTableData = { inputs, outputs, table, isValid };
+            // Deep copy inputs/outputs to capture current labels (avoid reference issues)
+            this.truthTableData = {
+                inputs: inputs.map(inp => ({ ...inp })),
+                outputs: outputs.map(out => ({ ...out })),
+                table,
+                isValid
+            };
             this.columnOrder = null;
 
             // Rebuild table with new columns (display() will restore position from state)
             this.display();
+        } else if (labelsChanged) {
+            // Labels changed but column count is the same - update headers in place
+            // Deep copy inputs/outputs to capture current labels (avoid reference issues)
+            this.truthTableData = {
+                inputs: inputs.map(inp => ({ ...inp })),
+                outputs: outputs.map(out => ({ ...out })),
+                table,
+                isValid
+            };
+            this._updateColumnHeaders();
+            this.table.replaceData(table);
+            this.reapplyRowHeights();
+            this.updateHighlight();
         } else {
             // Same structure - just update data in place (fast path)
-            this.truthTableData = { inputs, outputs, table, isValid };
+            // Deep copy inputs/outputs to capture current labels (avoid reference issues)
+            this.truthTableData = {
+                inputs: inputs.map(inp => ({ ...inp })),
+                outputs: outputs.map(out => ({ ...out })),
+                table,
+                isValid
+            };
             this.table.replaceData(table);
 
             // Re-apply row heights after replaceData since Tabulator resets styles
@@ -852,6 +984,22 @@ export class TruthTablePanel {
 
             this.updateHighlight();
         }
+    }
+
+    /**
+     * Update column headers when labels change (without full table rebuild)
+     * Uses setColumns() since updateDefinition() doesn't work on grouped columns
+     * @private
+     */
+    _updateColumnHeaders() {
+        if (!this.table) return;
+
+        // Generate new column definitions with updated labels from this.truthTableData
+        const newColumns = this.generateColumns();
+
+        // Use setColumns to update all column headers at once
+        // This is more efficient than full table rebuild and preserves data
+        this.table.setColumns(newColumns);
     }
 
     /**
@@ -929,6 +1077,33 @@ export class TruthTablePanel {
         this.state = sanitizedState;
         if (sanitizedState.columnOrder) {
             this.columnOrder = sanitizedState.columnOrder;
+        }
+    }
+
+    /**
+     * Clean up resources and event listeners
+     */
+    destroy() {
+        // Unsubscribe from events
+        eventBus.off(EVENT_TYPES.SIMULATION_STEP_COMPLETED, this._boundHandleStepCompleted);
+        eventBus.off(EVENT_TYPES.CIRCUIT_VALIDITY_CHANGED, this._boundHandleValidityChanged);
+
+        // Destroy Tabulator instance
+        if (this.table) {
+            this.table.destroy();
+            this.table = null;
+        }
+
+        // Unset Interact.js
+        if (this.interactionsSetup && this.panel) {
+            interact(this.panel).unset();
+            this.interactionsSetup = false;
+        }
+
+        // Cancel any pending resize RAF
+        if (this.resizeRAF) {
+            cancelAnimationFrame(this.resizeRAF);
+            this.resizeRAF = null;
         }
     }
 }

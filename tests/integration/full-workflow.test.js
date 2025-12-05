@@ -5,7 +5,13 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { CircuitState } from '../../src/core/CircuitState.js';
-import { CircuitOperations } from '../../src/core/CircuitOperations.js';
+import { CanvasOperations } from '../../src/core/CanvasOperations.js';
+import { BoardOperations } from '../../src/core/BoardOperations.js';
+import { ComponentLibraryOperations } from '../../src/core/ComponentLibraryOperations.js';
+import { ContextManager } from '../../src/core/ContextManager.js';
+import { TruthTableManager } from '../../src/core/TruthTableManager.js';
+import { SimulationController } from '../../src/core/SimulationController.js';
+import { CircuitValidityManager } from '../../src/core/CircuitValidityManager.js';
 import { eventBus, EVENT_TYPES } from '../../src/utils/eventBus.js';
 import { simulateCircuit } from '../../src/core/circuitEvaluator.js';
 import { BoardManager } from '../../src/storage/BoardManager.js';
@@ -31,10 +37,14 @@ describe('Full Circuit Workflow', () => {
     let storageAdapter;
     let boardManager;
     let componentLibrary;
-    let operations;
+    let canvasOperations;
+    let boardOperations;
+    let componentLibraryOperations;
+    let simulationController;
+    let validityManager;
     let mockStorage;
 
-    // Mock callbacks for CircuitOperations
+    // Mock callbacks for CanvasOperations
     const mockCallbacks = {
         redraw: vi.fn(),
         defineComponentPorts: vi.fn((component) => {
@@ -93,20 +103,48 @@ describe('Full Circuit Workflow', () => {
         boardManager = new BoardManager(storageAdapter);
         componentLibrary = new ComponentLibrary(storageAdapter);
 
-        // Initialize operations
-        operations = new CircuitOperations({
+        // Initialize TruthTableManager
+        const truthTableManager = new TruthTableManager({ state });
+
+        // Initialize ContextManager
+        const contextManager = new ContextManager({
             state,
             boardManager,
             componentLibrary,
+            truthTableManager
+        });
+
+        // Initialize operations using new split classes
+        canvasOperations = new CanvasOperations({
+            state,
             callbacks: mockCallbacks
+        });
+
+        boardOperations = new BoardOperations({
+            state,
+            boardManager,
+            contextManager
+        });
+
+        componentLibraryOperations = new ComponentLibraryOperations({
+            state,
+            componentLibrary,
+            contextManager
+        });
+
+        // Initialize simulation controller
+        validityManager = new CircuitValidityManager(state);
+        simulationController = new SimulationController({
+            circuitState: state,
+            validityManager
         });
     });
 
     describe('Component Placement and Connection', () => {
         it('should place components on the canvas', () => {
-            operations.placeComponent(100, 100, 'INPUT');
-            operations.placeComponent(200, 100, 'AND');
-            operations.placeComponent(300, 100, 'OUTPUT');
+            canvasOperations.placeComponent(100, 100, 'INPUT');
+            canvasOperations.placeComponent(200, 100, 'AND');
+            canvasOperations.placeComponent(300, 100, 'OUTPUT');
 
             const components = state.getComponents();
             expect(components).toHaveLength(3);
@@ -116,7 +154,7 @@ describe('Full Circuit Workflow', () => {
         });
 
         it('should snap components to grid', () => {
-            operations.placeComponent(127, 163, 'INPUT');
+            canvasOperations.placeComponent(127, 163, 'INPUT');
 
             const components = state.getComponents();
             expect(components[0].x).toBe(150); // Snapped to nearest 50
@@ -124,10 +162,10 @@ describe('Full Circuit Workflow', () => {
         });
 
         it('should auto-label INPUT and OUTPUT components', () => {
-            operations.placeComponent(100, 100, 'INPUT');
-            operations.placeComponent(100, 200, 'INPUT');
-            operations.placeComponent(300, 100, 'OUTPUT');
-            operations.placeComponent(300, 200, 'OUTPUT');
+            canvasOperations.placeComponent(100, 100, 'INPUT');
+            canvasOperations.placeComponent(100, 200, 'INPUT');
+            canvasOperations.placeComponent(300, 100, 'OUTPUT');
+            canvasOperations.placeComponent(300, 200, 'OUTPUT');
 
             const components = state.getComponents();
             expect(components[0].label).toBe('I1');
@@ -137,8 +175,8 @@ describe('Full Circuit Workflow', () => {
         });
 
         it('should place gates without labels', () => {
-            operations.placeComponent(200, 100, 'AND');
-            operations.placeComponent(200, 200, 'OR');
+            canvasOperations.placeComponent(200, 100, 'AND');
+            canvasOperations.placeComponent(200, 200, 'OR');
 
             const components = state.getComponents();
             expect(components[0].label).toBeNull();
@@ -241,14 +279,14 @@ describe('Full Circuit Workflow', () => {
     describe('Board Save and Load', () => {
         it('should save and load a board', async () => {
             // Create a simple circuit
-            operations.placeComponent(100, 100, 'INPUT');
-            operations.placeComponent(200, 100, 'NOT');
-            operations.placeComponent(300, 100, 'OUTPUT');
+            canvasOperations.placeComponent(100, 100, 'INPUT');
+            canvasOperations.placeComponent(200, 100, 'NOT');
+            canvasOperations.placeComponent(300, 100, 'OUTPUT');
 
             const initialComponents = state.getComponents().length;
 
             // Save the board as "TestBoard"
-            await operations.saveCurrentBoard('TestBoard');
+            await boardOperations.saveCurrentBoard('TestBoard');
 
             // Create a new board (this clears the state and sets board name to null)
             state.clearComponents();
@@ -256,7 +294,7 @@ describe('Full Circuit Workflow', () => {
             expect(state.getComponents()).toHaveLength(0);
 
             // Load the saved board
-            await operations.loadBoard('TestBoard');
+            await boardOperations.loadBoard('TestBoard');
 
             expect(state.getComponents()).toHaveLength(initialComponents);
             expect(state.getCurrentBoardName()).toBe('TestBoard');
@@ -271,14 +309,14 @@ describe('Full Circuit Workflow', () => {
             state.addConnection({ from: 1, fromPort: 0, to: 2, toPort: 0 });
 
             // Save the board
-            await operations.saveCurrentBoard('ConnectionTest');
+            await boardOperations.saveCurrentBoard('ConnectionTest');
 
             // Create a new board (clears state AND board name)
             state.clearComponents();
             state.setCurrentBoardName(null); // Clear board name so load won't overwrite
 
             // Load the saved board
-            await operations.loadBoard('ConnectionTest');
+            await boardOperations.loadBoard('ConnectionTest');
 
             expect(state.getConnections()).toHaveLength(1);
             expect(state.getConnections()[0].from).toBe(1);
@@ -301,7 +339,7 @@ describe('Full Circuit Workflow', () => {
             state.addConnection({ from: 2, fromPort: 0, to: 3, toPort: 0 });
 
             // Save as component
-            await operations.saveComponent('TestInverter', 'A simple inverter');
+            await componentLibraryOperations.saveComponent('TestInverter', 'A simple inverter');
 
             // Check it was saved - listComponents returns an array
             const componentsList = await componentLibrary.listComponents();
@@ -311,14 +349,14 @@ describe('Full Circuit Workflow', () => {
         });
 
         it('should not allow saving empty circuit as component', async () => {
-            await expect(operations.saveComponent('EmptyComponent', 'Empty')).rejects.toThrow(EmptyCircuitError);
+            await expect(componentLibraryOperations.saveComponent('EmptyComponent', 'Empty')).rejects.toThrow(EmptyCircuitError);
         });
 
         it('should not allow saving circuit without inputs or outputs', async () => {
             // Only add a gate (no inputs/outputs)
             state.addComponent({ id: 1, type: 'AND', x: 200, y: 100, value: null, inputs: [null, null], inputPorts: [{}, {}], outputPorts: [{}] });
 
-            await expect(operations.saveComponent('InvalidComponent', 'No I/O')).rejects.toThrow(NoInputsError);
+            await expect(componentLibraryOperations.saveComponent('InvalidComponent', 'No I/O')).rejects.toThrow(NoInputsError);
         });
     });
 
@@ -351,7 +389,7 @@ describe('Full Circuit Workflow', () => {
 
         it('should reset state to initial values', () => {
             // Add some data
-            operations.placeComponent(100, 100, 'INPUT');
+            canvasOperations.placeComponent(100, 100, 'INPUT');
             state.setMode('connect');
             state.setSelectedTool('AND');
             state.setCurrentBoardName('TestBoard');
@@ -372,7 +410,7 @@ describe('Full Circuit Workflow', () => {
             const handler = vi.fn();
             eventBus.on(EVENT_TYPES.COMPONENT_ADDED, handler);
 
-            operations.placeComponent(100, 100, 'INPUT');
+            canvasOperations.placeComponent(100, 100, 'INPUT');
 
             expect(handler).toHaveBeenCalled();
         });
@@ -381,7 +419,7 @@ describe('Full Circuit Workflow', () => {
             const handler = vi.fn();
             eventBus.on(EVENT_TYPES.COMPONENT_REMOVED, handler);
 
-            operations.placeComponent(100, 100, 'INPUT');
+            canvasOperations.placeComponent(100, 100, 'INPUT');
             const components = state.getComponents();
             state.removeComponent(components[0].id);
 
@@ -392,7 +430,7 @@ describe('Full Circuit Workflow', () => {
             const handler = vi.fn();
             eventBus.on(EVENT_TYPES.BOARD_CHANGED, handler);
 
-            operations.placeComponent(100, 100, 'INPUT');
+            canvasOperations.placeComponent(100, 100, 'INPUT');
 
             expect(handler).toHaveBeenCalled();
         });
@@ -408,7 +446,8 @@ describe('Full Circuit Workflow', () => {
             const handler = vi.fn();
             eventBus.on(EVENT_TYPES.CANVAS_REDRAW, handler);
 
-            operations.simulate();
+            // Use SimulationController to trigger simulation
+            simulationController.onToggleInput();
 
             expect(handler).toHaveBeenCalled();
         });
@@ -416,9 +455,9 @@ describe('Full Circuit Workflow', () => {
 
     describe('ID Generation', () => {
         it('should generate sequential IDs for components', () => {
-            operations.placeComponent(100, 100, 'INPUT');
-            operations.placeComponent(200, 100, 'AND');
-            operations.placeComponent(300, 100, 'OUTPUT');
+            canvasOperations.placeComponent(100, 100, 'INPUT');
+            canvasOperations.placeComponent(200, 100, 'AND');
+            canvasOperations.placeComponent(300, 100, 'OUTPUT');
 
             const components = state.getComponents();
             expect(components[0].id).toBe(1);
@@ -427,25 +466,25 @@ describe('Full Circuit Workflow', () => {
         });
 
         it('should continue ID sequence after removing components', () => {
-            operations.placeComponent(100, 100, 'INPUT');
-            operations.placeComponent(200, 100, 'AND');
+            canvasOperations.placeComponent(100, 100, 'INPUT');
+            canvasOperations.placeComponent(200, 100, 'AND');
 
             const components = state.getComponents();
             state.removeComponent(components[1].id); // Remove AND gate
 
-            operations.placeComponent(300, 100, 'OUTPUT');
+            canvasOperations.placeComponent(300, 100, 'OUTPUT');
 
             const updatedComponents = state.getComponents();
             expect(updatedComponents[1].id).toBe(3); // Should continue from 3
         });
 
         it('should reset IDs when clearing all components', () => {
-            operations.placeComponent(100, 100, 'INPUT');
-            operations.placeComponent(200, 100, 'AND');
+            canvasOperations.placeComponent(100, 100, 'INPUT');
+            canvasOperations.placeComponent(200, 100, 'AND');
 
             state.clearComponents();
 
-            operations.placeComponent(100, 100, 'INPUT');
+            canvasOperations.placeComponent(100, 100, 'INPUT');
 
             const components = state.getComponents();
             expect(components[0].id).toBe(1); // Should start from 1 again
@@ -534,7 +573,8 @@ describe('Bug Fixes Regression Tests', () => {
     let storageAdapter;
     let boardManager;
     let componentLibrary;
-    let operations;
+    let boardOperations;
+    let componentLibraryOperations;
     let mockStorage;
 
     // Create localStorage mock
@@ -551,17 +591,6 @@ describe('Bug Fixes Regression Tests', () => {
         };
     }
 
-    const mockCallbacks = {
-        redraw: vi.fn(),
-        defineComponentPorts: vi.fn((component) => {
-            component.inputs = component.type === 'INPUT' ? [] : [null];
-            component.inputPorts = component.type === 'INPUT' ? [] : [{}];
-            component.outputPorts = component.type === 'OUTPUT' ? [] : [{}];
-        }),
-        findComponent: vi.fn(),
-        findPort: vi.fn()
-    };
-
     beforeEach(() => {
         vi.clearAllMocks();
         eventBus.clear();
@@ -574,11 +603,27 @@ describe('Bug Fixes Regression Tests', () => {
         boardManager = new BoardManager(storageAdapter);
         componentLibrary = new ComponentLibrary(storageAdapter);
 
-        operations = new CircuitOperations({
+        // Initialize TruthTableManager
+        const truthTableManager = new TruthTableManager({ state });
+
+        // Initialize ContextManager
+        const contextManager = new ContextManager({
             state,
             boardManager,
             componentLibrary,
-            callbacks: mockCallbacks
+            truthTableManager
+        });
+
+        boardOperations = new BoardOperations({
+            state,
+            boardManager,
+            contextManager
+        });
+
+        componentLibraryOperations = new ComponentLibraryOperations({
+            state,
+            componentLibrary,
+            contextManager
         });
     });
 
@@ -669,14 +714,14 @@ describe('Bug Fixes Regression Tests', () => {
             };
             state.setTruthTableState(truthTableState);
 
-            await operations.saveCurrentBoard('BoardWithTable');
+            await boardOperations.saveCurrentBoard('BoardWithTable');
 
             // Clear and reload
             state.clearComponents();
             state.setCurrentBoardName(null);
             state.setTruthTableState(null);
 
-            await operations.loadBoard('BoardWithTable');
+            await boardOperations.loadBoard('BoardWithTable');
 
             expect(state.getTruthTableState()).toEqual(truthTableState);
         });
@@ -696,7 +741,7 @@ describe('Bug Fixes Regression Tests', () => {
             state.addComponent({ id: 1, type: 'INPUT', x: 100, y: 100, inputs: [], inputPorts: [], outputPorts: [{}], label: 'I1' });
             state.addComponent({ id: 2, type: 'OUTPUT', x: 200, y: 100, inputs: [null], inputPorts: [{}], outputPorts: [], label: 'O1' });
 
-            await operations.saveComponent('MyInverter', 'Test inverter');
+            await componentLibraryOperations.saveComponent('MyInverter', 'Test inverter');
 
             expect(state.getCurrentComponentName()).toBe('MyInverter');
             expect(state.getCurrentBoardName()).toBeNull();
@@ -707,11 +752,11 @@ describe('Bug Fixes Regression Tests', () => {
             state.addComponent({ id: 2, type: 'OUTPUT', x: 200, y: 100, inputs: [null], inputPorts: [{}], outputPorts: [], label: 'O1' });
 
             // First save as component
-            await operations.saveComponent('MyComponent', 'Test');
+            await componentLibraryOperations.saveComponent('MyComponent', 'Test');
             expect(state.getCurrentComponentName()).toBe('MyComponent');
 
             // Then save as board
-            await operations.saveCurrentBoard('MyBoard');
+            await boardOperations.saveCurrentBoard('MyBoard');
 
             expect(state.getCurrentBoardName()).toBe('MyBoard');
             expect(state.getCurrentComponentName()).toBeNull();

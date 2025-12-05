@@ -15,6 +15,7 @@ import {
 } from './src/constants.js';
 
 import { eventBus, EVENT_TYPES } from './src/utils/eventBus.js';
+import { logger } from './src/utils/logger.js';
 
 import { findComponentAt, findPortAt, findConnectionAt, snapToGrid } from './src/utils/hitDetection.js';
 import { generateNextBoardName } from './src/utils/naming.js';
@@ -40,8 +41,17 @@ import { DialogFactory } from './src/ui/DialogFactory.js';
 import { ThemeManager } from './src/ui/ThemeManager.js';
 
 import { CircuitState } from './src/core/CircuitState.js';
-import { CircuitOperations } from './src/core/CircuitOperations.js';
 import { CircuitError } from './src/core/errors.js';
+import { CircuitValidityManager } from './src/core/CircuitValidityManager.js';
+import { SimulationController } from './src/core/SimulationController.js';
+
+// Refactored operations modules
+import { CanvasOperations } from './src/core/CanvasOperations.js';
+import { TruthTableManager } from './src/core/TruthTableManager.js';
+import { ContextManager } from './src/core/ContextManager.js';
+import { BoardOperations } from './src/core/BoardOperations.js';
+import { ComponentLibraryOperations } from './src/core/ComponentLibraryOperations.js';
+import { AutoSaveManager } from './src/core/AutoSaveManager.js';
 
 import { CanvasInteraction } from './src/interaction/CanvasInteraction.js';
 
@@ -54,6 +64,15 @@ class CircuitSimulator {
 
         // Initialize centralized state container
         this.state = new CircuitState();
+
+        // Initialize validity manager (tracks circuit validity state)
+        this.validityManager = new CircuitValidityManager(this.state);
+
+        // Initialize simulation controller (owns simulation lifecycle)
+        this.simulationController = new SimulationController({
+            circuitState: this.state,
+            validityManager: this.validityManager
+        });
 
         // Initialize storage system
         this.storageAdapter = new LocalStorageAdapter();
@@ -109,20 +128,92 @@ class CircuitSimulator {
             getCircuitData: () => ({ components: this.state.getComponents(), connections: this.state.getConnections() })
         });
 
-        // Initialize circuit operations (business logic layer)
-        this.operations = new CircuitOperations({
+        // Initialize refactored operations modules
+
+        // 1. TruthTableManager (independent)
+        this.truthTableManager = new TruthTableManager({
+            state: this.state
+        });
+
+        // 2. ContextManager (needs truthTableManager)
+        this.contextManager = new ContextManager({
             state: this.state,
             boardManager: this.boardManager,
             componentLibrary: this.componentLibrary,
+            truthTableManager: this.truthTableManager
+        });
+
+        // 3. BoardOperations (needs contextManager)
+        this.boardOperations = new BoardOperations({
+            state: this.state,
+            boardManager: this.boardManager,
+            contextManager: this.contextManager
+        });
+
+        // 4. ComponentLibraryOperations (needs contextManager)
+        this.componentLibraryOperations = new ComponentLibraryOperations({
+            state: this.state,
+            componentLibrary: this.componentLibrary,
+            contextManager: this.contextManager
+        });
+
+        // 5. AutoSaveManager (independent)
+        this.autoSaveManager = new AutoSaveManager({
+            state: this.state,
+            storage: this.storageAdapter
+        });
+
+        // 6. CanvasOperations (independent)
+        this.canvasOperations = new CanvasOperations({
+            state: this.state,
             callbacks: {
-                redraw: () => this.redraw(),
                 defineComponentPorts: (component) => this.defineComponentPorts(component),
                 findComponent: (x, y) => this.findComponent(x, y),
                 findPort: (x, y) => this.findPort(x, y)
             }
         });
 
+        // Create backward-compatible facade for this.operations
+        this.operations = this._createOperationsFacade();
+
         this.init();
+    }
+
+    /**
+     * Create a backward-compatible facade that delegates to new operation classes
+     * @private
+     */
+    _createOperationsFacade() {
+        return {
+            // Canvas operations
+            placeComponent: (...args) => this.canvasOperations.placeComponent(...args),
+            handleConnect: (...args) => this.canvasOperations.handleConnect(...args),
+            handleDelete: (...args) => this.canvasOperations.handleDelete(...args),
+            checkDeletionImpact: (...args) => this.canvasOperations.checkDeletionImpact(...args),
+
+            // Board operations
+            saveCurrentBoard: (...args) => this.boardOperations.saveCurrentBoard(...args),
+            loadBoard: (...args) => this.boardOperations.loadBoard(...args),
+            createNewBoard: (...args) => this.boardOperations.createNewBoard(...args),
+            deleteBoard: (...args) => this.boardOperations.deleteBoard(...args),
+
+            // Component library operations
+            saveComponent: (...args) => this.componentLibraryOperations.saveComponent(...args),
+            loadComponentForEditing: (...args) => this.componentLibraryOperations.loadComponentForEditing(...args),
+            deleteComponent: (...args) => this.componentLibraryOperations.deleteComponent(...args),
+            exportComponent: (...args) => this.componentLibraryOperations.exportComponent(...args),
+            importComponent: (...args) => this.componentLibraryOperations.importComponent(...args),
+
+            // Truth table operations
+            recomputeTruthTable: () => this.truthTableManager.recomputeTruthTable(),
+
+            // Auto-save operations
+            setupAutoSave: () => this.autoSaveManager.setupAutoSave(),
+            clearAutoSave: () => this.autoSaveManager.clearAutoSave(),
+            saveBoardState: () => this.autoSaveManager.saveBoardState(),
+            loadBoardState: () => this.autoSaveManager.loadBoardState(this.truthTableManager),
+            clearBoardState: () => this.autoSaveManager.clearBoardState()
+        };
     }
 
     async init() {
@@ -130,8 +221,8 @@ class CircuitSimulator {
         await this.loadSavedBoards();
         this.setupEventListeners();
         // Truth table dragging now handled by TruthTablePanel + Interact.js
-        this.operations.setupAutoSave();
-        await this.operations.loadBoardState();
+        this.autoSaveManager.setupAutoSave();
+        await this.autoSaveManager.loadBoardState(this.truthTableManager);
         // Update renderer with loaded components and connections
         this.canvasRenderer.updateComponents(this.state.getComponents());
         this.canvasRenderer.updateConnections(this.state.getConnections());
@@ -251,11 +342,11 @@ class CircuitSimulator {
     handleSimulationStep(direction) {
         try {
             if (direction === 'next') {
-                this.operations.stepSimulation(1);
+                this.simulationController.manualStep(1);
             } else if (direction === 'prev') {
-                this.operations.stepSimulation(-1);
+                this.simulationController.manualStep(-1);
             } else if (direction === 'reset') {
-                this.operations.resetSimulation();
+                this.simulationController.reset();
             }
         } catch (error) {
             this._handleError(error);
@@ -264,10 +355,10 @@ class CircuitSimulator {
 
     toggleSimulation() {
         try {
-            if (this.state.isAutoCyclingActive()) {
-                this.operations.stopAutoCycle();
+            if (this.simulationController.isRunning()) {
+                this.simulationController.autocycleStop();
             } else {
-                this.operations.startAutoCycle();
+                this.simulationController.autocycleStart();
             }
         } catch (error) {
             this._handleError(error);
@@ -314,21 +405,22 @@ class CircuitSimulator {
             this.updateToolbarDisplays();
         });
 
-        // Truth table update highlight event
-        eventBus.on(EVENT_TYPES.TRUTH_TABLE_UPDATE_HIGHLIGHT, () => {
-            this.updateTruthTableHighlight();
-        });
-
         // Truth table computed event - refresh panel when cache is updated
-        eventBus.on(EVENT_TYPES.TRUTH_TABLE_COMPUTED, () => {
+        eventBus.on(EVENT_TYPES.TRUTH_TABLE_COMPUTED, (data) => {
+            logger.debug('[circuit-simulator] Received TRUTH_TABLE_COMPUTED, calling truthTablePanel.refresh()');
             if (this.truthTablePanel) {
                 this.truthTablePanel.refresh();
             }
         });
 
-        // Simulation state changed event
-        eventBus.on(EVENT_TYPES.SIMULATION_STATE_CHANGED, (data) => {
-            this.toolbar.setSimulationState(data.isRunning, data.currentIndex, data.totalCombinations);
+        // Auto-cycle state changes (play/stop button, enable/disable step buttons)
+        eventBus.on(EVENT_TYPES.AUTOCYCLE_STATE_CHANGED, (data) => {
+            this.toolbar.setAutocycleState(data.state);
+        });
+
+        // Step progress changes (step counter) - fires for ALL simulation types
+        eventBus.on(EVENT_TYPES.SIMULATION_STEP_COMPLETED, (data) => {
+            this.toolbar.setSimulationProgress(data.cycleIndex, data.totalCombinations);
         });
 
         // Connection start changed event
@@ -341,6 +433,7 @@ class CircuitSimulator {
             if (this.truthTablePanel) {
                 console.log('BOARD_CLEARED: Destroying truth table panel');
                 this.truthTablePanel.hide();
+                this.truthTablePanel.destroy();
                 // Don't remove the panel from DOM - it's part of static HTML and should remain
                 // Just destroy the TruthTablePanel object so it's regenerated with new board data
                 this.truthTablePanel = null;
@@ -365,6 +458,7 @@ class CircuitSimulator {
             if (this.truthTablePanel) {
                 console.log('BOARD_LOADED: Destroying truth table panel');
                 this.truthTablePanel.hide();
+                this.truthTablePanel.destroy();
                 // Don't remove the panel from DOM - it's part of static HTML and should remain
                 // Just destroy the TruthTablePanel object so it's regenerated with new board data
                 this.truthTablePanel = null;
@@ -410,16 +504,17 @@ class CircuitSimulator {
                         type: 'warning',
                         onConfirm: () => {
                             // Stop simulation and reset inputs (but don't simulate yet)
-                            this.operations.resetSimulation({ skipSimulate: true });
-                            // Delete the component
-                            this.operations.handleDelete(x, y, (x, y) => this.findConnection(x, y));
+                            this.simulationController.reset({ skipSimulate: true });
+                            // Commit the transaction to apply the deletion
+                            this.operations.handleDelete(x, y, null, { transaction: impact.transaction });
                             // Now simulate to update component values after deletion
                             // This ensures disconnected outputs and their wires turn gray
-                            this.operations.simulate();
+                            this.simulationController.onToggleInput();
                         }
                     });
-                } else {
-                    this.operations.handleDelete(x, y, (x, y) => this.findConnection(x, y));
+                } else if (impact.transaction) {
+                    // Use transaction if available (component or connection found)
+                    this.operations.handleDelete(x, y, null, { transaction: impact.transaction });
                 }
             } else {
                 // Check if clicking on an input to toggle
@@ -511,7 +606,7 @@ class CircuitSimulator {
         const component = this.findComponent(x, y);
         if (component && component.type === 'INPUT') {
             component.value = component.value === 0 ? 1 : 0;
-            this.operations.simulate();
+            this.simulationController.onToggleInput();
         }
     }
 
@@ -557,7 +652,7 @@ class CircuitSimulator {
     }
 
     simulate() {
-        this.operations.simulate();
+        this.simulationController.onToggleInput();
     }
 
     generateTruthTable() {
@@ -641,12 +736,6 @@ class CircuitSimulator {
         return truthTableData.table.findIndex(row => {
             return row.inputs.every((val, index) => val === currentState[index]);
         });
-    }
-
-    updateTruthTableHighlight() {
-        if (this.truthTablePanel) {
-            this.truthTablePanel.updateHighlight();
-        }
     }
 
     // startAutoCycle, stopAutoCycle, autoCycleStep moved to CircuitOperations

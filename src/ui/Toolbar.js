@@ -546,15 +546,15 @@ export class Toolbar {
     }
 
     /**
-     * Set simulation state and update button UI
-     * @param {boolean} isRunning - Whether simulation is running
-     * @param {number} currentIndex - Current combination index (optional)
-     * @param {number} total - Total combinations (optional)
+     * Update auto-cycle state in toolbar
+     * @param {'running' | 'stopped' | 'error'} state - Current auto-cycle state
      */
-    setSimulationState(isRunning, currentIndex = 0, total = 0) {
+    setAutocycleState(state) {
         if (!this.elements.simulateBtn) return;
 
-        // Disable prev/next buttons when simulation is running
+        const isRunning = state === 'running';
+
+        // Disable prev/next buttons when auto-cycling is running
         if (this.elements.prevStepBtn) {
             this.elements.prevStepBtn.disabled = isRunning;
         }
@@ -567,9 +567,8 @@ export class Toolbar {
             this.elements.simulateBtn.style.background = COLORS.VALUE_OFF;
 
             // Update mode indicator for simulation
-            if (this.elements.modeIndicator && this.elements.selectedComponent) {
+            if (this.elements.modeIndicator) {
                 this.elements.modeIndicator.textContent = 'Mode: Auto-Cycling Inputs';
-                this.elements.selectedComponent.textContent = `Combination ${currentIndex + 1} / ${total}`;
             }
         } else {
             this.elements.simulateBtn.textContent = '▶ Simulation';
@@ -577,6 +576,18 @@ export class Toolbar {
 
             // Restore normal mode indicator
             this.updateModeIndicator();
+        }
+        // 'error' state handled same as 'stopped' - UI returns to idle state
+    }
+
+    /**
+     * Update step counter display (called for ALL simulation types)
+     * @param {number} currentIndex - Current step index (0-based)
+     * @param {number} totalCombinations - Total number of combinations
+     */
+    setSimulationProgress(currentIndex, totalCombinations) {
+        if (this.elements.selectedComponent) {
+            this.elements.selectedComponent.textContent = `Combination ${currentIndex + 1} / ${totalCombinations}`;
         }
     }
 

@@ -6,6 +6,8 @@
 import { DialogFactory } from './DialogFactory.js';
 import { messages, formatMessage } from './messages.js';
 import { generateNextBoardName } from '../utils/naming.js';
+import { eventBus, EVENT_TYPES } from '../utils/eventBus.js';
+import { logger } from '../utils/logger.js';
 
 export class DialogManager {
     constructor(callbacks) {
@@ -457,8 +459,21 @@ export class DialogManager {
         }
 
         if (this.state.renameTarget) {
+            const oldLabel = this.state.renameTarget.label;
             this.state.renameTarget.label = newLabel;
             this.callbacks.onRenameComplete();
+
+            // Emit label changed event for truth table and other subscribers
+            logger.debug('[DialogManager] Emitting COMPONENT_LABEL_CHANGED:', {
+                componentId: this.state.renameTarget.id,
+                oldLabel,
+                newLabel
+            });
+            eventBus.emit(EVENT_TYPES.COMPONENT_LABEL_CHANGED, {
+                component: this.state.renameTarget,
+                oldLabel,
+                newLabel
+            });
         }
 
         DialogFactory.hideDialog(this.dialogs.rename);

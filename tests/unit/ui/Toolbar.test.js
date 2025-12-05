@@ -438,46 +438,56 @@ describe('Toolbar', () => {
         });
     });
 
-    describe('setSimulationState', () => {
+    describe('setAutocycleState', () => {
         beforeEach(() => {
             toolbar.init();
         });
 
-        it('disables prev/next buttons when simulation is running', () => {
-            toolbar.setSimulationState(true, 0, 4);
+        it('disables prev/next buttons when state is running', () => {
+            toolbar.setAutocycleState('running');
 
             expect(toolbar.elements.prevStepBtn.disabled).toBe(true);
             expect(toolbar.elements.nextStepBtn.disabled).toBe(true);
         });
 
-        it('enables prev/next buttons when simulation stops', () => {
+        it('enables prev/next buttons when state is stopped', () => {
             // First start simulation
-            toolbar.setSimulationState(true, 0, 4);
+            toolbar.setAutocycleState('running');
 
             // Then stop it
-            toolbar.setSimulationState(false, 0, 0);
+            toolbar.setAutocycleState('stopped');
+
+            expect(toolbar.elements.prevStepBtn.disabled).toBe(false);
+            expect(toolbar.elements.nextStepBtn.disabled).toBe(false);
+        });
+
+        it('enables prev/next buttons when state is error', () => {
+            // First start simulation
+            toolbar.setAutocycleState('running');
+
+            // Then error out
+            toolbar.setAutocycleState('error');
 
             expect(toolbar.elements.prevStepBtn.disabled).toBe(false);
             expect(toolbar.elements.nextStepBtn.disabled).toBe(false);
         });
 
         it('updates simulate button text when running', () => {
-            toolbar.setSimulationState(true, 0, 4);
+            toolbar.setAutocycleState('running');
 
             expect(toolbar.elements.simulateBtn.textContent).toBe('■ Simulation');
         });
 
         it('updates simulate button text when stopped', () => {
-            toolbar.setSimulationState(false, 0, 0);
+            toolbar.setAutocycleState('stopped');
 
             expect(toolbar.elements.simulateBtn.textContent).toBe('▶ Simulation');
         });
 
         it('updates mode indicator when running', () => {
-            toolbar.setSimulationState(true, 2, 8);
+            toolbar.setAutocycleState('running');
 
             expect(toolbar.elements.modeIndicator.textContent).toBe('Mode: Auto-Cycling Inputs');
-            expect(toolbar.elements.selectedComponent.textContent).toBe('Combination 3 / 8');
         });
 
         it('handles missing step buttons gracefully', () => {
@@ -485,7 +495,7 @@ describe('Toolbar', () => {
             toolbar.elements.nextStepBtn = null;
 
             expect(() => {
-                toolbar.setSimulationState(true, 0, 4);
+                toolbar.setAutocycleState('running');
             }).not.toThrow();
         });
 
@@ -493,7 +503,33 @@ describe('Toolbar', () => {
             toolbar.elements.simulateBtn = null;
 
             expect(() => {
-                toolbar.setSimulationState(true, 0, 4);
+                toolbar.setAutocycleState('running');
+            }).not.toThrow();
+        });
+    });
+
+    describe('setSimulationProgress', () => {
+        beforeEach(() => {
+            toolbar.init();
+        });
+
+        it('updates step counter display', () => {
+            toolbar.setSimulationProgress(2, 8);
+
+            expect(toolbar.elements.selectedComponent.textContent).toBe('Combination 3 / 8');
+        });
+
+        it('handles zero-based index correctly', () => {
+            toolbar.setSimulationProgress(0, 4);
+
+            expect(toolbar.elements.selectedComponent.textContent).toBe('Combination 1 / 4');
+        });
+
+        it('handles missing selectedComponent gracefully', () => {
+            toolbar.elements.selectedComponent = null;
+
+            expect(() => {
+                toolbar.setSimulationProgress(0, 4);
             }).not.toThrow();
         });
     });

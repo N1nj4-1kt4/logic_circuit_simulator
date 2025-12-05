@@ -5,7 +5,10 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { CircuitState } from '../../../src/core/CircuitState.js';
-import { CircuitOperations } from '../../../src/core/CircuitOperations.js';
+import { BoardOperations } from '../../../src/core/BoardOperations.js';
+import { ContextManager } from '../../../src/core/ContextManager.js';
+import { TruthTableManager } from '../../../src/core/TruthTableManager.js';
+import { AutoSaveManager } from '../../../src/core/AutoSaveManager.js';
 import { eventBus, EVENT_TYPES } from '../../../src/utils/eventBus.js';
 import { BoardManager } from '../../../src/storage/BoardManager.js';
 import { ComponentLibrary } from '../../../src/storage/ComponentLibrary.js';
@@ -138,15 +141,8 @@ describe('Circuit Data Validation', () => {
 
 describe('Board Name Validation', () => {
     let state;
-    let operations;
+    let boardOperations;
     let mockStorage;
-
-    const mockCallbacks = {
-        redraw: vi.fn(),
-        defineComponentPorts: vi.fn(),
-        findComponent: vi.fn(),
-        findPort: vi.fn()
-    };
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -160,30 +156,37 @@ describe('Board Name Validation', () => {
         const boardManager = new BoardManager(storageAdapter);
         const componentLibrary = new ComponentLibrary(storageAdapter);
 
-        operations = new CircuitOperations({
+        const truthTableManager = new TruthTableManager({ state });
+        const contextManager = new ContextManager({
             state,
             boardManager,
             componentLibrary,
-            callbacks: mockCallbacks
+            truthTableManager
+        });
+
+        boardOperations = new BoardOperations({
+            state,
+            boardManager,
+            contextManager
         });
     });
 
     it('should reject empty string board name', async () => {
         state.addComponent({ id: 1, type: 'INPUT', x: 100, y: 100 });
 
-        await expect(operations.saveCurrentBoard('')).rejects.toThrow(BoardNameRequiredError);
+        await expect(boardOperations.saveCurrentBoard('')).rejects.toThrow(BoardNameRequiredError);
     });
 
     it('should reject whitespace-only board name', async () => {
         state.addComponent({ id: 1, type: 'INPUT', x: 100, y: 100 });
 
-        await expect(operations.saveCurrentBoard('   ')).rejects.toThrow(BoardNameRequiredError);
+        await expect(boardOperations.saveCurrentBoard('   ')).rejects.toThrow(BoardNameRequiredError);
     });
 
     it('should accept valid board name', async () => {
         state.addComponent({ id: 1, type: 'INPUT', x: 100, y: 100, inputs: [], inputPorts: [], outputPorts: [{}], label: 'I1' });
 
-        const result = await operations.saveCurrentBoard('ValidBoardName');
+        const result = await boardOperations.saveCurrentBoard('ValidBoardName');
 
         // Now returns the board name on success
         expect(result).toBe('ValidBoardName');
@@ -192,7 +195,7 @@ describe('Board Name Validation', () => {
     it('should accept board name with spaces', async () => {
         state.addComponent({ id: 1, type: 'INPUT', x: 100, y: 100, inputs: [], inputPorts: [], outputPorts: [{}], label: 'I1' });
 
-        const result = await operations.saveCurrentBoard('My Board Name');
+        const result = await boardOperations.saveCurrentBoard('My Board Name');
 
         // Now returns the board name on success
         expect(result).toBe('My Board Name');
@@ -202,7 +205,7 @@ describe('Board Name Validation', () => {
         state.addComponent({ id: 1, type: 'INPUT', x: 100, y: 100, inputs: [], inputPorts: [], outputPorts: [{}], label: 'I1' });
 
         const longName = 'A'.repeat(1000);
-        const result = await operations.saveCurrentBoard(longName);
+        const result = await boardOperations.saveCurrentBoard(longName);
 
         // Should succeed (localStorage can handle long keys) - now returns the board name
         expect(result).toBe(longName);
@@ -211,15 +214,8 @@ describe('Board Name Validation', () => {
 
 describe('Storage Error Handling', () => {
     let state;
-    let operations;
+    let autoSaveManager;
     let mockStorage;
-
-    const mockCallbacks = {
-        redraw: vi.fn(),
-        defineComponentPorts: vi.fn(),
-        findComponent: vi.fn(),
-        findPort: vi.fn()
-    };
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -230,14 +226,10 @@ describe('Storage Error Handling', () => {
 
         state = new CircuitState();
         const storageAdapter = new LocalStorageAdapter();
-        const boardManager = new BoardManager(storageAdapter);
-        const componentLibrary = new ComponentLibrary(storageAdapter);
 
-        operations = new CircuitOperations({
+        autoSaveManager = new AutoSaveManager({
             state,
-            boardManager,
-            componentLibrary,
-            callbacks: mockCallbacks
+            storage: storageAdapter
         });
     });
 
@@ -248,7 +240,7 @@ describe('Storage Error Handling', () => {
         const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
         // Should not throw
-        await expect(operations.loadBoardState()).resolves.not.toThrow();
+        await expect(autoSaveManager.loadBoardState()).resolves.not.toThrow();
 
         // State should remain empty (fallback to empty state)
         expect(state.getComponents()).toHaveLength(0);
@@ -265,7 +257,7 @@ describe('Storage Error Handling', () => {
         };
         mockStorage._storage.set('currentBoard', JSON.stringify(JSON.stringify(partialData)));
 
-        await operations.loadBoardState();
+        await autoSaveManager.loadBoardState();
 
         // Should load what's available
         expect(state.getComponents()).toHaveLength(1);
@@ -281,7 +273,7 @@ describe('Storage Error Handling', () => {
         };
         mockStorage._storage.set('currentBoard', JSON.stringify(JSON.stringify(dataWithNulls)));
 
-        await operations.loadBoardState();
+        await autoSaveManager.loadBoardState();
 
         // Should fall back to defaults
         expect(state.getComponents()).toHaveLength(0);
@@ -290,7 +282,7 @@ describe('Storage Error Handling', () => {
 
     it('should handle localStorage.getItem returning null', async () => {
         // Default behavior - no stored data
-        await operations.loadBoardState();
+        await autoSaveManager.loadBoardState();
 
         expect(state.getComponents()).toHaveLength(0);
     });
@@ -304,7 +296,7 @@ describe('Storage Error Handling', () => {
         const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
         // Should not throw
-        await expect(operations.saveBoardState()).resolves.not.toThrow();
+        await expect(autoSaveManager.saveBoardState()).resolves.not.toThrow();
 
         // Error should be logged
         expect(consoleErrorSpy).toHaveBeenCalled();
@@ -319,7 +311,7 @@ describe('Storage Error Handling', () => {
 
         const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-        await expect(operations.clearBoardState()).resolves.not.toThrow();
+        await expect(autoSaveManager.clearBoardState()).resolves.not.toThrow();
 
         consoleErrorSpy.mockRestore();
     });

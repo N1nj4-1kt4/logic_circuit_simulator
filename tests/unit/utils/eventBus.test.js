@@ -226,6 +226,7 @@ describe('EventBus', () => {
             expect(EVENT_TYPES.COMPONENT_REMOVED).toBe('component:removed');
             expect(EVENT_TYPES.COMPONENT_MOVED).toBe('component:moved');
             expect(EVENT_TYPES.COMPONENT_VALUE_CHANGED).toBe('component:valueChanged');
+            expect(EVENT_TYPES.COMPONENT_LABEL_CHANGED).toBe('component:labelChanged');
         });
 
         it('should have connection events defined', () => {
@@ -237,7 +238,8 @@ describe('EventBus', () => {
             expect(EVENT_TYPES.SIMULATION_RUN).toBe('simulation:run');
             expect(EVENT_TYPES.SIMULATION_COMPLETED).toBe('simulation:completed');
             expect(EVENT_TYPES.SIMULATION_RESET).toBe('simulation:reset');
-            expect(EVENT_TYPES.SIMULATION_STATE_CHANGED).toBe('simulation:stateChanged');
+            expect(EVENT_TYPES.AUTOCYCLE_STATE_CHANGED).toBe('simulation:autocycleStateChanged');
+            expect(EVENT_TYPES.SIMULATION_STEP_COMPLETED).toBe('simulation:stepCompleted');
         });
 
         it('should have board events defined', () => {
@@ -253,7 +255,6 @@ describe('EventBus', () => {
             expect(EVENT_TYPES.TRUTH_TABLE_SHOWN).toBe('truthTable:shown');
             expect(EVENT_TYPES.TRUTH_TABLE_HIDDEN).toBe('truthTable:hidden');
             expect(EVENT_TYPES.TRUTH_TABLE_STATE_CHANGED).toBe('truthTable:stateChanged');
-            expect(EVENT_TYPES.TRUTH_TABLE_UPDATE_HIGHLIGHT).toBe('truthTable:updateHighlight');
         });
 
         it('should have theme events defined', () => {
