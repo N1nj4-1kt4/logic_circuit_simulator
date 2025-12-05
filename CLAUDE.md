@@ -478,6 +478,56 @@ stepSimulation() {
 - If you find yourself copy-pasting code blocks, stop and refactor
 - Consider if an existing method can be extended with a parameter instead of creating a new one
 
+## Writing Specs for State-Related Features
+
+When designing features that involve state comparison, dirty tracking, or revert/undo functionality, specs should include:
+
+### 1. State Boundaries Section
+
+List ALL state that crosses module boundaries:
+
+```markdown
+## State Boundaries
+
+| State | Owned By | Persisted In | Notes |
+|-------|----------|--------------|-------|
+| components, connections | CircuitState | CircuitState | Core circuit data |
+| truthTableState (x, y, width, visible) | TruthTablePanel (UI) | CircuitState | UI state persisted in Core |
+| dragState | ComponentDragger | Not persisted | Ephemeral interaction state |
+```
+
+### 2. Edge Case Scenarios
+
+Include scenarios that test state boundaries:
+
+- "What happens when user loads Board B while editing Board A with unsaved changes?"
+- "What happens when user moves truth table, then reverts? Does position revert?"
+- "What happens when comparison baseline needs to reset?"
+
+### 3. Comparison Baseline Events
+
+Document when the "last saved state" baseline should reset:
+
+```markdown
+## Comparison Baseline Reset Points
+
+| Event | Baseline Action |
+|-------|-----------------|
+| Board saved | Update to current state |
+| Board loaded | Set to loaded state |
+| New board created | Set to null (no saved version) |
+| Revert performed | Current state → baseline (no change to baseline) |
+```
+
+### 4. Write Tests First for State Features
+
+For any `hasUnsavedChanges()` or similar feature, write test cases covering:
+- Initial state (new board = no baseline = no unsaved changes reportable)
+- After modification (should detect change)
+- After save (should reset to "no changes")
+- After load (should reset baseline to loaded state)
+- Cross-layer state (UI state changes should trigger dirty detection)
+
 ## What NOT to Do
 
 - **Don't** put DOM manipulation in `src/core/`

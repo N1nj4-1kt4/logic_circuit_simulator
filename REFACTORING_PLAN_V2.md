@@ -23,6 +23,7 @@
 - Phase 11.2 completed ✅
 - Phase 11.3 completed ✅
 - Phase 11.4 completed ✅
+- Phase 13: Auto-Save & Revert Feature completed ✅
 
 **Remaining Work:**
 - Phase 12 optional improvements (split large files, refactor long functions)
@@ -41,6 +42,7 @@
 3. **Testability:** Pure functions, no UI in business logic
 4. **Single Source of Truth:** No duplicate logic
 5. **Constants Extraction:** No magic numbers in code
+6. **Explicit State Ownership:** Cross-layer state has documented ownership (added in Phase 13)
 
 ---
 
@@ -768,6 +770,7 @@ eventBus.on(EVENT_TYPES.MODE_CHANGED, (mode) => this.handleModeChange(mode));
 | 11.3 Rendering Tests | LOW | 2h | Coverage | ✅ Done |
 | 11.4 UI Tests | LOW | 2-3h | Coverage | ✅ Done |
 | 12.x Optional | LOW | 4-6h | Polish | Pending |
+| 13 Auto-Save & Revert | HIGH | 4h | User safety | ✅ Done |
 
 ---
 
@@ -800,6 +803,35 @@ git checkout -b refactor/v2-cleanup
 # Commit after each sub-phase
 git commit -m "Phase 10.1: Extract hit detection utilities"
 ```
+
+---
+
+## Phase 13: Auto-Save & Revert Feature ✅ COMPLETED
+
+**Goal:** Implement "Revert to Saved" functionality with proper dirty state tracking
+
+**Status:** ✅ Completed (5 commits: b0da46b → 1d79c32)
+
+**Files Created/Modified:**
+- `src/core/CircuitState.js` - Added `hasUnsavedChanges()`, `getLastSavedState()`, `setLastSavedState()`
+- `src/core/BoardOperations.js` - Added `revertToSaved()`, baseline management on save/load
+- `src/core/AutoSaveManager.js` - Persists `lastSavedState` alongside working state
+- `src/ui/Toolbar.js` - Added Revert button with enable/disable based on dirty state
+- `circuit-simulator.js` - Added `handleRevertToSaved()`, unsaved changes prompts on load/clear
+
+**Tests Created:**
+- `tests/unit/core/BoardOperations.test.js` - 221 lines for revert and state comparison
+- `tests/unit/core/TruthTableManager.test.js` - Truth table state persistence tests
+
+**Key Implementation Details:**
+- `lastSavedState` baseline tracks: components, connections, nextId, truthTableState
+- Baseline resets on: save, load, new board creation
+- Cross-layer state (truthTableState) managed by UI but persisted in Core
+- State comparison uses deep equality for arrays/objects
+
+**Documentation Updated:**
+- `ARCHITECTURE.md` - Added "State Ownership" section
+- `CLAUDE.md` - Added "Writing Specs for State-Related Features" guidelines
 
 ---
 

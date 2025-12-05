@@ -26,6 +26,7 @@ circuit-simulator.js    # Main application coordinator
 2. **Event-Driven Communication**: Modules communicate via event bus, not direct calls
 3. **Pure Functions**: Core logic is testable without DOM dependencies
 4. **Single Source of Truth**: All state lives in `CircuitState`
+5. **Explicit State Ownership**: Cross-layer state has documented ownership (see State Ownership section)
 
 ## Module Breakdown
 
@@ -639,6 +640,63 @@ npm test         # Run unit tests
 
 - [Architecture Flow Diagram](docs/specs/architecture-flow-diagram.md) - Visual flow diagrams for the event-driven architecture
 - [Architecture Evolution Proposal](docs/specs/architecture-evolution-proposal.md) - Original design document for live editing
+
+## State Ownership
+
+Some state crosses module boundaries. This section documents ownership to prevent bugs in features like dirty tracking and revert.
+
+### State Ownership Table
+
+| State | Managed By | Persisted In | Comparison Included |
+|-------|------------|--------------|---------------------|
+| `components[]` | CircuitState | CircuitState + AutoSaveManager | Yes |
+| `connections[]` | CircuitState | CircuitState + AutoSaveManager | Yes |
+| `nextId` | CircuitState | AutoSaveManager | Yes |
+| `truthTableState` (x, y, width, height, visible, columnOrder) | TruthTablePanel (UI) | CircuitState | Yes |
+| `currentBoardName` | CircuitState | AutoSaveManager | No (metadata) |
+| `customComponents` | CircuitState | AutoSaveManager | No (separate concern) |
+| `dragState` | ComponentDragger | Not persisted | No (ephemeral) |
+| `mode` | CircuitState | Not persisted | No (ephemeral) |
+
+### Cross-Layer State: Truth Table
+
+The truth table position/size is special:
+- **Managed by**: `TruthTablePanel` (UI layer) - user drags/resizes the panel
+- **Persisted in**: `CircuitState.truthTableState` (Core layer) - survives board save/load
+- **Flow**: Panel changes → `onStateChange` callback → `CircuitState.setTruthTableState()` → emits `TRUTH_TABLE_STATE_CHANGED`
+
+This cross-layer ownership requires careful handling:
+1. When loading a board, read `truthTableState` BEFORE destroying the panel
+2. When comparing for dirty detection, include `truthTableState`
+3. When reverting, restore `truthTableState` along with components/connections
+
+### Dirty State Detection (`hasUnsavedChanges`)
+
+`CircuitState.hasUnsavedChanges()` compares current state against `lastSavedState`:
+
+```javascript
+// Comparison includes:
+- components (deep comparison)
+- connections (deep comparison)
+- nextId
+- truthTableState (deep comparison)
+
+// Comparison excludes:
+- currentBoardName (metadata, not content)
+- customComponents (separate library concern)
+- mode, selectedTool (ephemeral UI state)
+```
+
+### Baseline Reset Events
+
+The `lastSavedState` baseline resets on these events:
+
+| Event | Action | Method |
+|-------|--------|--------|
+| Board saved | `lastSavedState = currentState` | `BoardOperations.saveCurrentBoard()` |
+| Board loaded | `lastSavedState = loadedState` | `BoardOperations.loadBoard()` |
+| New board | `lastSavedState = null` | `BoardOperations.createNewBoard()` |
+| Auto-save restore | `lastSavedState = persisted.lastSavedState` | `AutoSaveManager.loadBoardState()` |
 
 ## Future Improvements
 
