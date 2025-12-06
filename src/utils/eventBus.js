@@ -168,5 +168,18 @@ export const EVENT_TYPES = {
     CONNECTION_START_CHANGED: 'connection:startChanged',
 
     // Canvas events
-    CANVAS_REDRAW: 'canvas:redraw'
+    CANVAS_REDRAW: 'canvas:redraw',
+
+    // Undo/Redo events
+    // Payload: { canUndo: boolean, canRedo: boolean }
+    UNDO_REDO_STATE_CHANGED: 'undoredo:stateChanged',
+
+    // Drag interaction events (for undo coalescing)
+    // Payload: { component }
+    DRAG_STARTED: 'interaction:dragStarted',
+    DRAG_ENDED: 'interaction:dragEnded',
+
+    // Pre-clear event (for undo capture before state is cleared)
+    // Payload: {}
+    BOARD_WILL_CLEAR: 'board:willClear'
 };

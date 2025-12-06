@@ -6,6 +6,7 @@
  */
 
 import { eventBus, EVENT_TYPES } from '../utils/eventBus.js';
+import { captureCircuitSnapshot } from '../utils/stateSnapshot.js';
 
 export class AutoSaveManager {
     /**
@@ -85,15 +86,16 @@ export class AutoSaveManager {
      * Persists both working state and lastSavedState for revert functionality
      */
     async saveBoardState() {
+        // Capture circuit state using shared utility (includes truthTableState for auto-save)
+        const circuitSnapshot = captureCircuitSnapshot(this.state, { includeTruthTableState: true });
+
         const boardData = {
-            // Working state
-            components: this.state.getComponents(),
-            connections: this.state.getConnections(),
-            nextId: this.state.getNextId(),
+            // Circuit state from shared snapshot
+            ...circuitSnapshot,
+            // Context-specific state
             currentBoardName: this.state.getCurrentBoardName(),
             currentComponentName: this.state.getCurrentComponentName(),
             customComponents: this.state.getCustomComponents(),
-            truthTableState: this.state.getTruthTableState(),
             // Base state for revert (persisted from CircuitState)
             lastSavedState: this.state.getLastSavedState()
         };

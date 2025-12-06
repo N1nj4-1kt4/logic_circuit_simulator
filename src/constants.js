@@ -159,6 +159,13 @@ export const UI = {
     }
 };
 
+// ==================== UNDO/REDO ====================
+
+export const UNDO_REDO = {
+    MAX_HISTORY_SIZE: 20,
+    STORAGE_KEY_PREFIX: 'undoredo_'
+};
+
 // ==================== STORAGE KEYS ====================
 
 export const STORAGE_KEYS = {

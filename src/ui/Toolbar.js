@@ -29,6 +29,8 @@ export class Toolbar {
      * @param {Function} callbacks.onSimulationStep - Called when simulation step button is clicked
      * @param {Function} callbacks.onRevertToSaved - Called when revert to saved is clicked
      * @param {Function} callbacks.hasUnsavedChanges - Returns true if there are unsaved changes
+     * @param {Function} callbacks.onUndo - Called when undo button is clicked
+     * @param {Function} callbacks.onRedo - Called when redo button is clicked
      */
     constructor(callbacks) {
         // Callback functions for toolbar actions
@@ -47,6 +49,8 @@ export class Toolbar {
         this.onSimulationStep = callbacks.onSimulationStep;
         this.onRevertToSaved = callbacks.onRevertToSaved;
         this.hasUnsavedChanges = callbacks.hasUnsavedChanges;
+        this.onUndo = callbacks.onUndo;
+        this.onRedo = callbacks.onRedo;
 
         // State (managed by Toolbar, read by CircuitSimulator via getters)
         this.selectedTool = null;
@@ -65,7 +69,9 @@ export class Toolbar {
             simulateBtn: null,
             prevStepBtn: null,
             nextStepBtn: null,
-            revertBtn: null
+            revertBtn: null,
+            undoBtn: null,
+            redoBtn: null
         };
 
         // Bound event handlers for cleanup
@@ -84,6 +90,7 @@ export class Toolbar {
         this.setupBoardButtons();
         this.setupSimulationControls();
         this.setupRevertButton();
+        this.setupUndoRedoButtons();
         this.updateModeIndicator();
     }
 
@@ -102,6 +109,8 @@ export class Toolbar {
         this.elements.prevStepBtn = document.getElementById('prevStep');
         this.elements.nextStepBtn = document.getElementById('nextStep');
         this.elements.revertBtn = document.getElementById('revertToSaved');
+        this.elements.undoBtn = document.getElementById('undoBtn');
+        this.elements.redoBtn = document.getElementById('redoBtn');
     }
 
     /**
@@ -408,6 +417,57 @@ export class Toolbar {
 
         const hasChanges = this.hasUnsavedChanges();
         this.elements.revertBtn.disabled = !hasChanges;
+    }
+
+    /**
+     * Setup Undo/Redo buttons with event-driven state updates
+     */
+    setupUndoRedoButtons() {
+        // Undo button click handler
+        if (this.elements.undoBtn) {
+            this.elements.undoBtn.addEventListener('click', () => {
+                if (this.onUndo) {
+                    this.onUndo();
+                }
+            });
+        }
+
+        // Redo button click handler
+        if (this.elements.redoBtn) {
+            this.elements.redoBtn.addEventListener('click', () => {
+                if (this.onRedo) {
+                    this.onRedo();
+                }
+            });
+        }
+
+        // Subscribe to undo/redo state changes to update button states
+        eventBus.on(EVENT_TYPES.UNDO_REDO_STATE_CHANGED, (data) => {
+            console.log('[DEBUG] [Toolbar] Received UNDO_REDO_STATE_CHANGED:', data);
+            this.updateUndoRedoButtonStates(data.canUndo, data.canRedo);
+        });
+    }
+
+    /**
+     * Update undo/redo button enabled/disabled states
+     * @param {boolean} canUndo - Whether undo is available
+     * @param {boolean} canRedo - Whether redo is available
+     */
+    updateUndoRedoButtonStates(canUndo, canRedo) {
+        console.log('[DEBUG] [Toolbar] updateUndoRedoButtonStates:', {
+            canUndo,
+            canRedo,
+            undoBtnExists: !!this.elements.undoBtn,
+            redoBtnExists: !!this.elements.redoBtn
+        });
+        if (this.elements.undoBtn) {
+            this.elements.undoBtn.disabled = !canUndo;
+            console.log('[DEBUG] [Toolbar] undoBtn.disabled =', this.elements.undoBtn.disabled);
+        }
+        if (this.elements.redoBtn) {
+            this.elements.redoBtn.disabled = !canRedo;
+            console.log('[DEBUG] [Toolbar] redoBtn.disabled =', this.elements.redoBtn.disabled);
+        }
     }
 
     /**

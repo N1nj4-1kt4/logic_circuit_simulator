@@ -6,6 +6,8 @@
  * since it's UI interaction state, not circuit state.
  */
 
+import { eventBus, EVENT_TYPES } from '../utils/eventBus.js';
+
 export class ComponentDragger {
     /**
      * @param {Object} params
@@ -78,6 +80,8 @@ export class ComponentDragger {
                 this.dragState.isDragging = true;
                 this.dragState.hasMoved = true;
                 canvas.style.cursor = 'grabbing';
+                // Emit drag started event for undo coalescing
+                eventBus.emit(EVENT_TYPES.DRAG_STARTED, { component });
             }
         }
 
@@ -99,6 +103,11 @@ export class ComponentDragger {
      * @param {HTMLElement} canvas - Canvas element
      */
     handleMouseUp(canvas) {
+        // Emit drag ended event if we were actually dragging
+        if (this.dragState.isDragging && this.dragState.component) {
+            eventBus.emit(EVENT_TYPES.DRAG_ENDED, { component: this.dragState.component });
+        }
+
         // Reset drag state (but preserve hasMoved for click detection)
         this.dragState.isDragging = false;
         this.dragState.component = null;

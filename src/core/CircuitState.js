@@ -120,6 +120,9 @@ export class CircuitState {
      * Clear all components
      */
     clearComponents() {
+        // Emit pre-clear event for undo capture before state changes
+        eventBus.emit(EVENT_TYPES.BOARD_WILL_CLEAR);
+
         this.components = [];
         this.connections = [];
         this.nextId = 1;

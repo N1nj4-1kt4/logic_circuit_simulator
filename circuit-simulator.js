@@ -52,6 +52,7 @@ import { ContextManager } from './src/core/ContextManager.js';
 import { BoardOperations } from './src/core/BoardOperations.js';
 import { ComponentLibraryOperations } from './src/core/ComponentLibraryOperations.js';
 import { AutoSaveManager } from './src/core/AutoSaveManager.js';
+import { UndoRedoManager } from './src/core/UndoRedoManager.js';
 
 import { CanvasInteraction } from './src/interaction/CanvasInteraction.js';
 
@@ -109,7 +110,9 @@ class CircuitSimulator {
             onLoadBoard: (boardName) => this.loadBoard(boardName),
             onSimulationStep: (direction) => this.handleSimulationStep(direction),
             onRevertToSaved: () => this.handleRevertToSaved(),
-            hasUnsavedChanges: () => this.state.hasUnsavedChanges()
+            hasUnsavedChanges: () => this.state.hasUnsavedChanges(),
+            onUndo: () => this.handleUndo(),
+            onRedo: () => this.handleRedo()
         });
 
         // Initialize dialog manager with callbacks
@@ -166,7 +169,13 @@ class CircuitSimulator {
             storage: this.storageAdapter
         });
 
-        // 6. CanvasOperations (independent)
+        // 6. UndoRedoManager (independent)
+        this.undoRedoManager = new UndoRedoManager({
+            state: this.state,
+            storage: this.storageAdapter
+        });
+
+        // 7. CanvasOperations (independent)
         this.canvasOperations = new CanvasOperations({
             state: this.state,
             callbacks: {
@@ -223,9 +232,23 @@ class CircuitSimulator {
         await this.loadCustomComponents();
         await this.loadSavedBoards();
         this.setupEventListeners();
+
+        // Initialize toolbar early so it can receive state change events
+        this.toolbar.init();
+
+        // Initialize dialog manager (after DOM is ready)
+        this.dialogManager.init();
+
         // Truth table dragging now handled by TruthTablePanel + Interact.js
         this.autoSaveManager.setupAutoSave();
         await this.autoSaveManager.loadBoardState(this.truthTableManager);
+
+        // Setup undo/redo manager (after toolbar so button states update correctly)
+        this.undoRedoManager.setupListeners();
+        await this.undoRedoManager.loadHistory(this.state.getCurrentBoardName());
+        // Initialize lastKnownState after loading so first action can be undone
+        this.undoRedoManager.initializeLastKnownState();
+
         // Update renderer with loaded components and connections
         this.canvasRenderer.updateComponents(this.state.getComponents());
         this.canvasRenderer.updateConnections(this.state.getConnections());
@@ -237,12 +260,6 @@ class CircuitSimulator {
             console.log('Restoring truth table from saved state...');
             this.generateTruthTable();
         }
-
-        // Initialize toolbar (after DOM is ready)
-        this.toolbar.init();
-
-        // Initialize dialog manager (after DOM is ready)
-        this.dialogManager.init();
 
         // Initialize canvas interaction layer
         this.canvasInteraction = new CanvasInteraction({
@@ -335,9 +352,17 @@ class CircuitSimulator {
     }
 
     handleNewBoard() {
+        // Save current board's history before creating new board
+        const currentBoardName = this.state.getCurrentBoardName();
+
         this.operations.createNewBoard(
             (callback) => this.dialogManager.showSaveOptionsDialog(callback),
-            () => {
+            async () => {
+                // Save current board's history before switching
+                await this.undoRedoManager.saveHistory(currentBoardName);
+                // Clear history for the new unnamed board
+                this.undoRedoManager.clearHistory();
+
                 DialogFactory.showAlert({
                     message: messages.alerts.newBoardCreated,
                     type: 'success'
@@ -359,6 +384,32 @@ class CircuitSimulator {
                 message: 'No saved version to revert to.',
                 type: 'warning'
             });
+        }
+    }
+
+    /**
+     * Handle undo action
+     */
+    handleUndo() {
+        const success = this.undoRedoManager.undo();
+        if (success) {
+            // Update renderer with restored state
+            this.canvasRenderer.updateComponents(this.state.getComponents());
+            this.canvasRenderer.updateConnections(this.state.getConnections());
+            this.redraw();
+        }
+    }
+
+    /**
+     * Handle redo action
+     */
+    handleRedo() {
+        const success = this.undoRedoManager.redo();
+        if (success) {
+            // Update renderer with restored state
+            this.canvasRenderer.updateComponents(this.state.getComponents());
+            this.canvasRenderer.updateConnections(this.state.getConnections());
+            this.redraw();
         }
     }
 
@@ -399,11 +450,26 @@ class CircuitSimulator {
 
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
+            // Skip shortcuts when typing in input fields
+            const isTyping = e.target.matches('input, textarea');
+
             if (e.key === 'Escape') {
                 this.toolbar.exitToNeutralMode();
-            } else if (e.key === '?' && !e.target.matches('input, textarea')) {
+            } else if (e.key === '?' && !isTyping) {
                 // Open help dialog with '?' key (if not typing in an input field)
                 this.dialogManager.showHelpDialog();
+            } else if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey && !isTyping) {
+                // Ctrl+Z or Cmd+Z - Undo
+                e.preventDefault();
+                this.handleUndo();
+            } else if ((e.ctrlKey || e.metaKey) && e.key === 'z' && e.shiftKey && !isTyping) {
+                // Ctrl+Shift+Z or Cmd+Shift+Z - Redo
+                e.preventDefault();
+                this.handleRedo();
+            } else if ((e.ctrlKey || e.metaKey) && e.key === 'y' && !isTyping) {
+                // Ctrl+Y or Cmd+Y - Redo (alternative)
+                e.preventDefault();
+                this.handleRedo();
             }
         });
 
@@ -888,7 +954,19 @@ class CircuitSimulator {
 
     async saveCurrentBoard(boardName) {
         try {
+            const oldBoardName = this.state.getCurrentBoardName();
             const savedName = await this.operations.saveCurrentBoard(boardName);
+
+            // Handle undo/redo history based on save type
+            if (oldBoardName === null && savedName) {
+                // Unnamed → Named (first save): Migrate history to new board name
+                await this.undoRedoManager.onBoardSwitch(null, savedName, true);
+            } else if (oldBoardName !== savedName) {
+                // Named → Different Name (Save As): New board starts with empty history
+                await this.undoRedoManager.onSaveAs(oldBoardName, savedName);
+            }
+            // Named → Same Name (update): History is preserved (no action needed)
+
             DialogFactory.showAlert({
                 message: messages.alerts.boardSaved(savedName),
                 type: 'success'
@@ -913,7 +991,16 @@ class CircuitSimulator {
 
     async _loadBoardInternal(boardName) {
         try {
+            // Save current board's undo/redo history before switching
+            const currentBoardName = this.state.getCurrentBoardName();
+            await this.undoRedoManager.saveHistory(currentBoardName);
+
             const loadedName = await this.operations.loadBoard(boardName);
+
+            // Load the new board's undo/redo history and initialize lastKnownState
+            await this.undoRedoManager.loadHistory(loadedName);
+            this.undoRedoManager.initializeLastKnownState();
+
             DialogFactory.showAlert({
                 message: messages.alerts.boardLoaded(loadedName),
                 type: 'success'
