@@ -649,7 +649,7 @@ describe('TruthTablePanel', () => {
             expect(panel.truthTableData.table).toEqual([]);
         });
 
-        it('generate() should return false only when cache is null', () => {
+        it('generate() should return "computing" when cache is null (async computation in progress)', () => {
             const circuitState = createMockCircuitState(null);
             const panel = new TruthTablePanel(
                 mockDOM.canvasEl,
@@ -660,7 +660,12 @@ describe('TruthTablePanel', () => {
 
             const result = panel.generate();
 
-            expect(result).toBe(false);
+            // When cache is null, it means async computation is in progress
+            expect(result).toBe('computing');
+            // Panel should have placeholder truthTableData for display
+            expect(panel.truthTableData).not.toBeNull();
+            expect(panel.truthTableData.isValid).toBe(false);
+            expect(panel.truthTableData.reason).toBe('Computing truth table...');
         });
 
         it('updateHighlight() should return early when table has no data', () => {

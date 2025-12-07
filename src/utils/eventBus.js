@@ -141,6 +141,8 @@ export const EVENT_TYPES = {
     TRUTH_TABLE_HIDDEN: 'truthTable:hidden',
     TRUTH_TABLE_STATE_CHANGED: 'truthTable:stateChanged',
     TRUTH_TABLE_COMPUTED: 'truthTable:computed',
+    // Payload: { current: number, total: number, percent: number }
+    TRUTH_TABLE_COMPUTING: 'truthTable:computing',
 
     // Theme events
     THEME_CHANGED: 'theme:changed',

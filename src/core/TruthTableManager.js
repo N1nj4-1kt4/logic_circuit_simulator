@@ -6,9 +6,11 @@
  */
 
 import { eventBus, EVENT_TYPES } from '../utils/eventBus.js';
-import { logger } from '../utils/logger.js';
-import { computeTruthTable } from './TruthTableComputer.js';
+import { computeTruthTable, computeTruthTableAsync } from './TruthTableComputer.js';
 import { TIMING } from '../constants.js';
+
+// Threshold for using async computation (number of input combinations)
+const ASYNC_THRESHOLD = 256; // 8+ inputs = 256+ rows
 
 export class TruthTableManager {
     /**
@@ -20,6 +22,10 @@ export class TruthTableManager {
 
         // Truth table recomputation debounce timer
         this.truthTableDebounceTimer = null;
+
+        // Track if async computation is in progress
+        this._isComputing = false;
+        this._computationId = 0; // Incremented to invalidate stale computations
 
         // Bind handlers for cleanup
         this._handleBoardChanged = this._handleBoardChanged.bind(this);
@@ -62,8 +68,7 @@ export class TruthTableManager {
      * Handle COMPONENT_LABEL_CHANGED event
      * @private
      */
-    _handleLabelChanged(data) {
-        logger.debug('[TruthTableManager] Received COMPONENT_LABEL_CHANGED:', data);
+    _handleLabelChanged() {
         this._debouncedRecomputeTruthTable();
     }
 
@@ -98,21 +103,79 @@ export class TruthTableManager {
 
     /**
      * Recompute truth table and store in cache
+     * Uses async computation for large tables to keep UI responsive
      */
     recomputeTruthTable() {
         const components = this.state.getComponents();
         const connections = this.state.getConnections();
 
-        logger.debug('[TruthTableManager] recomputeTruthTable called');
+        // Count inputs to determine if we need async computation
+        const inputCount = components.filter(c => c.type === 'INPUT').length;
+        const numCombinations = Math.pow(2, inputCount);
 
+        if (numCombinations > ASYNC_THRESHOLD) {
+            // Use async computation for large tables
+            this._recomputeTruthTableAsync(components, connections, numCombinations);
+        } else {
+            // Use sync computation for small tables
+            this._recomputeTruthTableSync(components, connections);
+        }
+    }
+
+    /**
+     * Synchronous truth table computation (for small tables)
+     * @private
+     */
+    _recomputeTruthTableSync(components, connections) {
         const result = computeTruthTable(components, connections);
-        this.state.setTruthTableCache(result);
+        this._handleComputationResult(result);
+    }
 
-        logger.debug('[TruthTableManager] Truth table computed, emitting TRUTH_TABLE_COMPUTED:', {
-            inputLabels: result.inputs?.map(i => i.label),
-            outputLabels: result.outputs?.map(o => o.label),
-            isValid: result.isValid
-        });
+    /**
+     * Asynchronous truth table computation (for large tables)
+     * @private
+     */
+    async _recomputeTruthTableAsync(components, connections, numCombinations) {
+        // Increment computation ID to invalidate any in-progress computation
+        this._computationId++;
+        const currentComputationId = this._computationId;
+
+        this._isComputing = true;
+
+        // Clear cache immediately so panel knows computation is in progress
+        this.state.setTruthTableCache(null);
+
+        try {
+            const result = await computeTruthTableAsync(components, connections, {
+                onProgress: (progress) => {
+                    // Only emit if this computation is still valid
+                    if (this._computationId === currentComputationId) {
+                        eventBus.emit(EVENT_TYPES.TRUTH_TABLE_COMPUTING, progress);
+                    }
+                },
+                chunkSize: 64
+            });
+
+            // Only use result if this computation is still valid
+            if (this._computationId === currentComputationId) {
+                this._handleComputationResult(result);
+            }
+        } catch (error) {
+            // Computation failed - log error but don't crash
+            console.error('[TruthTableManager] Async computation failed:', error);
+        } finally {
+            if (this._computationId === currentComputationId) {
+                this._isComputing = false;
+            }
+        }
+    }
+
+    /**
+     * Handle computation result (shared by sync and async paths)
+     * @private
+     */
+    _handleComputationResult(result) {
+        this.state.setTruthTableCache(result);
 
         // Also update the truthTableData for backwards compatibility
         if (result.isValid) {
@@ -120,6 +183,14 @@ export class TruthTableManager {
         }
 
         eventBus.emit(EVENT_TYPES.TRUTH_TABLE_COMPUTED, result);
+    }
+
+    /**
+     * Check if computation is in progress
+     * @returns {boolean}
+     */
+    isComputing() {
+        return this._isComputing;
     }
 
     /**

@@ -3,10 +3,8 @@ import 'tabulator-tables/dist/css/tabulator.min.css';
 import 'tabulator-tables/dist/css/tabulator_midnight.min.css';
 import interact from 'interactjs';
 import { positionPanelSmartly } from '../utils/positioning.js';
-import { DialogFactory } from './DialogFactory.js';
 import { UI } from '../constants.js';
 import { eventBus, EVENT_TYPES } from '../utils/eventBus.js';
-import { logger } from '../utils/logger.js';
 
 /**
  * TruthTablePanel - Manages the truth table UI using Tabulator.js
@@ -58,6 +56,8 @@ export class TruthTablePanel {
         // Bound event handlers for cleanup
         this._boundHandleStepCompleted = this._handleStepCompleted.bind(this);
         this._boundHandleValidityChanged = this._handleValidityChanged.bind(this);
+        this._boundHandleComputing = this._handleComputing.bind(this);
+        this._boundHandleComputed = this._handleComputed.bind(this);
 
         // Subscribe to declarative events
         this._setupEventListeners();
@@ -73,6 +73,12 @@ export class TruthTablePanel {
 
         // Show invalid message when circuit becomes incomplete
         eventBus.on(EVENT_TYPES.CIRCUIT_VALIDITY_CHANGED, this._boundHandleValidityChanged);
+
+        // Progress updates during async computation
+        eventBus.on(EVENT_TYPES.TRUTH_TABLE_COMPUTING, this._boundHandleComputing);
+
+        // Computation complete - refresh table if visible
+        eventBus.on(EVENT_TYPES.TRUTH_TABLE_COMPUTED, this._boundHandleComputed);
     }
 
     /**
@@ -104,6 +110,91 @@ export class TruthTablePanel {
     }
 
     /**
+     * Handle truth table computing progress event
+     * @private
+     */
+    _handleComputing(data) {
+        if (this.isVisible()) {
+            this._showProgress(data.percent, data.current, data.total);
+        }
+    }
+
+    /**
+     * Handle truth table computed event
+     * @private
+     */
+    _handleComputed() {
+        // Hide progress indicator
+        this._hideProgress();
+
+        // If panel is visible, refresh it with new data
+        if (this.isVisible()) {
+            // Refresh the table with new cached data
+            const cache = this.circuitState.getTruthTableCache();
+            if (cache) {
+                this.truthTableData = {
+                    inputs: (cache.inputs || []).map(inp => ({ ...inp })),
+                    outputs: (cache.outputs || []).map(out => ({ ...out })),
+                    table: cache.table || [],
+                    isValid: cache.isValid,
+                    reason: cache.reason
+                };
+
+                if (this.table) {
+                    // Table exists - just update data
+                    this.table.setData(this.truthTableData.table);
+                } else if (this.truthTableData.table.length > 0) {
+                    // Table doesn't exist (was showing "computing" message) - need full display
+                    // The display() method will create the Tabulator instance
+                    this.display();
+                }
+            }
+        }
+    }
+
+    /**
+     * Show progress indicator in the panel
+     * @private
+     */
+    _showProgress(percent, current, total) {
+        const content = document.getElementById('truthTableContent');
+        if (!content) return;
+
+        let progressEl = content.querySelector('.truth-table-progress');
+        if (!progressEl) {
+            progressEl = document.createElement('div');
+            progressEl.className = 'truth-table-progress';
+            progressEl.innerHTML = `
+                <div class="progress-text">Computing truth table...</div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar"></div>
+                </div>
+                <div class="progress-detail"></div>
+            `;
+            content.insertBefore(progressEl, content.firstChild);
+        }
+
+        const bar = progressEl.querySelector('.progress-bar');
+        const detail = progressEl.querySelector('.progress-detail');
+        if (bar) bar.style.width = `${percent}%`;
+        if (detail) detail.textContent = `${current.toLocaleString()} / ${total.toLocaleString()} rows (${percent}%)`;
+    }
+
+    /**
+     * Hide progress indicator
+     * @private
+     */
+    _hideProgress() {
+        const content = document.getElementById('truthTableContent');
+        if (!content) return;
+
+        const progressEl = content.querySelector('.truth-table-progress');
+        if (progressEl) {
+            progressEl.remove();
+        }
+    }
+
+    /**
      * Check if panel is visible
      * @returns {boolean}
      */
@@ -131,19 +222,23 @@ export class TruthTablePanel {
 
     /**
      * Generate and display the truth table from pre-computed cache
+     * @returns {boolean|'computing'} - true if ready, 'computing' if async in progress, false if failed
      */
     generate() {
         // Read from pre-computed cache
         const cache = this.circuitState.getTruthTableCache();
 
         if (!cache) {
-            // Cache not available yet - this shouldn't normally happen
-            // as cache is computed on circuit changes
-            DialogFactory.showAlert({
-                message: 'Truth table is being computed. Please try again.',
-                type: 'info'
-            });
-            return false;
+            // Cache not available yet - show panel with "computing" state
+            // Initialize with empty data so panel can display
+            this.truthTableData = {
+                inputs: [],
+                outputs: [],
+                table: [],
+                isValid: false,
+                reason: 'Computing truth table...'
+            };
+            return 'computing';
         }
 
         const { inputs, outputs, table, isValid, reason } = cache;
@@ -244,7 +339,12 @@ export class TruthTablePanel {
         // Handle cases with no table data (no inputs or no outputs)
         // If table has data, display it normally even for invalid circuits
         if (this.truthTableData.table.length === 0) {
-            this.displayInvalidMessage(wasVisible);
+            // Check if we're in "computing" state
+            if (this.truthTableData.reason === 'Computing truth table...') {
+                this.displayComputingMessage(wasVisible);
+            } else {
+                this.displayInvalidMessage(wasVisible);
+            }
             return;
         }
 
@@ -255,17 +355,18 @@ export class TruthTablePanel {
         // Generate Tabulator columns with groups
         const columns = this.generateColumns();
 
-        // Initialize Tabulator
+        // Initialize Tabulator with virtual DOM - it handles large datasets efficiently
         this.table = new Tabulator(content, {
             columns: columns,
             data: this.truthTableData.table,
             layout: 'fitColumns',
-            // Don't set height - let it fill the flex container naturally
             selectable: 1, // Single row selection
             movableColumns: true,
             columnHeaderVertAlign: 'bottom',
             reactiveData: false,
-            maxHeight: '100%', // Limit to container height
+            // Virtual DOM rendering - only renders visible rows for performance
+            height: '100%', // Required for virtual DOM
+            renderVertical: 'virtual', // Enable virtual rendering
         });
 
         // Apply dark mode theme if needed
@@ -366,6 +467,58 @@ export class TruthTablePanel {
             <div class="truth-table-invalid-message">
                 <div class="icon">${UI.ICONS.WARNING}</div>
                 <div class="message">${this.truthTableData.reason || 'Circuit incomplete'}</div>
+            </div>
+        `;
+
+        // Position panel on first open
+        if (!wasVisible) {
+            const hasValidSavedPosition = this.state &&
+                this.state.x !== undefined &&
+                this.state.y !== undefined &&
+                (this.state.x !== 0 || this.state.y !== 0);
+
+            if (!hasValidSavedPosition) {
+                positionPanelSmartly(this.panel, this.canvas, this.components);
+            } else {
+                this.restoreState(this.state);
+            }
+        }
+
+        // Setup interactions if not already setup
+        if (!this.interactionsSetup) {
+            this.setupInteractions();
+            this.interactionsSetup = true;
+        }
+
+        // Show panel
+        this.panel.style.opacity = '1';
+        this.panel.style.pointerEvents = 'auto';
+
+        eventBus.emit(EVENT_TYPES.TRUTH_TABLE_SHOWN);
+    }
+
+    /**
+     * Display a computing message with progress bar
+     * @param {boolean} wasVisible - Whether panel was already visible before this call
+     */
+    displayComputingMessage(wasVisible) {
+        const content = document.getElementById('truthTableContent');
+        if (!content) return;
+
+        // Destroy existing table if any
+        if (this.table) {
+            this.table.destroy();
+            this.table = null;
+        }
+
+        // Clear content and show computing message with progress bar
+        content.innerHTML = `
+            <div class="truth-table-progress" style="position: relative;">
+                <div class="progress-text">Computing truth table...</div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" style="width: 0%"></div>
+                </div>
+                <div class="progress-detail">Starting computation...</div>
             </div>
         `;
 
@@ -625,7 +778,14 @@ export class TruthTablePanel {
             // Add same gap at bottom as between header and content for visual balance
             const bottomGap = headerMarginBottom;
 
-            const newPanelHeight = panelHeaderHeight + headerMarginBottom + paddingTop + paddingBottom + actualTotalHeight + bottomGap;
+            let newPanelHeight = panelHeaderHeight + headerMarginBottom + paddingTop + paddingBottom + actualTotalHeight + bottomGap;
+
+            // Cap panel height to 80% of viewport to prevent absurdly tall panels for large tables
+            const maxPanelHeight = window.innerHeight * 0.8;
+            if (newPanelHeight > maxPanelHeight) {
+                newPanelHeight = maxPanelHeight;
+            }
+
             this.panel.style.height = newPanelHeight + 'px';
         }
 
@@ -796,12 +956,27 @@ export class TruthTablePanel {
     restoreState(state) {
         if (!state || !this.panel) return;
 
-        // Restore size (only if valid)
+        // Cap dimensions to reasonable viewport percentages to prevent
+        // restoring absurdly large saved dimensions from large tables
+        const maxWidth = window.innerWidth * 0.9;
+        const maxHeight = window.innerHeight * 0.9;
+
+        // Restore size (only if valid and within reasonable bounds)
         if (state.width && state.width !== '') {
-            this.panel.style.width = state.width;
+            const savedWidth = parseFloat(state.width);
+            if (savedWidth > 0 && savedWidth <= maxWidth) {
+                this.panel.style.width = state.width;
+            } else if (savedWidth > maxWidth) {
+                this.panel.style.width = maxWidth + 'px';
+            }
         }
         if (state.height && state.height !== '') {
-            this.panel.style.height = state.height;
+            const savedHeight = parseFloat(state.height);
+            if (savedHeight > 0 && savedHeight <= maxHeight) {
+                this.panel.style.height = state.height;
+            } else if (savedHeight > maxHeight) {
+                this.panel.style.height = maxHeight + 'px';
+            }
         }
 
         // Restore position (prefer transform over left/top)
@@ -814,21 +989,15 @@ export class TruthTablePanel {
             const viewportWidth = window.innerWidth;
             const viewportHeight = window.innerHeight;
 
-            // Get panel dimensions (use saved state or computed style)
-            // Use computed style to get actual rendered dimensions
+            // Get panel dimensions from ACTUAL applied styles (after capping above)
+            // This ensures we use the capped dimensions, not the potentially corrupted saved values
             const computedStyle = window.getComputedStyle(this.panel);
             let panelWidth = parseFloat(computedStyle.width) || 400; // Default 400px
             let panelHeight = parseFloat(computedStyle.height) || 300; // Default 300px
 
-            // If we have valid saved dimensions, use those
-            if (state.width && state.width !== '') {
-                const savedWidth = parseFloat(state.width);
-                if (savedWidth > 0) panelWidth = savedWidth;
-            }
-            if (state.height && state.height !== '') {
-                const savedHeight = parseFloat(state.height);
-                if (savedHeight > 0) panelHeight = savedHeight;
-            }
+            // Ensure dimensions don't exceed viewport for clamping calculations
+            panelWidth = Math.min(panelWidth, maxWidth);
+            panelHeight = Math.min(panelHeight, maxHeight);
 
             // Clamp position to keep panel at least partially visible
             // Allow panel to be positioned at most 80% off-screen
@@ -864,25 +1033,13 @@ export class TruthTablePanel {
      * Called when TRUTH_TABLE_COMPUTED event fires
      */
     refresh() {
-        logger.debug('[TruthTablePanel] refresh() called');
-
         // Don't refresh if panel doesn't exist
-        if (!this.panel) {
-            logger.debug('[TruthTablePanel] refresh() - panel does not exist, returning');
-            return;
-        }
+        if (!this.panel) return;
 
         // Don't refresh if panel is hidden
-        if (this.panel.classList.contains('hidden')) {
-            logger.debug('[TruthTablePanel] refresh() - panel is hidden, returning');
-            return;
-        }
+        if (this.panel.classList.contains('hidden')) return;
 
         const cache = this.circuitState.getTruthTableCache();
-        logger.debug('[TruthTablePanel] refresh() - cache:', {
-            inputLabels: cache?.inputs?.map(i => i.label),
-            outputLabels: cache?.outputs?.map(o => o.label)
-        });
 
         // Hide panel only if no cache at all
         if (!cache) {
@@ -921,19 +1078,6 @@ export class TruthTablePanel {
             inputs.some((input, i) => input.label !== this.truthTableData.inputs[i]?.label) ||
             outputs.some((output, i) => output.label !== this.truthTableData.outputs[i]?.label)
         );
-
-        logger.debug('[TruthTablePanel] refresh() - change detection:', {
-            countChanged,
-            labelsChanged,
-            currentLabels: {
-                inputs: this.truthTableData?.inputs?.map(i => i.label),
-                outputs: this.truthTableData?.outputs?.map(o => o.label)
-            },
-            newLabels: {
-                inputs: inputs.map(i => i.label),
-                outputs: outputs.map(o => o.label)
-            }
-        });
 
         if (countChanged) {
             // Full rebuild needed - column count has changed
@@ -1053,6 +1197,37 @@ export class TruthTablePanel {
     }
 
     /**
+     * Show the truth table panel (reusing existing table if available)
+     * Use this for simple show/hide toggling - no data reload.
+     * Use display() when data needs to be updated.
+     */
+    show() {
+        // If we already have a table, just reveal the panel
+        if (this.table && this.panel) {
+            this.panel.classList.remove('hidden');
+            this.panel.style.display = 'block';
+            this.panel.style.opacity = '1';
+            this.panel.style.pointerEvents = 'auto';
+
+            // Update highlight to match current input state
+            this.updateHighlight();
+
+            eventBus.emit(EVENT_TYPES.TRUTH_TABLE_SHOWN);
+            return true;
+        }
+
+        // No table exists - need to build it
+        // First ensure we have data
+        if (!this.generate()) {
+            return false;
+        }
+
+        // Create the table
+        this.display();
+        return true;
+    }
+
+    /**
      * Get current state
      */
     getState() {
@@ -1099,6 +1274,8 @@ export class TruthTablePanel {
         // Unsubscribe from events
         eventBus.off(EVENT_TYPES.SIMULATION_STEP_COMPLETED, this._boundHandleStepCompleted);
         eventBus.off(EVENT_TYPES.CIRCUIT_VALIDITY_CHANGED, this._boundHandleValidityChanged);
+        eventBus.off(EVENT_TYPES.TRUTH_TABLE_COMPUTING, this._boundHandleComputing);
+        eventBus.off(EVENT_TYPES.TRUTH_TABLE_COMPUTED, this._boundHandleComputed);
 
         // Destroy Tabulator instance
         if (this.table) {

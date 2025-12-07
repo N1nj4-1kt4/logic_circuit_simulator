@@ -780,13 +780,12 @@ class CircuitSimulator {
             }
         }
 
-        // Generate and display truth table
-        const success = this.truthTablePanel.generate();
-        if (success) {
-            this.truthTablePanel.display();
-
+        // Show truth table (reuses existing table if available, or builds new one)
+        if (this.truthTablePanel.show()) {
             // Store reference for backward compatibility
-            this.state.setTruthTableData(this.truthTablePanel.truthTableData);
+            if (this.truthTablePanel.truthTableData) {
+                this.state.setTruthTableData(this.truthTablePanel.truthTableData);
+            }
         }
     }
 
