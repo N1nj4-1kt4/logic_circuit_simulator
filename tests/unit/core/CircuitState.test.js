@@ -268,26 +268,25 @@ describe('CircuitState', () => {
         });
     });
 
-    describe('Truth Table State', () => {
-        it('should set and get truth table data', () => {
-            const data = { table: [[0, 0, 0]] };
-            state.setTruthTableData(data);
+    describe('Circuit Analysis & Truth Table Panel State', () => {
+        it('should set and get circuit analysis', () => {
+            const analysis = {
+                inputs: [{ label: 'A' }],
+                outputs: [{ label: 'Y' }],
+                table: [{ input0: 0, output0: 0 }],
+                isValid: true,
+                reason: null
+            };
+            state.setCircuitAnalysis(analysis);
 
-            expect(state.getTruthTableData()).toEqual(data);
+            expect(state.getCircuitAnalysis()).toEqual(analysis);
         });
 
-        it('should set and get truth table column order', () => {
-            const order = ['A', 'B', 'Output'];
-            state.setTruthTableColumnOrder(order);
+        it('should set and get truth table panel state', () => {
+            const panelState = { width: '400px', height: '300px', x: 100, y: 50, columnOrder: ['input0', 'output0'], visible: true };
+            state.setTruthTablePanelState(panelState);
 
-            expect(state.getTruthTableColumnOrder()).toEqual(order);
-        });
-
-        it('should set and get truth table state', () => {
-            const tableState = { width: 400, height: 300 };
-            state.setTruthTableState(tableState);
-
-            expect(state.getTruthTableState()).toEqual(tableState);
+            expect(state.getTruthTablePanelState()).toEqual(panelState);
         });
     });
 
@@ -327,7 +326,7 @@ describe('CircuitState', () => {
                 nextId: 3,
                 currentBoardName: 'Board01',
                 currentComponentName: null,
-                truthTableState: { width: 400 }
+                truthTablePanelState: { width: '400px' }
             };
 
             state.loadState(loadState);
@@ -335,7 +334,7 @@ describe('CircuitState', () => {
             expect(state.getComponents()).toHaveLength(1);
             expect(state.getConnections()).toHaveLength(1);
             expect(state.getCurrentBoardName()).toBe('Board01');
-            expect(state.getTruthTableState()).toEqual({ width: 400 });
+            expect(state.getTruthTablePanelState()).toEqual({ width: '400px' });
         });
 
         it('should reset to initial state', () => {

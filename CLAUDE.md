@@ -492,7 +492,7 @@ List ALL state that crosses module boundaries:
 | State | Owned By | Persisted In | Notes |
 |-------|----------|--------------|-------|
 | components, connections | CircuitState | CircuitState | Core circuit data |
-| truthTableState (x, y, width, visible) | TruthTablePanel (UI) | CircuitState | UI state persisted in Core |
+| truthTablePanelState (x, y, width, visible, columnOrder) | TruthTablePanel (UI) | CircuitState | UI state persisted in Core |
 | dragState | ComponentDragger | Not persisted | Ephemeral interaction state |
 ```
 

@@ -63,7 +63,7 @@ export class ComponentLibraryOperations {
             connections: deepClone(connections),
             inputPorts: inputs.map(input => ({ label: input.label, id: input.id })),
             outputPorts: outputs.map(output => ({ label: output.label, id: output.id })),
-            truthTableState: this.state.getTruthTableState()
+            truthTablePanelState: this.state.getTruthTablePanelState()
         };
 
         // Save to component library

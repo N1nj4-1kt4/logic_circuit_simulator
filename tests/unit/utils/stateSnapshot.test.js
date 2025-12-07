@@ -15,7 +15,7 @@ function createMockState(data = {}) {
         components: [],
         connections: [],
         nextId: 1,
-        truthTableState: null
+        truthTablePanelState: null
     };
     const stateData = { ...defaultData, ...data };
 
@@ -23,7 +23,7 @@ function createMockState(data = {}) {
         getComponents: vi.fn(() => stateData.components),
         getConnections: vi.fn(() => stateData.connections),
         getNextId: vi.fn(() => stateData.nextId),
-        getTruthTableState: vi.fn(() => stateData.truthTableState),
+        getTruthTablePanelState: vi.fn(() => stateData.truthTablePanelState),
         loadState: vi.fn()
     };
 }
@@ -77,35 +77,35 @@ describe('State Snapshot Utilities', () => {
             expect(snapshot.connections[0].from).toBe(1);
         });
 
-        it('should exclude truthTableState by default', () => {
+        it('should exclude truthTablePanelState by default', () => {
             const mockState = createMockState({
-                truthTableState: { x: 100, y: 100, width: 400, height: 300 }
+                truthTablePanelState: { x: 100, y: 100, width: 400, height: 300 }
             });
 
             const snapshot = captureCircuitSnapshot(mockState);
 
-            expect(snapshot.truthTableState).toBeUndefined();
+            expect(snapshot.truthTablePanelState).toBeUndefined();
         });
 
-        it('should include truthTableState when option is set', () => {
+        it('should include truthTablePanelState when option is set', () => {
             const mockState = createMockState({
-                truthTableState: { x: 100, y: 100, width: 400, height: 300 }
+                truthTablePanelState: { x: 100, y: 100, width: 400, height: 300 }
             });
 
-            const snapshot = captureCircuitSnapshot(mockState, { includeTruthTableState: true });
+            const snapshot = captureCircuitSnapshot(mockState, { includeTruthTablePanelState: true });
 
-            expect(snapshot.truthTableState).toBeDefined();
-            expect(snapshot.truthTableState.x).toBe(100);
+            expect(snapshot.truthTablePanelState).toBeDefined();
+            expect(snapshot.truthTablePanelState.x).toBe(100);
         });
 
-        it('should handle null truthTableState', () => {
+        it('should handle null truthTablePanelState', () => {
             const mockState = createMockState({
-                truthTableState: null
+                truthTablePanelState: null
             });
 
-            const snapshot = captureCircuitSnapshot(mockState, { includeTruthTableState: true });
+            const snapshot = captureCircuitSnapshot(mockState, { includeTruthTablePanelState: true });
 
-            expect(snapshot.truthTableState).toBeNull();
+            expect(snapshot.truthTablePanelState).toBeNull();
         });
 
         it('should handle empty circuit', () => {
@@ -155,7 +155,7 @@ describe('State Snapshot Utilities', () => {
                 components: [{ id: 1, type: 'AND' }],
                 connections: [],
                 nextId: 2,
-                truthTableState: null
+                truthTablePanelState: null
             };
 
             restoreCircuitSnapshot(mockState, snapshot);
@@ -164,17 +164,17 @@ describe('State Snapshot Utilities', () => {
                 components: snapshot.components,
                 connections: snapshot.connections,
                 nextId: snapshot.nextId,
-                truthTableState: null
+                truthTablePanelState: null
             });
         });
 
-        it('should handle missing truthTableState in snapshot', () => {
+        it('should handle missing truthTablePanelState in snapshot', () => {
             const mockState = createMockState();
             const snapshot = {
                 components: [],
                 connections: [],
                 nextId: 1
-                // No truthTableState
+                // No truthTablePanelState
             };
 
             restoreCircuitSnapshot(mockState, snapshot);
@@ -183,17 +183,17 @@ describe('State Snapshot Utilities', () => {
                 components: [],
                 connections: [],
                 nextId: 1,
-                truthTableState: null
+                truthTablePanelState: null
             });
         });
 
-        it('should pass truthTableState when present', () => {
+        it('should pass truthTablePanelState when present', () => {
             const mockState = createMockState();
             const snapshot = {
                 components: [],
                 connections: [],
                 nextId: 1,
-                truthTableState: { x: 50, y: 50, width: 300, height: 200 }
+                truthTablePanelState: { x: 50, y: 50, width: 300, height: 200 }
             };
 
             restoreCircuitSnapshot(mockState, snapshot);
@@ -202,7 +202,7 @@ describe('State Snapshot Utilities', () => {
                 components: [],
                 connections: [],
                 nextId: 1,
-                truthTableState: { x: 50, y: 50, width: 300, height: 200 }
+                truthTablePanelState: { x: 50, y: 50, width: 300, height: 200 }
             });
         });
     });
@@ -353,7 +353,7 @@ describe('State Snapshot Utilities', () => {
                 getComponents: vi.fn(() => currentComponents),
                 getConnections: vi.fn(() => []),
                 getNextId: vi.fn(() => 2),
-                getTruthTableState: vi.fn(() => null),
+                getTruthTablePanelState: vi.fn(() => null),
                 loadState: vi.fn()
             };
 

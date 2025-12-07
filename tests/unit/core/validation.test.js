@@ -7,7 +7,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { CircuitState } from '../../../src/core/CircuitState.js';
 import { BoardOperations } from '../../../src/core/BoardOperations.js';
 import { ContextManager } from '../../../src/core/ContextManager.js';
-import { TruthTableManager } from '../../../src/core/TruthTableManager.js';
+import { CircuitAnalysisManager } from '../../../src/core/CircuitAnalysisManager.js';
 import { AutoSaveManager } from '../../../src/core/AutoSaveManager.js';
 import { eventBus, EVENT_TYPES } from '../../../src/utils/eventBus.js';
 import { BoardManager } from '../../../src/storage/BoardManager.js';
@@ -156,12 +156,12 @@ describe('Board Name Validation', () => {
         const boardManager = new BoardManager(storageAdapter);
         const componentLibrary = new ComponentLibrary(storageAdapter);
 
-        const truthTableManager = new TruthTableManager({ state });
+        const circuitAnalysisManager = new CircuitAnalysisManager({ state });
         const contextManager = new ContextManager({
             state,
             boardManager,
             componentLibrary,
-            truthTableManager
+            circuitAnalysisManager
         });
 
         boardOperations = new BoardOperations({
@@ -367,25 +367,26 @@ describe('State Load Validation', () => {
         expect(state.generateNextId()).toBe(1);
     });
 
-    it('should restore truthTableState from loadState', () => {
+    it('should restore truthTablePanelState from loadState', () => {
         state.loadState({
             components: [],
             connections: [],
-            truthTableState: { width: 500, columnOrder: ['A', 'B'] }
+            truthTablePanelState: { width: 500, columnOrder: ['A', 'B'] }
         });
 
-        expect(state.getTruthTableState()).toEqual({ width: 500, columnOrder: ['A', 'B'] });
-        expect(state.getTruthTableColumnOrder()).toEqual(['A', 'B']);
+        const panelState = state.getTruthTablePanelState();
+        expect(panelState).toEqual({ width: 500, columnOrder: ['A', 'B'] });
+        expect(panelState.columnOrder).toEqual(['A', 'B']);
     });
 
-    it('should handle loadState with null truthTableState', () => {
+    it('should handle loadState with null truthTablePanelState', () => {
         state.loadState({
             components: [],
             connections: [],
-            truthTableState: null
+            truthTablePanelState: null
         });
 
-        expect(state.getTruthTableState()).toBeNull();
+        expect(state.getTruthTablePanelState()).toBeNull();
     });
 });
 

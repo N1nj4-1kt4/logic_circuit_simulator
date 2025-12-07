@@ -9,7 +9,7 @@ import { CanvasOperations } from '../../src/core/CanvasOperations.js';
 import { BoardOperations } from '../../src/core/BoardOperations.js';
 import { ComponentLibraryOperations } from '../../src/core/ComponentLibraryOperations.js';
 import { ContextManager } from '../../src/core/ContextManager.js';
-import { TruthTableManager } from '../../src/core/TruthTableManager.js';
+import { CircuitAnalysisManager } from '../../src/core/CircuitAnalysisManager.js';
 import { SimulationController } from '../../src/core/SimulationController.js';
 import { CircuitValidityManager } from '../../src/core/CircuitValidityManager.js';
 import { eventBus, EVENT_TYPES } from '../../src/utils/eventBus.js';
@@ -103,15 +103,15 @@ describe('Full Circuit Workflow', () => {
         boardManager = new BoardManager(storageAdapter);
         componentLibrary = new ComponentLibrary(storageAdapter);
 
-        // Initialize TruthTableManager
-        const truthTableManager = new TruthTableManager({ state });
+        // Initialize CircuitAnalysisManager
+        const circuitAnalysisManager = new CircuitAnalysisManager({ state });
 
         // Initialize ContextManager
         const contextManager = new ContextManager({
             state,
             boardManager,
             componentLibrary,
-            truthTableManager
+            circuitAnalysisManager
         });
 
         // Initialize operations using new split classes
@@ -603,15 +603,15 @@ describe('Bug Fixes Regression Tests', () => {
         boardManager = new BoardManager(storageAdapter);
         componentLibrary = new ComponentLibrary(storageAdapter);
 
-        // Initialize TruthTableManager
-        const truthTableManager = new TruthTableManager({ state });
+        // Initialize CircuitAnalysisManager
+        const circuitAnalysisManager = new CircuitAnalysisManager({ state });
 
         // Initialize ContextManager
         const contextManager = new ContextManager({
             state,
             boardManager,
             componentLibrary,
-            truthTableManager
+            circuitAnalysisManager
         });
 
         boardOperations = new BoardOperations({
@@ -707,30 +707,30 @@ describe('Bug Fixes Regression Tests', () => {
             state.addComponent({ id: 1, type: 'INPUT', x: 100, y: 100, inputs: [], inputPorts: [], outputPorts: [{}], label: 'I1' });
             state.addComponent({ id: 2, type: 'OUTPUT', x: 200, y: 100, inputs: [null], inputPorts: [{}], outputPorts: [], label: 'O1' });
 
-            const truthTableState = {
+            const truthTablePanelState = {
                 width: 450,
                 height: 350,
                 columnOrder: ['I1', 'O1']
             };
-            state.setTruthTableState(truthTableState);
+            state.setTruthTablePanelState(truthTablePanelState);
 
             await boardOperations.saveCurrentBoard('BoardWithTable');
 
             // Clear and reload
             state.clearComponents();
             state.setCurrentBoardName(null);
-            state.setTruthTableState(null);
+            state.setTruthTablePanelState(null);
 
             await boardOperations.loadBoard('BoardWithTable');
 
-            expect(state.getTruthTableState()).toEqual(truthTableState);
+            expect(state.getTruthTablePanelState()).toEqual(truthTablePanelState);
         });
 
-        it('should emit TRUTH_TABLE_STATE_CHANGED when state changes', () => {
+        it('should emit TRUTH_TABLE_PANEL_STATE_CHANGED when state changes', () => {
             const handler = vi.fn();
-            eventBus.on(EVENT_TYPES.TRUTH_TABLE_STATE_CHANGED, handler);
+            eventBus.on(EVENT_TYPES.TRUTH_TABLE_PANEL_STATE_CHANGED, handler);
 
-            state.setTruthTableState({ width: 500 });
+            state.setTruthTablePanelState({ width: 500 });
 
             expect(handler).toHaveBeenCalledWith({ state: { width: 500 } });
         });

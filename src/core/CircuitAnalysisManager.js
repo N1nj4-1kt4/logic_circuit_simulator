@@ -1,18 +1,18 @@
 /**
- * TruthTableManager - Truth Table Computation Module
+ * CircuitAnalysisManager - Circuit Analysis Computation Module
  *
- * Handles truth table computation and caching with event-driven recomputation.
+ * Handles circuit analysis (truth table data) computation and caching with event-driven recomputation.
  * Subscribes to circuit change events and automatically recomputes with debouncing.
  */
 
 import { eventBus, EVENT_TYPES } from '../utils/eventBus.js';
-import { computeTruthTable, computeTruthTableAsync } from './TruthTableComputer.js';
+import { computeCircuitAnalysis, computeCircuitAnalysisAsync } from './CircuitAnalyzer.js';
 import { TIMING } from '../constants.js';
 
 // Threshold for using async computation (number of input combinations)
 const ASYNC_THRESHOLD = 256; // 8+ inputs = 256+ rows
 
-export class TruthTableManager {
+export class CircuitAnalysisManager {
     /**
      * @param {Object} config - Configuration object
      * @param {CircuitState} config.state - Circuit state container
@@ -20,8 +20,8 @@ export class TruthTableManager {
     constructor(config) {
         this.state = config.state;
 
-        // Truth table recomputation debounce timer
-        this.truthTableDebounceTimer = null;
+        // Circuit analysis recomputation debounce timer
+        this.analysisDebounceTimer = null;
 
         // Track if async computation is in progress
         this._isComputing = false;
@@ -33,26 +33,26 @@ export class TruthTableManager {
         this._handleBoardCleared = this._handleBoardCleared.bind(this);
         this._handleBoardLoaded = this._handleBoardLoaded.bind(this);
 
-        // Subscribe to circuit changes for truth table recomputation
-        this._setupTruthTableRecomputation();
+        // Subscribe to circuit changes for analysis recomputation
+        this._setupAnalysisRecomputation();
     }
 
     /**
-     * Setup event listeners for truth table recomputation
+     * Setup event listeners for circuit analysis recomputation
      * @private
      */
-    _setupTruthTableRecomputation() {
-        // Recompute truth table on any circuit topology change
+    _setupAnalysisRecomputation() {
+        // Recompute analysis on any circuit topology change
         eventBus.on(EVENT_TYPES.BOARD_CHANGED, this._handleBoardChanged);
 
-        // Recompute truth table when input/output labels change
+        // Recompute analysis when input/output labels change
         // (affects column headers in truth table display)
         eventBus.on(EVENT_TYPES.COMPONENT_LABEL_CHANGED, this._handleLabelChanged);
 
-        // Clear cache on board cleared
+        // Clear analysis on board cleared
         eventBus.on(EVENT_TYPES.BOARD_CLEARED, this._handleBoardCleared);
 
-        // Recompute truth table when board is loaded (including revert to saved)
+        // Recompute analysis when board is loaded (including revert to saved)
         eventBus.on(EVENT_TYPES.BOARD_LOADED, this._handleBoardLoaded);
     }
 
@@ -61,7 +61,7 @@ export class TruthTableManager {
      * @private
      */
     _handleBoardChanged() {
-        this._debouncedRecomputeTruthTable();
+        this._debouncedRecomputeAnalysis();
     }
 
     /**
@@ -69,7 +69,7 @@ export class TruthTableManager {
      * @private
      */
     _handleLabelChanged() {
-        this._debouncedRecomputeTruthTable();
+        this._debouncedRecomputeAnalysis();
     }
 
     /**
@@ -77,7 +77,7 @@ export class TruthTableManager {
      * @private
      */
     _handleBoardCleared() {
-        this.state.setTruthTableCache(null);
+        this.state.setCircuitAnalysis(null);
     }
 
     /**
@@ -85,27 +85,27 @@ export class TruthTableManager {
      * @private
      */
     _handleBoardLoaded() {
-        this.recomputeTruthTable();
+        this.recomputeAnalysis();
     }
 
     /**
-     * Debounced recomputation of truth table
+     * Debounced recomputation of circuit analysis
      * @private
      */
-    _debouncedRecomputeTruthTable() {
-        if (this.truthTableDebounceTimer) {
-            clearTimeout(this.truthTableDebounceTimer);
+    _debouncedRecomputeAnalysis() {
+        if (this.analysisDebounceTimer) {
+            clearTimeout(this.analysisDebounceTimer);
         }
-        this.truthTableDebounceTimer = setTimeout(() => {
-            this.recomputeTruthTable();
+        this.analysisDebounceTimer = setTimeout(() => {
+            this.recomputeAnalysis();
         }, TIMING.TRUTH_TABLE_DEBOUNCE);
     }
 
     /**
-     * Recompute truth table and store in cache
-     * Uses async computation for large tables to keep UI responsive
+     * Recompute circuit analysis and store in state
+     * Uses async computation for large analyses to keep UI responsive
      */
-    recomputeTruthTable() {
+    recomputeAnalysis() {
         const components = this.state.getComponents();
         const connections = this.state.getConnections();
 
@@ -114,43 +114,43 @@ export class TruthTableManager {
         const numCombinations = Math.pow(2, inputCount);
 
         if (numCombinations > ASYNC_THRESHOLD) {
-            // Use async computation for large tables
-            this._recomputeTruthTableAsync(components, connections, numCombinations);
+            // Use async computation for large analyses
+            this._recomputeAnalysisAsync(components, connections, numCombinations);
         } else {
-            // Use sync computation for small tables
-            this._recomputeTruthTableSync(components, connections);
+            // Use sync computation for small analyses
+            this._recomputeAnalysisSync(components, connections);
         }
     }
 
     /**
-     * Synchronous truth table computation (for small tables)
+     * Synchronous circuit analysis computation (for small circuits)
      * @private
      */
-    _recomputeTruthTableSync(components, connections) {
-        const result = computeTruthTable(components, connections);
+    _recomputeAnalysisSync(components, connections) {
+        const result = computeCircuitAnalysis(components, connections);
         this._handleComputationResult(result);
     }
 
     /**
-     * Asynchronous truth table computation (for large tables)
+     * Asynchronous circuit analysis computation (for large circuits)
      * @private
      */
-    async _recomputeTruthTableAsync(components, connections, numCombinations) {
+    async _recomputeAnalysisAsync(components, connections, numCombinations) {
         // Increment computation ID to invalidate any in-progress computation
         this._computationId++;
         const currentComputationId = this._computationId;
 
         this._isComputing = true;
 
-        // Clear cache immediately so panel knows computation is in progress
-        this.state.setTruthTableCache(null);
+        // Clear analysis immediately so panel knows computation is in progress
+        this.state.setCircuitAnalysis(null);
 
         try {
-            const result = await computeTruthTableAsync(components, connections, {
+            const result = await computeCircuitAnalysisAsync(components, connections, {
                 onProgress: (progress) => {
                     // Only emit if this computation is still valid
                     if (this._computationId === currentComputationId) {
-                        eventBus.emit(EVENT_TYPES.TRUTH_TABLE_COMPUTING, progress);
+                        eventBus.emit(EVENT_TYPES.CIRCUIT_ANALYSIS_COMPUTING, progress);
                     }
                 },
                 chunkSize: 64
@@ -162,7 +162,7 @@ export class TruthTableManager {
             }
         } catch (error) {
             // Computation failed - log error but don't crash
-            console.error('[TruthTableManager] Async computation failed:', error);
+            console.error('[CircuitAnalysisManager] Async computation failed:', error);
         } finally {
             if (this._computationId === currentComputationId) {
                 this._isComputing = false;
@@ -175,14 +175,9 @@ export class TruthTableManager {
      * @private
      */
     _handleComputationResult(result) {
-        this.state.setTruthTableCache(result);
+        this.state.setCircuitAnalysis(result);
 
-        // Also update the truthTableData for backwards compatibility
-        if (result.isValid) {
-            this.state.setTruthTableData(result);
-        }
-
-        eventBus.emit(EVENT_TYPES.TRUTH_TABLE_COMPUTED, result);
+        eventBus.emit(EVENT_TYPES.CIRCUIT_ANALYSIS_COMPUTED, result);
     }
 
     /**
@@ -198,9 +193,9 @@ export class TruthTableManager {
      */
     destroy() {
         // Clear debounce timer
-        if (this.truthTableDebounceTimer) {
-            clearTimeout(this.truthTableDebounceTimer);
-            this.truthTableDebounceTimer = null;
+        if (this.analysisDebounceTimer) {
+            clearTimeout(this.analysisDebounceTimer);
+            this.analysisDebounceTimer = null;
         }
 
         // Remove event listeners

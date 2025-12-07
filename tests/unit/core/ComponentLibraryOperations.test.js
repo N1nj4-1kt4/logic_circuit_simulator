@@ -150,7 +150,7 @@ describe('ComponentLibraryOperations', () => {
 
         it('includes truth table state in saved component', async () => {
             setupValidCircuit();
-            state.setTruthTableState({ width: 500, height: 300 });
+            state.setTruthTablePanelState({ width: 500, height: 300 });
             mockComponentLibrary.saveComponent.mockResolvedValue(true);
 
             await operations.saveComponent('TestComp', 'Description');
@@ -158,7 +158,7 @@ describe('ComponentLibraryOperations', () => {
             expect(mockComponentLibrary.saveComponent).toHaveBeenCalledWith(
                 'TestComp',
                 expect.objectContaining({
-                    truthTableState: { width: 500, height: 300 }
+                    truthTablePanelState: { width: 500, height: 300 }
                 })
             );
         });

@@ -47,7 +47,7 @@ import { SimulationController } from './src/core/SimulationController.js';
 
 // Refactored operations modules
 import { CanvasOperations } from './src/core/CanvasOperations.js';
-import { TruthTableManager } from './src/core/TruthTableManager.js';
+import { CircuitAnalysisManager } from './src/core/CircuitAnalysisManager.js';
 import { ContextManager } from './src/core/ContextManager.js';
 import { BoardOperations } from './src/core/BoardOperations.js';
 import { ComponentLibraryOperations } from './src/core/ComponentLibraryOperations.js';
@@ -136,17 +136,17 @@ class CircuitSimulator {
 
         // Initialize refactored operations modules
 
-        // 1. TruthTableManager (independent)
-        this.truthTableManager = new TruthTableManager({
+        // 1. CircuitAnalysisManager (independent)
+        this.circuitAnalysisManager = new CircuitAnalysisManager({
             state: this.state
         });
 
-        // 2. ContextManager (needs truthTableManager)
+        // 2. ContextManager (needs circuitAnalysisManager)
         this.contextManager = new ContextManager({
             state: this.state,
             boardManager: this.boardManager,
             componentLibrary: this.componentLibrary,
-            truthTableManager: this.truthTableManager
+            circuitAnalysisManager: this.circuitAnalysisManager
         });
 
         // 3. BoardOperations (needs contextManager)
@@ -216,14 +216,14 @@ class CircuitSimulator {
             exportComponent: (...args) => this.componentLibraryOperations.exportComponent(...args),
             importComponent: (...args) => this.componentLibraryOperations.importComponent(...args),
 
-            // Truth table operations
-            recomputeTruthTable: () => this.truthTableManager.recomputeTruthTable(),
+            // Circuit analysis operations
+            recomputeAnalysis: () => this.circuitAnalysisManager.recomputeAnalysis(),
 
             // Auto-save operations
             setupAutoSave: () => this.autoSaveManager.setupAutoSave(),
             clearAutoSave: () => this.autoSaveManager.clearAutoSave(),
             saveBoardState: () => this.autoSaveManager.saveBoardState(),
-            loadBoardState: () => this.autoSaveManager.loadBoardState(this.truthTableManager),
+            loadBoardState: () => this.autoSaveManager.loadBoardState(this.circuitAnalysisManager),
             clearBoardState: () => this.autoSaveManager.clearBoardState()
         };
     }
@@ -241,7 +241,7 @@ class CircuitSimulator {
 
         // Truth table dragging now handled by TruthTablePanel + Interact.js
         this.autoSaveManager.setupAutoSave();
-        await this.autoSaveManager.loadBoardState(this.truthTableManager);
+        await this.autoSaveManager.loadBoardState(this.circuitAnalysisManager);
 
         // Setup undo/redo manager (after toolbar so button states update correctly)
         this.undoRedoManager.setupListeners();
@@ -255,8 +255,8 @@ class CircuitSimulator {
         this.canvasRenderer.render();
 
         // Restore truth table if it was visible
-        const truthTableState = this.state.getTruthTableState();
-        if (truthTableState && truthTableState.visible) {
+        const truthTablePanelState = this.state.getTruthTablePanelState();
+        if (truthTablePanelState && truthTablePanelState.visible) {
             console.log('Restoring truth table from saved state...');
             this.generateTruthTable();
         }
@@ -494,9 +494,9 @@ class CircuitSimulator {
             this.updateToolbarDisplays();
         });
 
-        // Truth table computed event - refresh panel when cache is updated
-        eventBus.on(EVENT_TYPES.TRUTH_TABLE_COMPUTED, (data) => {
-            logger.debug('[circuit-simulator] Received TRUTH_TABLE_COMPUTED, calling truthTablePanel.refresh()');
+        // Circuit analysis computed event - refresh panel when analysis is updated
+        eventBus.on(EVENT_TYPES.CIRCUIT_ANALYSIS_COMPUTED, (data) => {
+            logger.debug('[circuit-simulator] Received CIRCUIT_ANALYSIS_COMPUTED, calling truthTablePanel.refresh()');
             if (this.truthTablePanel) {
                 this.truthTablePanel.refresh();
             }
@@ -526,8 +526,8 @@ class CircuitSimulator {
                 // Don't remove the panel from DOM - it's part of static HTML and should remain
                 // Just destroy the TruthTablePanel object so it's regenerated with new board data
                 this.truthTablePanel = null;
-                // Clear truth table state for this board
-                this.state.setTruthTableState(null);
+                // Clear truth table panel state for this board
+                this.state.setTruthTablePanelState(null);
                 console.log('Truth table panel destroyed and state cleared');
             }
             // Reset the DOM panel's inline styles to prevent stale dimensions
@@ -544,9 +544,9 @@ class CircuitSimulator {
 
         // Board loaded event - destroy truth table to avoid stale data
         eventBus.on(EVENT_TYPES.BOARD_LOADED, () => {
-            // Read the loaded board's truth table state BEFORE destroying panel
+            // Read the loaded board's truth table panel state BEFORE destroying panel
             // (hide() would overwrite the state with current position)
-            const truthTableState = this.state.getTruthTableState();
+            const truthTablePanelState = this.state.getTruthTablePanelState();
 
             if (this.truthTablePanel) {
                 // Don't call hide() here - it would save current position and overwrite the loaded state
@@ -570,7 +570,7 @@ class CircuitSimulator {
 
             // Restore truth table if it was visible in the loaded board
             // setState() in generateTruthTable() will set _isRestoring flag
-            if (truthTableState && truthTableState.visible) {
+            if (truthTablePanelState && truthTablePanelState.visible) {
                 this.generateTruthTable();
             }
         });
@@ -768,25 +768,20 @@ class CircuitSimulator {
 
             // Hook up state persistence
             this.truthTablePanel.onStateChange = (state) => {
-                this.state.setTruthTableState(state);
-                // Event system will trigger auto-save via TRUTH_TABLE_STATE_CHANGED event
+                this.state.setTruthTablePanelState(state);
+                // Event system will trigger auto-save via TRUTH_TABLE_PANEL_STATE_CHANGED event
             };
 
             // Restore saved state if available (position, size, etc.)
             // setState() sets _isRestoring flag to skip saveState() during initial display
-            const truthTableState = this.state.getTruthTableState();
-            if (truthTableState) {
-                this.truthTablePanel.setState(truthTableState);
+            const truthTablePanelState = this.state.getTruthTablePanelState();
+            if (truthTablePanelState) {
+                this.truthTablePanel.setState(truthTablePanelState);
             }
         }
 
         // Show truth table (reuses existing table if available, or builds new one)
-        if (this.truthTablePanel.show()) {
-            // Store reference for backward compatibility
-            if (this.truthTablePanel.truthTableData) {
-                this.state.setTruthTableData(this.truthTablePanel.truthTableData);
-            }
-        }
+        this.truthTablePanel.show();
     }
 
     // Old truth table methods removed - now handled by TruthTablePanel class
@@ -803,9 +798,9 @@ class CircuitSimulator {
     }
 
     findMatchingTruthTableRow() {
-        const truthTableData = this.state.getTruthTableData();
-        if (!truthTableData) {
-            return -1; // No truth table generated yet
+        const circuitAnalysis = this.state.getCircuitAnalysis();
+        if (!circuitAnalysis) {
+            return -1; // No circuit analysis computed yet
         }
 
         const currentState = this.getCurrentInputState();
@@ -816,7 +811,7 @@ class CircuitSimulator {
         }
 
         // Find the row that matches current input state
-        return truthTableData.table.findIndex(row => {
+        return circuitAnalysis.table.findIndex(row => {
             return row.inputs.every((val, index) => val === currentState[index]);
         });
     }

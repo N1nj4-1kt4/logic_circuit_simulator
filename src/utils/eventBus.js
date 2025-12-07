@@ -135,14 +135,16 @@ export const EVENT_TYPES = {
     BOARD_CHANGED: 'board:changed',
     BOARD_CLEARED: 'board:cleared',
 
-    // Truth table events
+    // Truth table panel events (UI-related)
     TRUTH_TABLE_GENERATE: 'truthTable:generate',
     TRUTH_TABLE_SHOWN: 'truthTable:shown',
     TRUTH_TABLE_HIDDEN: 'truthTable:hidden',
-    TRUTH_TABLE_STATE_CHANGED: 'truthTable:stateChanged',
-    TRUTH_TABLE_COMPUTED: 'truthTable:computed',
+    TRUTH_TABLE_PANEL_STATE_CHANGED: 'truthTable:panelStateChanged',
+
+    // Circuit analysis events (computed data)
+    CIRCUIT_ANALYSIS_COMPUTED: 'circuitAnalysis:computed',
     // Payload: { current: number, total: number, percent: number }
-    TRUTH_TABLE_COMPUTING: 'truthTable:computing',
+    CIRCUIT_ANALYSIS_COMPUTING: 'circuitAnalysis:computing',
 
     // Theme events
     THEME_CHANGED: 'theme:changed',

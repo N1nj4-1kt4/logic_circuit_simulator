@@ -103,8 +103,8 @@ const createMockDOM = () => {
 };
 
 // Create mock CircuitState
-const createMockCircuitState = (cache = null) => ({
-    getTruthTableCache: vi.fn().mockReturnValue(cache)
+const createMockCircuitState = (analysis = null) => ({
+    getCircuitAnalysis: vi.fn().mockReturnValue(analysis)
 });
 
 // Create valid cache with specified inputs/outputs
@@ -184,7 +184,7 @@ describe('TruthTablePanel', () => {
             panel.refresh();
 
             // Should not attempt to read cache since panel doesn't exist
-            expect(circuitState.getTruthTableCache).not.toHaveBeenCalled();
+            expect(circuitState.getCircuitAnalysis).not.toHaveBeenCalled();
         });
 
         it('should attempt rebuild when table is not initialized but panel is visible', () => {
@@ -200,7 +200,7 @@ describe('TruthTablePanel', () => {
             // Simulate panel exists but table is null (e.g., after displayInvalidMessage)
             panel.panel = mockDOM.panelEl;
             panel.table = null;
-            panel.truthTableData = null; // No previous data
+            panel.circuitAnalysis = null; // No previous data
 
             // Mock display to prevent actual table creation
             const displaySpy = vi.spyOn(panel, 'display').mockImplementation(() => {});
@@ -209,8 +209,8 @@ describe('TruthTablePanel', () => {
             panel.refresh();
 
             // Should read cache and attempt to rebuild
-            expect(circuitState.getTruthTableCache).toHaveBeenCalled();
-            // Since truthTableData was null, it should trigger rebuild
+            expect(circuitState.getCircuitAnalysis).toHaveBeenCalled();
+            // Since circuitAnalysis was null, it should trigger rebuild
             expect(displaySpy).toHaveBeenCalled();
         });
 
@@ -234,7 +234,7 @@ describe('TruthTablePanel', () => {
 
             // Should check hidden state and return early
             expect(mockDOM.panelEl.classList.contains).toHaveBeenCalledWith('hidden');
-            expect(circuitState.getTruthTableCache).not.toHaveBeenCalled();
+            expect(circuitState.getCircuitAnalysis).not.toHaveBeenCalled();
         });
 
         it('should show invalid message when cache becomes invalid (not hide)', () => {
@@ -254,7 +254,7 @@ describe('TruthTablePanel', () => {
                 getColumns: vi.fn().mockReturnValue([]),
                 destroy: vi.fn()
             };
-            panel.truthTableData = createValidCache();
+            panel.circuitAnalysis = createValidCache();
 
             // Spy on displayInvalidMessage method
             const displayInvalidMessageSpy = vi.spyOn(panel, 'displayInvalidMessage').mockImplementation(() => {});
@@ -263,9 +263,9 @@ describe('TruthTablePanel', () => {
 
             // Should call displayInvalidMessage instead of hide
             expect(displayInvalidMessageSpy).toHaveBeenCalledWith(true);
-            // Verify truthTableData was updated with invalid state
-            expect(panel.truthTableData.isValid).toBe(false);
-            expect(panel.truthTableData.reason).toBe('No outputs');
+            // Verify circuitAnalysis was updated with invalid state
+            expect(panel.circuitAnalysis.isValid).toBe(false);
+            expect(panel.circuitAnalysis.reason).toBe('No outputs');
         });
 
         it('should hide panel when cache is null', () => {
@@ -282,7 +282,7 @@ describe('TruthTablePanel', () => {
                 replaceData: vi.fn(),
                 getColumns: vi.fn().mockReturnValue([])
             };
-            panel.truthTableData = createValidCache();
+            panel.circuitAnalysis = createValidCache();
 
             const hideSpy = vi.spyOn(panel, 'hide');
 
@@ -314,16 +314,16 @@ describe('TruthTablePanel', () => {
 
             panel.panel = mockDOM.panelEl;
             panel.table = mockTable;
-            panel.truthTableData = initialCache;
+            panel.circuitAnalysis = initialCache;
 
             panel.refresh();
 
             // Should call replaceData with new table data
             expect(mockTable.replaceData).toHaveBeenCalledWith(updatedCache.table);
-            // Should update truthTableData with new cache data
-            expect(panel.truthTableData.inputs.length).toBe(updatedCache.inputs.length);
-            expect(panel.truthTableData.outputs.length).toBe(updatedCache.outputs.length);
-            expect(panel.truthTableData.table).toBe(updatedCache.table);
+            // Should update circuitAnalysis with new cache data
+            expect(panel.circuitAnalysis.inputs.length).toBe(updatedCache.inputs.length);
+            expect(panel.circuitAnalysis.outputs.length).toBe(updatedCache.outputs.length);
+            expect(panel.circuitAnalysis.table).toBe(updatedCache.table);
         });
 
         it('should rebuild table when input count changes', () => {
@@ -350,7 +350,7 @@ describe('TruthTablePanel', () => {
 
             panel.panel = mockDOM.panelEl;
             panel.table = mockTable;
-            panel.truthTableData = initialCache;
+            panel.circuitAnalysis = initialCache;
             panel.state = { x: 100, y: 100, width: '400px', height: '300px' };
 
             // Spy on display method
@@ -397,7 +397,7 @@ describe('TruthTablePanel', () => {
 
             panel.panel = mockDOM.panelEl;
             panel.table = mockTable;
-            panel.truthTableData = initialCache;
+            panel.circuitAnalysis = initialCache;
 
             const displaySpy = vi.spyOn(panel, 'display').mockImplementation(() => {});
             vi.spyOn(panel, 'saveState').mockImplementation(() => {});
@@ -427,7 +427,7 @@ describe('TruthTablePanel', () => {
 
             panel.panel = mockDOM.panelEl;
             panel.table = mockTable;
-            panel.truthTableData = createValidCache(2, 1); // Same structure
+            panel.circuitAnalysis = createValidCache(2, 1); // Same structure
 
             const updateHighlightSpy = vi.spyOn(panel, 'updateHighlight');
 
@@ -436,7 +436,7 @@ describe('TruthTablePanel', () => {
             expect(updateHighlightSpy).toHaveBeenCalled();
         });
 
-        it('should handle missing truthTableData gracefully', () => {
+        it('should handle missing circuitAnalysis gracefully', () => {
             const cache = createValidCache(2, 1);
             const circuitState = createMockCircuitState(cache);
             const panel = new TruthTablePanel(
@@ -458,7 +458,7 @@ describe('TruthTablePanel', () => {
 
             panel.panel = mockDOM.panelEl;
             panel.table = mockTable;
-            panel.truthTableData = null; // No existing data
+            panel.circuitAnalysis = null; // No existing data
 
             const displaySpy = vi.spyOn(panel, 'display').mockImplementation(() => {});
             vi.spyOn(panel, 'saveState').mockImplementation(() => {});
@@ -643,10 +643,10 @@ describe('TruthTablePanel', () => {
             const result = panel.generate();
 
             expect(result).toBe(true);
-            expect(panel.truthTableData).not.toBeNull();
-            expect(panel.truthTableData.isValid).toBe(false);
-            expect(panel.truthTableData.reason).toBe('Please add at least one gate');
-            expect(panel.truthTableData.table).toEqual([]);
+            expect(panel.circuitAnalysis).not.toBeNull();
+            expect(panel.circuitAnalysis.isValid).toBe(false);
+            expect(panel.circuitAnalysis.reason).toBe('Please add at least one gate');
+            expect(panel.circuitAnalysis.table).toEqual([]);
         });
 
         it('generate() should return "computing" when cache is null (async computation in progress)', () => {
@@ -662,10 +662,10 @@ describe('TruthTablePanel', () => {
 
             // When cache is null, it means async computation is in progress
             expect(result).toBe('computing');
-            // Panel should have placeholder truthTableData for display
-            expect(panel.truthTableData).not.toBeNull();
-            expect(panel.truthTableData.isValid).toBe(false);
-            expect(panel.truthTableData.reason).toBe('Computing truth table...');
+            // Panel should have placeholder circuitAnalysis for display
+            expect(panel.circuitAnalysis).not.toBeNull();
+            expect(panel.circuitAnalysis.isValid).toBe(false);
+            expect(panel.circuitAnalysis.reason).toBe('Computing truth table...');
         });
 
         it('updateHighlight() should return early when table has no data', () => {
@@ -684,7 +684,7 @@ describe('TruthTablePanel', () => {
 
             panel.panel = mockDOM.panelEl;
             panel.table = mockTable;
-            panel.truthTableData = {
+            panel.circuitAnalysis = {
                 inputs: [],
                 outputs: [],
                 table: [], // Empty table - no data to highlight
@@ -722,7 +722,7 @@ describe('TruthTablePanel', () => {
             panel.panel = mockDOM.panelEl;
             panel.table = mockTable;
             // Start with empty table (e.g., no inputs or outputs before)
-            panel.truthTableData = {
+            panel.circuitAnalysis = {
                 inputs: [],
                 outputs: [],
                 table: [], // Empty table
@@ -737,8 +737,8 @@ describe('TruthTablePanel', () => {
 
             // Should trigger full rebuild (hadNoTable is true)
             expect(displaySpy).toHaveBeenCalled();
-            // truthTableData should be updated with new table data
-            expect(panel.truthTableData.table.length).toBeGreaterThan(0);
+            // circuitAnalysis should be updated with new table data
+            expect(panel.circuitAnalysis.table.length).toBeGreaterThan(0);
         });
 
         it('displayInvalidMessage() should destroy existing table', () => {
@@ -759,7 +759,7 @@ describe('TruthTablePanel', () => {
 
             panel.panel = mockDOM.panelEl;
             panel.table = mockTable;
-            panel.truthTableData = {
+            panel.circuitAnalysis = {
                 inputs: [],
                 outputs: [],
                 table: [],
@@ -856,7 +856,7 @@ describe('TruthTablePanel', () => {
             // Setup panel as visible with valid table data
             panel.panel = mockDOM.panelEl;
             panel.table = { destroy: vi.fn() };
-            panel.truthTableData = {
+            panel.circuitAnalysis = {
                 inputs: [{ label: 'I1', value: 0 }],
                 outputs: [{ label: 'O1', value: 0 }],
                 table: [],
@@ -876,9 +876,9 @@ describe('TruthTablePanel', () => {
                 outputs: []
             });
 
-            // Should update truthTableData to invalid state
-            expect(panel.truthTableData.isValid).toBe(false);
-            expect(panel.truthTableData.reason).toBe('Missing connection');
+            // Should update circuitAnalysis to invalid state
+            expect(panel.circuitAnalysis.isValid).toBe(false);
+            expect(panel.circuitAnalysis.reason).toBe('Missing connection');
             // Should show invalid message (since table is empty after invalidation)
             expect(displayInvalidSpy).toHaveBeenCalledWith(true);
         });
@@ -1052,7 +1052,7 @@ describe('TruthTablePanel', () => {
             panel.panel = mockDOM.panelEl;
             panel.table = mockTable;
             // Deep copy to simulate stored data with old labels
-            panel.truthTableData = {
+            panel.circuitAnalysis = {
                 inputs: initialCache.inputs.map(inp => ({ ...inp })),
                 outputs: initialCache.outputs.map(out => ({ ...out })),
                 table: initialCache.table,
@@ -1073,7 +1073,7 @@ describe('TruthTablePanel', () => {
             };
 
             // Update the mock to return updated cache
-            circuitState.getTruthTableCache.mockReturnValue(updatedCache);
+            circuitState.getCircuitAnalysis.mockReturnValue(updatedCache);
 
             // Spy on display to ensure full rebuild is NOT called
             const displaySpy = vi.spyOn(panel, 'display');
@@ -1120,7 +1120,7 @@ describe('TruthTablePanel', () => {
             panel.panel = mockDOM.panelEl;
             panel.table = mockTable;
             // Deep copy to simulate stored data
-            panel.truthTableData = {
+            panel.circuitAnalysis = {
                 inputs: initialCache.inputs.map(inp => ({ ...inp })),
                 outputs: initialCache.outputs.map(out => ({ ...out })),
                 table: initialCache.table,
@@ -1134,7 +1134,7 @@ describe('TruthTablePanel', () => {
                 table: initialCache.table,
                 isValid: true
             };
-            circuitState.getTruthTableCache.mockReturnValue(sameLabelsCache);
+            circuitState.getCircuitAnalysis.mockReturnValue(sameLabelsCache);
 
             vi.spyOn(panel, 'reapplyRowHeights').mockImplementation(() => {});
             panel.refresh();

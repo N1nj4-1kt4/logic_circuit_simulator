@@ -48,7 +48,7 @@ export class AutoSaveManager {
         // Listen to all events that modify board state
         eventBus.on(EVENT_TYPES.BOARD_CHANGED, this.debouncedSave);
         eventBus.on(EVENT_TYPES.BOARD_LOADED, this.debouncedSave);
-        eventBus.on(EVENT_TYPES.TRUTH_TABLE_STATE_CHANGED, this.debouncedSave);
+        eventBus.on(EVENT_TYPES.TRUTH_TABLE_PANEL_STATE_CHANGED, this.debouncedSave);
         eventBus.on(EVENT_TYPES.THEME_CHANGED, this.debouncedSave);
 
         // When board is cleared, save immediately (no debounce) to persist the cleared state
@@ -72,7 +72,7 @@ export class AutoSaveManager {
         if (this.debouncedSave) {
             eventBus.off(EVENT_TYPES.BOARD_CHANGED, this.debouncedSave);
             eventBus.off(EVENT_TYPES.BOARD_LOADED, this.debouncedSave);
-            eventBus.off(EVENT_TYPES.TRUTH_TABLE_STATE_CHANGED, this.debouncedSave);
+            eventBus.off(EVENT_TYPES.TRUTH_TABLE_PANEL_STATE_CHANGED, this.debouncedSave);
             eventBus.off(EVENT_TYPES.THEME_CHANGED, this.debouncedSave);
         }
 
@@ -86,8 +86,8 @@ export class AutoSaveManager {
      * Persists both working state and lastSavedState for revert functionality
      */
     async saveBoardState() {
-        // Capture circuit state using shared utility (includes truthTableState for auto-save)
-        const circuitSnapshot = captureCircuitSnapshot(this.state, { includeTruthTableState: true });
+        // Capture circuit state using shared utility (includes truthTablePanelState for auto-save)
+        const circuitSnapshot = captureCircuitSnapshot(this.state, { includeTruthTablePanelState: true });
 
         const boardData = {
             // Circuit state from shared snapshot
@@ -110,9 +110,9 @@ export class AutoSaveManager {
     /**
      * Load board state from localStorage (on app start)
      * Handles migration from old format (no lastSavedState) to new format
-     * @param {TruthTableManager} truthTableManager - Optional truth table manager for recomputation
+     * @param {CircuitAnalysisManager} circuitAnalysisManager - Optional analysis manager for recomputation
      */
-    async loadBoardState(truthTableManager = null) {
+    async loadBoardState(circuitAnalysisManager = null) {
         try {
             const savedState = await this.storage.getItem('currentBoard');
 
@@ -131,14 +131,14 @@ export class AutoSaveManager {
                 this.state.setCurrentBoardName(boardData.currentBoardName || null);
                 this.state.setCurrentComponentName(boardData.currentComponentName || null);
 
-                // Restore truth table state
-                if (boardData.truthTableState) {
-                    this.state.setTruthTableState(boardData.truthTableState);
+                // Restore truth table panel state
+                if (boardData.truthTablePanelState) {
+                    this.state.setTruthTablePanelState(boardData.truthTablePanelState);
                 }
 
-                // Compute truth table cache for the restored circuit
-                if (truthTableManager) {
-                    truthTableManager.recomputeTruthTable();
+                // Compute circuit analysis for the restored circuit
+                if (circuitAnalysisManager) {
+                    circuitAnalysisManager.recomputeAnalysis();
                 }
 
                 // Restore lastSavedState if present, otherwise null (migration case)

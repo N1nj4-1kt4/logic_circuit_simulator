@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
-    validateCircuitForTruthTable,
-    computeTruthTable,
-    lookupTruthTableRow,
+    validateCircuitForAnalysis,
+    computeCircuitAnalysis,
+    lookupAnalysisRow,
     getCurrentRowIndex
-} from '../../../src/core/TruthTableComputer.js';
+} from '../../../src/core/CircuitAnalyzer.js';
 
-describe('TruthTableComputer', () => {
+describe('CircuitAnalyzer', () => {
     // Helper to create a basic circuit with INPUT -> AND -> OUTPUT
     function createBasicAndCircuit() {
         const components = [
@@ -39,13 +39,13 @@ describe('TruthTableComputer', () => {
         return { components, connections };
     }
 
-    describe('validateCircuitForTruthTable', () => {
+    describe('validateCircuitForAnalysis', () => {
         it('should return invalid when no inputs exist', () => {
             const components = [
                 { id: 1, type: 'AND', inputs: [], outputs: [] },
                 { id: 2, type: 'OUTPUT', label: 'O1', inputs: [], outputs: [] }
             ];
-            const result = validateCircuitForTruthTable(components, []);
+            const result = validateCircuitForAnalysis(components, []);
 
             expect(result.isValid).toBe(false);
             expect(result.reason).toContain('input');
@@ -56,7 +56,7 @@ describe('TruthTableComputer', () => {
                 { id: 1, type: 'INPUT', label: 'I1', inputs: [], outputs: [] },
                 { id: 2, type: 'AND', inputs: [], outputs: [] }
             ];
-            const result = validateCircuitForTruthTable(components, []);
+            const result = validateCircuitForAnalysis(components, []);
 
             expect(result.isValid).toBe(false);
             expect(result.reason).toContain('output');
@@ -67,7 +67,7 @@ describe('TruthTableComputer', () => {
                 { id: 1, type: 'INPUT', label: 'I1', inputs: [], outputs: [] },
                 { id: 2, type: 'OUTPUT', label: 'O1', inputs: [], outputs: [] }
             ];
-            const result = validateCircuitForTruthTable(components, []);
+            const result = validateCircuitForAnalysis(components, []);
 
             expect(result.isValid).toBe(false);
             expect(result.reason).toContain('gate');
@@ -84,7 +84,7 @@ describe('TruthTableComputer', () => {
                 { from: 1, fromPort: 0, to: 2, toPort: 0 },
                 { from: 2, fromPort: 0, to: 3, toPort: 0 }
             ];
-            const result = validateCircuitForTruthTable(components, connections);
+            const result = validateCircuitForAnalysis(components, connections);
 
             expect(result.isValid).toBe(false);
             expect(result.reason).toContain('connected');
@@ -102,7 +102,7 @@ describe('TruthTableComputer', () => {
                 { from: 1, fromPort: 0, to: 3, toPort: 0 },
                 { from: 2, fromPort: 0, to: 3, toPort: 1 }
             ];
-            const result = validateCircuitForTruthTable(components, connections);
+            const result = validateCircuitForAnalysis(components, connections);
 
             expect(result.isValid).toBe(false);
             expect(result.reason).toContain('connected');
@@ -110,7 +110,7 @@ describe('TruthTableComputer', () => {
 
         it('should return valid for a properly connected circuit', () => {
             const { components, connections } = createBasicAndCircuit();
-            const result = validateCircuitForTruthTable(components, connections);
+            const result = validateCircuitForAnalysis(components, connections);
 
             expect(result.isValid).toBe(true);
             expect(result.reason).toBeNull();
@@ -130,7 +130,7 @@ describe('TruthTableComputer', () => {
                 { from: 2, fromPort: 0, to: 3, toPort: 1 },
                 { from: 3, fromPort: 0, to: 4, toPort: 0 }
             ];
-            const result = validateCircuitForTruthTable(components, connections);
+            const result = validateCircuitForAnalysis(components, connections);
 
             expect(result.inputs[0].label).toBe('A');
             expect(result.inputs[1].label).toBe('B');
@@ -150,7 +150,7 @@ describe('TruthTableComputer', () => {
             ];
 
             // Should not throw
-            const result = validateCircuitForTruthTable(components, connections);
+            const result = validateCircuitForAnalysis(components, connections);
             expect(result.inputs).toHaveLength(2);
         });
 
@@ -163,17 +163,17 @@ describe('TruthTableComputer', () => {
             const connections = [];
 
             // Should not throw
-            const result = validateCircuitForTruthTable(components, connections);
+            const result = validateCircuitForAnalysis(components, connections);
             expect(result.isValid).toBe(false);
         });
     });
 
-    describe('computeTruthTable', () => {
+    describe('computeCircuitAnalysis', () => {
         it('should return invalid result for invalid circuit', () => {
             const components = [
                 { id: 1, type: 'INPUT', label: 'I1', inputs: [], outputs: [] }
             ];
-            const result = computeTruthTable(components, []);
+            const result = computeCircuitAnalysis(components, []);
 
             expect(result.isValid).toBe(false);
             expect(result.table).toEqual([]);
@@ -181,7 +181,7 @@ describe('TruthTableComputer', () => {
 
         it('should compute correct truth table for AND gate', () => {
             const { components, connections } = createBasicAndCircuit();
-            const result = computeTruthTable(components, connections);
+            const result = computeCircuitAnalysis(components, connections);
 
             expect(result.isValid).toBe(true);
             expect(result.table).toHaveLength(4); // 2^2 = 4 combinations
@@ -195,7 +195,7 @@ describe('TruthTableComputer', () => {
 
         it('should compute correct truth table for OR gate', () => {
             const { components, connections } = createOrCircuit();
-            const result = computeTruthTable(components, connections);
+            const result = computeCircuitAnalysis(components, connections);
 
             expect(result.isValid).toBe(true);
             expect(result.table).toHaveLength(4);
@@ -216,7 +216,7 @@ describe('TruthTableComputer', () => {
             const originalGateValue = components[2].value;
             const originalOutputValue = components[3].value;
 
-            computeTruthTable(components, connections);
+            computeCircuitAnalysis(components, connections);
 
             // Verify original values are unchanged
             expect(components[0].value).toBe(originalInput1Value);
@@ -236,7 +236,7 @@ describe('TruthTableComputer', () => {
                 { from: 2, fromPort: 0, to: 3, toPort: 0 }
             ];
 
-            const result = computeTruthTable(components, connections);
+            const result = computeCircuitAnalysis(components, connections);
 
             expect(result.isValid).toBe(true);
             expect(result.table).toHaveLength(2); // 2^1 = 2 combinations
@@ -261,7 +261,7 @@ describe('TruthTableComputer', () => {
                 { from: 5, fromPort: 0, to: 6, toPort: 0 }
             ];
 
-            const result = computeTruthTable(components, connections);
+            const result = computeCircuitAnalysis(components, connections);
 
             expect(result.isValid).toBe(true);
             expect(result.table).toHaveLength(8); // 2^3 = 8 combinations
@@ -287,7 +287,7 @@ describe('TruthTableComputer', () => {
                 { from: 2, fromPort: 0, to: 4, toPort: 0 }  // NOT output to O2
             ];
 
-            const result = computeTruthTable(components, connections);
+            const result = computeCircuitAnalysis(components, connections);
 
             expect(result.isValid).toBe(true);
             expect(result.outputs).toHaveLength(2);
@@ -299,7 +299,7 @@ describe('TruthTableComputer', () => {
 
         it('should return inputs and outputs arrays in result', () => {
             const { components, connections } = createBasicAndCircuit();
-            const result = computeTruthTable(components, connections);
+            const result = computeCircuitAnalysis(components, connections);
 
             expect(result.inputs).toHaveLength(2);
             expect(result.outputs).toHaveLength(1);
@@ -308,35 +308,35 @@ describe('TruthTableComputer', () => {
         });
     });
 
-    describe('lookupTruthTableRow', () => {
+    describe('lookupAnalysisRow', () => {
         let cache;
 
         beforeEach(() => {
             const { components, connections } = createBasicAndCircuit();
-            cache = computeTruthTable(components, connections);
+            cache = computeCircuitAnalysis(components, connections);
         });
 
         it('should return correct row for input combination', () => {
             // Input [0, 0] should be row 0
-            const row = lookupTruthTableRow(cache, [0, 0]);
+            const row = lookupAnalysisRow(cache, [0, 0]);
             expect(row).toMatchObject({ input0: 0, input1: 0, output0: 0 });
         });
 
         it('should return correct row for different combinations', () => {
             // Input [1, 1] should be row 3
-            const row = lookupTruthTableRow(cache, [1, 1]);
+            const row = lookupAnalysisRow(cache, [1, 1]);
             expect(row).toMatchObject({ input0: 1, input1: 1, output0: 1 });
         });
 
         it('should return null for invalid cache', () => {
-            expect(lookupTruthTableRow(null, [0, 0])).toBeNull();
-            expect(lookupTruthTableRow({}, [0, 0])).toBeNull();
-            expect(lookupTruthTableRow({ isValid: false }, [0, 0])).toBeNull();
+            expect(lookupAnalysisRow(null, [0, 0])).toBeNull();
+            expect(lookupAnalysisRow({}, [0, 0])).toBeNull();
+            expect(lookupAnalysisRow({ isValid: false }, [0, 0])).toBeNull();
         });
 
         it('should return null for out of range index', () => {
             // Only 4 rows (0-3), asking for row that doesn't exist
-            const row = lookupTruthTableRow(cache, [1, 1, 1]); // Would be index 7
+            const row = lookupAnalysisRow(cache, [1, 1, 1]); // Would be index 7
             expect(row).toBeNull();
         });
     });
@@ -348,7 +348,7 @@ describe('TruthTableComputer', () => {
         beforeEach(() => {
             const circuit = createBasicAndCircuit();
             components = circuit.components;
-            cache = computeTruthTable(circuit.components, circuit.connections);
+            cache = computeCircuitAnalysis(circuit.components, circuit.connections);
         });
 
         it('should return 0 for all inputs at 0', () => {
@@ -388,7 +388,7 @@ describe('TruthTableComputer', () => {
 
     describe('edge cases', () => {
         it('should handle empty components array', () => {
-            const result = computeTruthTable([], []);
+            const result = computeCircuitAnalysis([], []);
             expect(result.isValid).toBe(false);
         });
 
@@ -398,7 +398,7 @@ describe('TruthTableComputer', () => {
                 { id: 2, type: 'AND', inputs: [{ x: 0, y: 0 }], outputs: [{ x: 0, y: 0 }] },
                 { id: 3, type: 'OUTPUT', label: 'O1', inputs: [], outputs: [] }
             ];
-            const result = computeTruthTable(components, []);
+            const result = computeCircuitAnalysis(components, []);
             expect(result.isValid).toBe(false);
         });
 
@@ -416,7 +416,7 @@ describe('TruthTableComputer', () => {
             ];
 
             // Should not throw
-            const result = computeTruthTable(components, connections);
+            const result = computeCircuitAnalysis(components, connections);
             expect(result.isValid).toBe(true);
             expect(result.table).toHaveLength(4);
         });
@@ -435,7 +435,7 @@ describe('TruthTableComputer', () => {
             ];
 
             // Should not throw and values should be unchanged on originals
-            const result = computeTruthTable(components, connections);
+            const result = computeCircuitAnalysis(components, connections);
             expect(result.isValid).toBe(true);
             expect(components[0].value).toBeUndefined();
             expect(components[1].value).toBeUndefined();

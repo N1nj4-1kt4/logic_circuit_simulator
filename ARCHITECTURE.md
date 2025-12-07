@@ -41,7 +41,7 @@ Pure business logic with no DOM or Canvas dependencies.
 | `BoardOperations.js` | Board CRUD operations | `BoardOperations` class |
 | `ComponentLibraryOperations.js` | Custom component library management | `ComponentLibraryOperations` class |
 | `ContextManager.js` | Save/load circuit contexts (boards vs components) | `ContextManager` class |
-| `TruthTableManager.js` | Truth table computation and caching | `TruthTableManager` class |
+| `CircuitAnalysisManager.js` | Circuit analysis computation and caching | `CircuitAnalysisManager` class |
 | `AutoSaveManager.js` | Event-driven auto-save with debouncing | `AutoSaveManager` class |
 | `CircuitValidityManager.js` | Single source of truth for circuit validity | `CircuitValidityManager`, `VALIDITY_STATES` |
 | `SimulationController.js` | Simulation lifecycle management | `SimulationController`, `SIMULATION_STATES` |
@@ -132,27 +132,27 @@ const contextManager = new ContextManager({
     state,
     boardManager,
     componentLibrary,
-    truthTableManager
+    circuitAnalysisManager
 });
 
 await contextManager.saveCurrentContext();  // Save before switching
 contextManager.loadCircuitContext(circuitData, { type: 'board', name: 'MyBoard' });
 ```
 
-#### TruthTableManager
+#### CircuitAnalysisManager
 
-Manages truth table computation with debouncing. Subscribes to BOARD_CHANGED events.
+Manages circuit analysis computation with debouncing. Subscribes to BOARD_CHANGED events.
 
 ```javascript
-const truthTableManager = new TruthTableManager({ state });
+const circuitAnalysisManager = new CircuitAnalysisManager({ state });
 
-truthTableManager.recomputeTruthTable();  // Manual recompute
-truthTableManager.destroy();               // Cleanup event listeners
+circuitAnalysisManager.recomputeAnalysis();  // Manual recompute
+circuitAnalysisManager.destroy();             // Cleanup event listeners
 ```
 
 #### AutoSaveManager
 
-Event-driven auto-save with debouncing. Subscribes to BOARD_CHANGED, TRUTH_TABLE_STATE_CHANGED, etc.
+Event-driven auto-save with debouncing. Subscribes to BOARD_CHANGED, TRUTH_TABLE_PANEL_STATE_CHANGED, etc.
 Persists both working state and `lastSavedState` for revert functionality.
 
 ```javascript
@@ -173,9 +173,9 @@ await autoSaveManager.clearBoardState();  // Removes all persisted state
 {
   // Working state (updated on every change)
   components, connections, nextId, customComponents,
-  truthTableState, currentBoardName, currentComponentName,
+  truthTablePanelState, currentBoardName, currentComponentName,
   // Base state for revert (updated only on explicit save/load)
-  lastSavedState: { components, connections, nextId, truthTableState } | null
+  lastSavedState: { components, connections, nextId, truthTablePanelState } | null
 }
 ```
 
@@ -652,23 +652,23 @@ Some state crosses module boundaries. This section documents ownership to preven
 | `components[]` | CircuitState | CircuitState + AutoSaveManager | Yes |
 | `connections[]` | CircuitState | CircuitState + AutoSaveManager | Yes |
 | `nextId` | CircuitState | AutoSaveManager | Yes |
-| `truthTableState` (x, y, width, height, visible, columnOrder) | TruthTablePanel (UI) | CircuitState | Yes |
+| `truthTablePanelState` (x, y, width, height, visible, columnOrder) | TruthTablePanel (UI) | CircuitState | Yes |
 | `currentBoardName` | CircuitState | AutoSaveManager | No (metadata) |
 | `customComponents` | CircuitState | AutoSaveManager | No (separate concern) |
 | `dragState` | ComponentDragger | Not persisted | No (ephemeral) |
 | `mode` | CircuitState | Not persisted | No (ephemeral) |
 
-### Cross-Layer State: Truth Table
+### Cross-Layer State: Truth Table Panel
 
-The truth table position/size is special:
+The truth table panel position/size is special:
 - **Managed by**: `TruthTablePanel` (UI layer) - user drags/resizes the panel
-- **Persisted in**: `CircuitState.truthTableState` (Core layer) - survives board save/load
-- **Flow**: Panel changes → `onStateChange` callback → `CircuitState.setTruthTableState()` → emits `TRUTH_TABLE_STATE_CHANGED`
+- **Persisted in**: `CircuitState.truthTablePanelState` (Core layer) - survives board save/load
+- **Flow**: Panel changes → `onStateChange` callback → `CircuitState.setTruthTablePanelState()` → emits `TRUTH_TABLE_PANEL_STATE_CHANGED`
 
 This cross-layer ownership requires careful handling:
-1. When loading a board, read `truthTableState` BEFORE destroying the panel
-2. When comparing for dirty detection, include `truthTableState`
-3. When reverting, restore `truthTableState` along with components/connections
+1. When loading a board, read `truthTablePanelState` BEFORE destroying the panel
+2. When comparing for dirty detection, include `truthTablePanelState`
+3. When reverting, restore `truthTablePanelState` along with components/connections
 
 ### Dirty State Detection (`hasUnsavedChanges`)
 
@@ -679,7 +679,7 @@ This cross-layer ownership requires careful handling:
 - components (deep comparison)
 - connections (deep comparison)
 - nextId
-- truthTableState (deep comparison)
+- truthTablePanelState (deep comparison)
 
 // Comparison excludes:
 - currentBoardName (metadata, not content)

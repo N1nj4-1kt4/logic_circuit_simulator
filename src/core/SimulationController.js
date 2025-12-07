@@ -327,7 +327,7 @@ export class SimulationController {
      * @returns {boolean} True if cache was used
      */
     _restoreFromCacheOrSimulate(cycleIndex, components) {
-        const cache = this.circuitState.getTruthTableCache();
+        const cache = this.circuitState.getCircuitAnalysis();
         if (cache && cache.isValid && cache.table && cache.table[cycleIndex]) {
             const row = cache.table[cycleIndex];
 

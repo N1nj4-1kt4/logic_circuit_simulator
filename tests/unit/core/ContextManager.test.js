@@ -17,8 +17,8 @@ const createMockComponentLibrary = () => ({
     loadComponent: vi.fn().mockResolvedValue(null)
 });
 
-const createMockTruthTableManager = () => ({
-    recomputeTruthTable: vi.fn()
+const createMockCircuitAnalysisManager = () => ({
+    recomputeAnalysis: vi.fn()
 });
 
 describe('ContextManager', () => {
@@ -26,19 +26,19 @@ describe('ContextManager', () => {
     let manager;
     let mockBoardManager;
     let mockComponentLibrary;
-    let mockTruthTableManager;
+    let mockCircuitAnalysisManager;
 
     beforeEach(() => {
         state = new CircuitState();
         mockBoardManager = createMockBoardManager();
         mockComponentLibrary = createMockComponentLibrary();
-        mockTruthTableManager = createMockTruthTableManager();
+        mockCircuitAnalysisManager = createMockCircuitAnalysisManager();
 
         manager = new ContextManager({
             state,
             boardManager: mockBoardManager,
             componentLibrary: mockComponentLibrary,
-            truthTableManager: mockTruthTableManager
+            circuitAnalysisManager: mockCircuitAnalysisManager
         });
 
         // Clear event bus before each test
@@ -109,21 +109,21 @@ describe('ContextManager', () => {
 
         it('includes truth table state when saving board', async () => {
             state.setCurrentBoardName('TestBoard');
-            state.setTruthTableState({ width: 500, height: 300 });
+            state.setTruthTablePanelState({ width: 500, height: 300 });
 
             await manager.saveCurrentContext();
 
             expect(mockBoardManager.saveBoard).toHaveBeenCalledWith(
                 'TestBoard',
                 expect.objectContaining({
-                    truthTableState: { width: 500, height: 300 }
+                    truthTablePanelState: { width: 500, height: 300 }
                 })
             );
         });
 
         it('includes truth table state when saving component', async () => {
             state.setCurrentComponentName('TestComp');
-            state.setTruthTableState({ width: 600, height: 400 });
+            state.setTruthTablePanelState({ width: 600, height: 400 });
 
             mockComponentLibrary.loadComponent.mockResolvedValue({
                 name: 'TestComp'
@@ -134,7 +134,7 @@ describe('ContextManager', () => {
             expect(mockComponentLibrary.saveComponent).toHaveBeenCalledWith(
                 'TestComp',
                 expect.objectContaining({
-                    truthTableState: { width: 600, height: 400 }
+                    truthTablePanelState: { width: 600, height: 400 }
                 })
             );
         });
@@ -229,45 +229,45 @@ describe('ContextManager', () => {
             const circuitData = {
                 components: [],
                 connections: [],
-                truthTableState: { width: 500, height: 300, columnOrder: ['I1', 'O1'] }
+                truthTablePanelState: { width: 500, height: 300, columnOrder: ['I1', 'O1'] }
             };
 
             manager.loadCircuitContext(circuitData, { type: 'board', name: 'TestBoard' });
 
-            expect(state.getTruthTableState()).toEqual({
+            expect(state.getTruthTablePanelState()).toEqual({
                 width: 500, height: 300, columnOrder: ['I1', 'O1']
             });
         });
 
         it('clears truth table state if not present in data', () => {
-            state.setTruthTableState({ width: 500 });
+            state.setTruthTablePanelState({ width: 500 });
 
             manager.loadCircuitContext(
                 { components: [], connections: [] },
                 { type: 'board', name: 'TestBoard' }
             );
 
-            expect(state.getTruthTableState()).toBeNull();
+            expect(state.getTruthTablePanelState()).toBeNull();
         });
 
         it('clears truth table cache', () => {
-            state.setTruthTableCache({ isValid: true, table: [] });
+            state.setCircuitAnalysis({ isValid: true, table: [] });
 
             manager.loadCircuitContext(
                 { components: [], connections: [] },
                 { type: 'board', name: 'TestBoard' }
             );
 
-            expect(state.getTruthTableCache()).toBeNull();
+            expect(state.getCircuitAnalysis()).toBeNull();
         });
 
-        it('calls truthTableManager.recomputeTruthTable', () => {
+        it('calls circuitAnalysisManager.recomputeAnalysis', () => {
             manager.loadCircuitContext(
                 { components: [], connections: [] },
                 { type: 'board', name: 'TestBoard' }
             );
 
-            expect(mockTruthTableManager.recomputeTruthTable).toHaveBeenCalled();
+            expect(mockCircuitAnalysisManager.recomputeAnalysis).toHaveBeenCalled();
         });
 
         it('emits BOARD_LOADED event', () => {
@@ -363,12 +363,12 @@ describe('ContextManager', () => {
             expect(state.generateNextId()).toBe(1);
         });
 
-        it('works without truthTableManager', () => {
+        it('works without circuitAnalysisManager', () => {
             const managerWithoutTT = new ContextManager({
                 state,
                 boardManager: mockBoardManager,
                 componentLibrary: mockComponentLibrary,
-                truthTableManager: null
+                circuitAnalysisManager: null
             });
 
             // Should not throw

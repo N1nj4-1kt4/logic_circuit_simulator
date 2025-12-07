@@ -12,7 +12,7 @@
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
 │  ┌──────────────┐    ┌───────────────────┐    ┌────────────────────┐   │
-│  │   Toolbar    │    │  TruthTablePanel  │    │ TruthTableManager  │   │
+│  │   Toolbar    │    │  TruthTablePanel  │    │CircuitAnalysisManager│  │
 │  │  (UI Entry)  │    │   (UI Rendering)  │    │   (Computation)    │   │
 │  └──────┬───────┘    └─────────┬─────────┘    └──────────┬─────────┘   │
 │         │                      │                         │              │
@@ -22,15 +22,15 @@
 │                    ┌───────────┴───────────┐                            │
 │                    │     CircuitState      │                            │
 │                    │   (State Container)   │                            │
-│                    │  - truthTableCache    │                            │
-│                    │  - truthTableState    │                            │
+│                    │  - circuitAnalysis    │                            │
+│                    │  - truthTablePanelState│                           │
 │                    └───────────────────────┘                            │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
 **Separation of Concerns:**
-- **TruthTableManager** = Computation engine (WHAT data to compute)
+- **CircuitAnalysisManager** = Computation engine (WHAT data to compute)
 - **TruthTablePanel** = UI rendering (HOW to display)
 - **CircuitState** = State container (WHERE data lives)
 - **Event Bus** = Communication glue (HOW they talk)
@@ -154,7 +154,7 @@
                                  │
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  TruthTableManager - Event Handlers                                     │
+│  CircuitAnalysisManager - Event Handlers                                │
 │                                                                          │
 │  BOARD_CHANGED ──────────► _handleBoardChanged()                        │
 │  COMPONENT_LABEL_CHANGED ► _handleLabelChanged()     ──┐                │
@@ -163,13 +163,13 @@
 │                                                        │                │
 │                                          ┌─────────────┘                │
 │                                          ▼                              │
-│                           _debouncedRecomputeTruthTable()               │
+│                           _debouncedRecomputeAnalysis()                 │
 │                           (200ms debounce via TIMING.TRUTH_TABLE_DEBOUNCE)
 └────────────────────────────────┬────────────────────────────────────────┘
                                  │
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  recomputeTruthTable()                                                  │
+│  recomputeAnalysis()                                                    │
 │                                                                          │
 │  Count inputs → numCombinations = 2^inputCount                          │
 │                                                                          │
@@ -177,13 +177,13 @@
 │  │  numCombinations ≤ 256         │  numCombinations > 256         │    │
 │  │  (≤8 inputs, ≤256 rows)        │  (9+ inputs, 512+ rows)        │    │
 │  │                                │                                │    │
-│  │  _recomputeTruthTableSync()    │  _recomputeTruthTableAsync()   │    │
+│  │  _recomputeAnalysisSync()      │  _recomputeAnalysisAsync()     │    │
 │  │  - Immediate computation       │  - Clear cache (triggers       │    │
 │  │  - No progress events          │    "computing" state)          │    │
 │  │                                │  - Compute in chunks (64 rows) │    │
-│  │                                │  - Emit TRUTH_TABLE_COMPUTING  │    │
-│  │                                │    with { percent, current,    │    │
-│  │                                │    total }                     │    │
+│  │                                │  - Emit CIRCUIT_ANALYSIS_      │    │
+│  │                                │    COMPUTING with { percent,   │    │
+│  │                                │    current, total }            │    │
 │  │                                │  - Yield to browser between    │    │
 │  │                                │    chunks (setTimeout 0)       │    │
 │  └────────────────┬───────────────┴────────────────┬───────────────┘    │
@@ -191,9 +191,8 @@
 │                   └────────────────┬───────────────┘                    │
 │                                    ▼                                    │
 │                    _handleComputationResult(result)                     │
-│                    1. state.setTruthTableCache(result)                  │
-│                    2. state.setTruthTableData(result) [compat]          │
-│                    3. emit(TRUTH_TABLE_COMPUTED, result)                │
+│                    1. state.setCircuitAnalysis(result)                  │
+│                    2. emit(CIRCUIT_ANALYSIS_COMPUTED, result)           │
 └────────────────────────────────────┬────────────────────────────────────┘
                                      │
         ┌────────────────────────────┼────────────────────────────┐
@@ -223,7 +222,7 @@
 │  1. _hideProgress() - remove progress bar if showing                    │
 │  2. If panel visible:                                                    │
 │     - Get cache from circuitState                                       │
-│     - Update this.truthTableData                                        │
+│     - Update this.circuitAnalysis                                        │
 │     - If table exists: table.setData(newData)  ◄── FAST UPDATE         │
 │     - If no table (was showing "computing"): display()                  │
 └────────────────────────────────┬────────────────────────────────────────┘
@@ -232,7 +231,7 @@
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  refresh() - Smart update detection (lines 1028-1120)                   │
 │                                                                          │
-│  Compare old truthTableData with new cache:                             │
+│  Compare old circuitAnalysis with new cache:                             │
 │                                                                          │
 │  ┌──────────────────────────────────────────────────────────────────┐   │
 │  │  STRUCTURE CHANGED? (input/output count different)               │   │
@@ -314,8 +313,8 @@
                                  │
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  circuitState.setTruthTableState(state)                                 │
-│  → emits TRUTH_TABLE_STATE_CHANGED                                      │
+│  circuitState.setTruthTablePanelState(state)                            │
+│  → emits TRUTH_TABLE_PANEL_STATE_CHANGED                                │
 └────────────────────────────────┬────────────────────────────────────────┘
                                  │
                                  ▼
@@ -333,13 +332,13 @@
 │                           EVENT BUS FLOW                                 │
 └─────────────────────────────────────────────────────────────────────────┘
 
-TRUTH_TABLE_COMPUTING
-├── Emitted by: TruthTableManager._recomputeTruthTableAsync()
+CIRCUIT_ANALYSIS_COMPUTING
+├── Emitted by: CircuitAnalysisManager._recomputeAnalysisAsync()
 ├── Payload: { percent, current, total }
 └── Listened by: TruthTablePanel._handleComputing() → shows progress bar
 
-TRUTH_TABLE_COMPUTED
-├── Emitted by: TruthTableManager._handleComputationResult()
+CIRCUIT_ANALYSIS_COMPUTED
+├── Emitted by: CircuitAnalysisManager._handleComputationResult()
 ├── Payload: { inputs, outputs, table, isValid, reason }
 └── Listened by:
     ├── TruthTablePanel._handleComputed() → updates table
@@ -350,26 +349,26 @@ TRUTH_TABLE_SHOWN
 ├── Payload: (none)
 └── Listened by: (internal tracking)
 
-TRUTH_TABLE_STATE_CHANGED
-├── Emitted by: CircuitState.setTruthTableState()
+TRUTH_TABLE_PANEL_STATE_CHANGED
+├── Emitted by: CircuitState.setTruthTablePanelState()
 ├── Payload: { state }
 └── Listened by: AutoSaveManager → triggers save
 
 BOARD_CHANGED
 ├── Emitted by: CircuitState (on component/connection changes)
-└── Listened by: TruthTableManager._handleBoardChanged() → recompute
+└── Listened by: CircuitAnalysisManager._handleBoardChanged() → recompute
 
 COMPONENT_LABEL_CHANGED
 ├── Emitted by: CircuitState
-└── Listened by: TruthTableManager._handleLabelChanged() → recompute
+└── Listened by: CircuitAnalysisManager._handleLabelChanged() → recompute
 
 BOARD_LOADED
 ├── Emitted by: CircuitOperations
-└── Listened by: TruthTableManager._handleBoardLoaded() → recompute
+└── Listened by: CircuitAnalysisManager._handleBoardLoaded() → recompute
 
 BOARD_CLEARED
 ├── Emitted by: CircuitOperations
-└── Listened by: TruthTableManager._handleBoardCleared() → clear cache
+└── Listened by: CircuitAnalysisManager._handleBoardCleared() → clear cache
 
 SIMULATION_STEP_COMPLETED
 ├── Emitted by: Simulation system
@@ -384,7 +383,7 @@ CIRCUIT_VALIDITY_CHANGED
 
 ## 8. DATA STRUCTURES
 
-### Cache Object (CircuitState.truthTableCache)
+### Circuit Analysis Object (CircuitState.circuitAnalysis)
 ```javascript
 {
     inputs: [
@@ -406,7 +405,7 @@ CIRCUIT_VALIDITY_CHANGED
 }
 ```
 
-### Panel State Object (CircuitState.truthTableState)
+### Panel State Object (CircuitState.truthTablePanelState)
 ```javascript
 {
     columnOrder: ['input0', 'input1', 'output0'],  // User's column arrangement
@@ -449,6 +448,6 @@ CIRCUIT_VALIDITY_CHANGED
 - Now calls `panel.show()` instead of `generate()` + `display()`
 
 ### Preserved: Async Computation
-- TruthTableManager still uses async for 8+ inputs
+- CircuitAnalysisManager still uses async for 8+ inputs
 - Progress bar shows during computation (rare)
 - This is separate from panel display

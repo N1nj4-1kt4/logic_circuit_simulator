@@ -107,8 +107,8 @@ describe('AutoSaveManager', () => {
             );
         });
 
-        it('saves board state on TRUTH_TABLE_STATE_CHANGED event after debounce', async () => {
-            eventBus.emit(EVENT_TYPES.TRUTH_TABLE_STATE_CHANGED);
+        it('saves board state on TRUTH_TABLE_PANEL_STATE_CHANGED event after debounce', async () => {
+            eventBus.emit(EVENT_TYPES.TRUTH_TABLE_PANEL_STATE_CHANGED);
 
             vi.advanceTimersByTime(1500);
 
@@ -159,7 +159,7 @@ describe('AutoSaveManager', () => {
                 inputs: [], outputs: [], value: 0, label: 'I1'
             });
             state.setCurrentBoardName('TestBoard');
-            state.setTruthTableState({ width: 500, height: 300 });
+            state.setTruthTablePanelState({ width: 500, height: 300 });
 
             await manager.saveBoardState();
 
@@ -172,7 +172,7 @@ describe('AutoSaveManager', () => {
             const savedData = JSON.parse(mockStorage.setItem.mock.calls[0][1]);
             expect(savedData.components).toHaveLength(1);
             expect(savedData.currentBoardName).toBe('TestBoard');
-            expect(savedData.truthTableState).toEqual({ width: 500, height: 300 });
+            expect(savedData.truthTablePanelState).toEqual({ width: 500, height: 300 });
         });
 
         it('handles save errors silently', async () => {
@@ -188,7 +188,7 @@ describe('AutoSaveManager', () => {
                 components: [{ id: 1, type: 'AND', x: 50, y: 50 }],
                 connections: [],
                 nextId: 2,
-                truthTableState: null
+                truthTablePanelState: null
             };
             state.setLastSavedState(lastSaved);
 
@@ -230,13 +230,13 @@ describe('AutoSaveManager', () => {
                 components: [],
                 connections: [],
                 nextId: 1,
-                truthTableState: { width: 600, height: 400, columnOrder: ['I1', 'O1'] }
+                truthTablePanelState: { width: 600, height: 400, columnOrder: ['I1', 'O1'] }
             });
             mockStorage.getItem.mockResolvedValue(savedState);
 
             await manager.loadBoardState();
 
-            expect(state.getTruthTableState()).toEqual({
+            expect(state.getTruthTablePanelState()).toEqual({
                 width: 600, height: 400, columnOrder: ['I1', 'O1']
             });
         });
@@ -275,7 +275,7 @@ describe('AutoSaveManager', () => {
                 components: [{ id: 1, type: 'AND', x: 50, y: 50 }],
                 connections: [],
                 nextId: 2,
-                truthTableState: null
+                truthTablePanelState: null
             };
             const savedState = JSON.stringify({
                 components: [{ id: 1, type: 'AND', x: 50, y: 50 }, { id: 2, type: 'INPUT', x: 100, y: 100 }],
@@ -316,7 +316,7 @@ describe('AutoSaveManager', () => {
             expect(state.getComponents()).toHaveLength(0);
         });
 
-        it('calls truthTableManager.recomputeTruthTable if provided', async () => {
+        it('calls circuitAnalysisManager.recomputeAnalysis if provided', async () => {
             const savedState = JSON.stringify({
                 components: [{ id: 1, type: 'INPUT', x: 100, y: 100, label: 'I1' }],
                 connections: [],
@@ -324,13 +324,13 @@ describe('AutoSaveManager', () => {
             });
             mockStorage.getItem.mockResolvedValue(savedState);
 
-            const mockTruthTableManager = {
-                recomputeTruthTable: vi.fn()
+            const mockCircuitAnalysisManager = {
+                recomputeAnalysis: vi.fn()
             };
 
-            await manager.loadBoardState(mockTruthTableManager);
+            await manager.loadBoardState(mockCircuitAnalysisManager);
 
-            expect(mockTruthTableManager.recomputeTruthTable).toHaveBeenCalled();
+            expect(mockCircuitAnalysisManager.recomputeAnalysis).toHaveBeenCalled();
         });
 
         it('emits TOOLBAR_UPDATE_DISPLAYS after loading', async () => {

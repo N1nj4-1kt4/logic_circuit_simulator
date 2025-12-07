@@ -116,7 +116,7 @@ describe('BoardOperations', () => {
         });
 
         it('includes truth table state in saved data', async () => {
-            state.setTruthTableState({ width: 500, height: 300 });
+            state.setTruthTablePanelState({ width: 500, height: 300 });
             mockBoardManager.saveBoard.mockResolvedValue(true);
 
             await operations.saveCurrentBoard('TestBoard');
@@ -124,7 +124,7 @@ describe('BoardOperations', () => {
             expect(mockBoardManager.saveBoard).toHaveBeenCalledWith(
                 'TestBoard',
                 expect.objectContaining({
-                    truthTableState: { width: 500, height: 300 }
+                    truthTablePanelState: { width: 500, height: 300 }
                 })
             );
         });
@@ -134,7 +134,7 @@ describe('BoardOperations', () => {
                 id: 1, type: 'INPUT', x: 100, y: 100,
                 inputs: [], outputs: [], value: 0, label: 'I1'
             });
-            state.setTruthTableState({ width: 400 });
+            state.setTruthTablePanelState({ width: 400 });
             mockBoardManager.saveBoard.mockResolvedValue(true);
 
             await operations.saveCurrentBoard('TestBoard');
@@ -142,7 +142,7 @@ describe('BoardOperations', () => {
             const lastSavedState = state.getLastSavedState();
             expect(lastSavedState).not.toBeNull();
             expect(lastSavedState.components).toHaveLength(1);
-            expect(lastSavedState.truthTableState).toEqual({ width: 400 });
+            expect(lastSavedState.truthTablePanelState).toEqual({ width: 400 });
         });
     });
 
@@ -194,7 +194,7 @@ describe('BoardOperations', () => {
                 connections: [{ from: 1, to: 2 }],
                 nextId: 3,
                 customComponents: { 'MyComp': {} },
-                truthTableState: { width: 600 }
+                truthTablePanelState: { width: 600 }
             };
             mockBoardManager.loadBoard.mockResolvedValue(boardData);
 
@@ -319,7 +319,7 @@ describe('BoardOperations', () => {
                 ],
                 connections: [{ from: 1, fromPort: 0, to: 2, toPort: 0 }],
                 nextId: 3,
-                truthTableState: { width: 400, height: 300 }
+                truthTablePanelState: { width: 400, height: 300 }
             };
             state.setLastSavedState(savedState);
 
@@ -334,7 +334,7 @@ describe('BoardOperations', () => {
             expect(result).toBe(true);
             expect(state.getComponents()).toHaveLength(2);
             expect(state.getConnections()).toHaveLength(1);
-            expect(state.getTruthTableState()).toEqual({ width: 400, height: 300 });
+            expect(state.getTruthTablePanelState()).toEqual({ width: 400, height: 300 });
         });
 
         it('emits BOARD_LOADED event', () => {
@@ -383,7 +383,7 @@ describe('BoardOperations', () => {
         });
 
         it('preserves truth table state from lastSavedState', () => {
-            const truthTableState = {
+            const truthTablePanelState = {
                 width: 500,
                 height: 400,
                 columnOrder: ['I1', 'O1'],
@@ -393,24 +393,24 @@ describe('BoardOperations', () => {
                 components: [],
                 connections: [],
                 nextId: 1,
-                truthTableState
+                truthTablePanelState
             });
 
             operations.revertToSaved();
 
-            expect(state.getTruthTableState()).toEqual(truthTableState);
+            expect(state.getTruthTablePanelState()).toEqual(truthTablePanelState);
         });
 
-        it('handles lastSavedState with no truthTableState', () => {
+        it('handles lastSavedState with no truthTablePanelState', () => {
             state.setLastSavedState({
                 components: [{ id: 1, type: 'INPUT', x: 100, y: 100 }],
                 connections: [],
                 nextId: 2
-                // No truthTableState
+                // No truthTablePanelState
             });
 
             // Set current truth table state
-            state.setTruthTableState({ width: 300 });
+            state.setTruthTablePanelState({ width: 300 });
 
             const result = operations.revertToSaved();
 

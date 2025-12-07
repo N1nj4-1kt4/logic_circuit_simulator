@@ -29,13 +29,13 @@ export class CircuitState {
         this.currentComponentName = null; // null means not a saved component
         this.lastSavedState = null; // To track if board has been modified
 
-        // Truth table state
-        this.truthTableData = null; // Store truth table data for highlighting
-        this.truthTableColumnOrder = null; // Store column order for drag-and-drop
-        this.truthTableState = null; // Store truth table customization (size, column order)
+        // Circuit analysis - pre-computed input/output mappings for all combinations
+        // { inputs, outputs, table, isValid, reason }
+        this.circuitAnalysis = null;
 
-        // Pre-computed truth table cache
-        this.truthTableCache = null; // { inputs, outputs, table, isValid, reason }
+        // Truth table panel UI state (position, size, column order, visibility)
+        // { x, y, width, height, columnOrder, visible }
+        this.truthTablePanelState = null;
 
         // Simulation state
         this.isAutoCycling = false;
@@ -379,77 +379,45 @@ export class CircuitState {
             components: JSON.parse(JSON.stringify(this.components)),
             connections: JSON.parse(JSON.stringify(this.connections)),
             nextId: this.nextId,
-            truthTableState: this.truthTableState ? JSON.parse(JSON.stringify(this.truthTableState)) : null
+            truthTablePanelState: this.truthTablePanelState ? JSON.parse(JSON.stringify(this.truthTablePanelState)) : null
         };
     }
 
     // ====================================
-    // Truth Table State
+    // Circuit Analysis & Truth Table Panel State
     // ====================================
 
     /**
-     * Set truth table data
-     * @param {Object|null} data - Truth table data
+     * Set circuit analysis (pre-computed input/output mappings)
+     * @param {Object|null} analysis - Circuit analysis { inputs, outputs, table, isValid, reason }
      */
-    setTruthTableData(data) {
-        this.truthTableData = data;
+    setCircuitAnalysis(analysis) {
+        this.circuitAnalysis = analysis;
     }
 
     /**
-     * Get truth table data
-     * @returns {Object|null} Truth table data
+     * Get circuit analysis
+     * @returns {Object|null} Circuit analysis
      */
-    getTruthTableData() {
-        return this.truthTableData;
+    getCircuitAnalysis() {
+        return this.circuitAnalysis;
     }
 
     /**
-     * Set truth table column order
-     * @param {Array|null} order - Column order array
+     * Set truth table panel UI state (position, size, column order, visibility)
+     * @param {Object|null} state - Panel state { x, y, width, height, columnOrder, visible }
      */
-    setTruthTableColumnOrder(order) {
-        this.truthTableColumnOrder = order;
+    setTruthTablePanelState(state) {
+        this.truthTablePanelState = state;
+        eventBus.emit(EVENT_TYPES.TRUTH_TABLE_PANEL_STATE_CHANGED, { state });
     }
 
     /**
-     * Get truth table column order
-     * @returns {Array|null} Column order
+     * Get truth table panel UI state
+     * @returns {Object|null} Panel state
      */
-    getTruthTableColumnOrder() {
-        return this.truthTableColumnOrder;
-    }
-
-    /**
-     * Set truth table state (size, position, column order)
-     * @param {Object|null} state - Truth table state
-     */
-    setTruthTableState(state) {
-        this.truthTableState = state;
-        eventBus.emit(EVENT_TYPES.TRUTH_TABLE_STATE_CHANGED, { state });
-    }
-
-    /**
-     * Get truth table state
-     * @returns {Object|null} Truth table state
-     */
-    getTruthTableState() {
-        return this.truthTableState;
-    }
-
-    /**
-     * Set pre-computed truth table cache
-     * @param {Object|null} cache - Pre-computed truth table { inputs, outputs, table, isValid, reason }
-     */
-    setTruthTableCache(cache) {
-        this.truthTableCache = cache;
-    }
-
-    /**
-     * Get pre-computed truth table cache
-     * @returns {Object|null} Truth table cache
-     */
-    getTruthTableCache() {
-        return this.truthTableCache;
+    getTruthTablePanelState() {
+        return this.truthTablePanelState;
     }
 
     // ====================================
@@ -538,11 +506,7 @@ export class CircuitState {
         this.nextId = state.nextId || 1;
         this.currentBoardName = state.currentBoardName || null;
         this.currentComponentName = state.currentComponentName || null;
-        this.truthTableState = state.truthTableState ? JSON.parse(JSON.stringify(state.truthTableState)) : null;
-
-        if (this.truthTableState && this.truthTableState.columnOrder) {
-            this.truthTableColumnOrder = [...this.truthTableState.columnOrder];
-        }
+        this.truthTablePanelState = state.truthTablePanelState ? JSON.parse(JSON.stringify(state.truthTablePanelState)) : null;
 
         eventBus.emit(EVENT_TYPES.BOARD_LOADED, { state });
     }
@@ -560,10 +524,8 @@ export class CircuitState {
         this.currentBoardName = null;
         this.currentComponentName = null;
         this.lastSavedState = null;
-        this.truthTableData = null;
-        this.truthTableColumnOrder = null;
-        this.truthTableState = null;
-        this.truthTableCache = null;
+        this.circuitAnalysis = null;
+        this.truthTablePanelState = null;
         this.isAutoCycling = false;
         this.autoCycleTimeout = null;
         this.currentCycleIndex = 0;

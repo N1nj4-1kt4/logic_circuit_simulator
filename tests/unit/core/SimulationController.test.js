@@ -36,7 +36,7 @@ describe('SimulationController', () => {
         mockCircuitState = {
             getComponents: vi.fn().mockReturnValue(validCircuit.components),
             getConnections: vi.fn().mockReturnValue(validCircuit.connections),
-            getTruthTableCache: vi.fn().mockReturnValue(null),
+            getCircuitAnalysis: vi.fn().mockReturnValue(null),
             setAutoCycling: vi.fn()
         };
 
@@ -248,7 +248,7 @@ describe('SimulationController', () => {
                     { componentValues: { 1: { value: 1 }, 2: { value: 1 }, 3: { value: 1 }, 4: { value: 1 } } }
                 ]
             };
-            mockCircuitState.getTruthTableCache.mockReturnValue(mockCache);
+            mockCircuitState.getCircuitAnalysis.mockReturnValue(mockCache);
 
             // Set some non-zero input values first
             validCircuit.components[0].value = 1;
@@ -267,7 +267,7 @@ describe('SimulationController', () => {
         });
 
         it('should fall back to simulation on reset when cache is null', () => {
-            mockCircuitState.getTruthTableCache.mockReturnValue(null);
+            mockCircuitState.getCircuitAnalysis.mockReturnValue(null);
 
             const redrawHandler = vi.fn();
             eventBus.on(EVENT_TYPES.CANVAS_REDRAW, redrawHandler);
@@ -386,7 +386,7 @@ describe('SimulationController', () => {
                     { componentValues: { 1: { value: 1 }, 2: { value: 1 }, 3: { value: 1 }, 4: { value: 1 } } }
                 ]
             };
-            mockCircuitState.getTruthTableCache.mockReturnValue(mockCache);
+            mockCircuitState.getCircuitAnalysis.mockReturnValue(mockCache);
 
             // Set input values to [1, 1] which corresponds to index 3
             validCircuit.components[0].value = 1;
@@ -417,7 +417,7 @@ describe('SimulationController', () => {
         });
 
         it('should fall back to simulation when cache is null', () => {
-            mockCircuitState.getTruthTableCache.mockReturnValue(null);
+            mockCircuitState.getCircuitAnalysis.mockReturnValue(null);
 
             const redrawHandler = vi.fn();
             eventBus.on(EVENT_TYPES.CANVAS_REDRAW, redrawHandler);
@@ -430,7 +430,7 @@ describe('SimulationController', () => {
 
         it('should fall back to simulation when cache is invalid', () => {
             const mockCache = { isValid: false, table: [] };
-            mockCircuitState.getTruthTableCache.mockReturnValue(mockCache);
+            mockCircuitState.getCircuitAnalysis.mockReturnValue(mockCache);
 
             const redrawHandler = vi.fn();
             eventBus.on(EVENT_TYPES.CANVAS_REDRAW, redrawHandler);

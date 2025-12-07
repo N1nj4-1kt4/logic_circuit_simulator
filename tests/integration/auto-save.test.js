@@ -8,7 +8,7 @@ import { CircuitState } from '../../src/core/CircuitState.js';
 import { AutoSaveManager } from '../../src/core/AutoSaveManager.js';
 import { BoardOperations } from '../../src/core/BoardOperations.js';
 import { ContextManager } from '../../src/core/ContextManager.js';
-import { TruthTableManager } from '../../src/core/TruthTableManager.js';
+import { CircuitAnalysisManager } from '../../src/core/CircuitAnalysisManager.js';
 import { eventBus, EVENT_TYPES } from '../../src/utils/eventBus.js';
 import { BoardManager } from '../../src/storage/BoardManager.js';
 import { ComponentLibrary } from '../../src/storage/ComponentLibrary.js';
@@ -141,7 +141,7 @@ describe('Auto-Save State Persistence', () => {
         state.addComponent({ id: 2, type: 'OUTPUT', x: 200, y: 100, label: 'O1' });
         state.addConnection({ from: 1, fromPort: 0, to: 2, toPort: 0 });
         state.setCurrentBoardName('TestBoard');
-        state.setTruthTableState({ width: 400, height: 300 });
+        state.setTruthTablePanelState({ width: 400, height: 300 });
 
         await autoSaveManager.saveBoardState();
 
@@ -153,7 +153,7 @@ describe('Auto-Save State Persistence', () => {
         expect(savedData.components).toHaveLength(2);
         expect(savedData.connections).toHaveLength(1);
         expect(savedData.currentBoardName).toBe('TestBoard');
-        expect(savedData.truthTableState).toEqual({ width: 400, height: 300 });
+        expect(savedData.truthTablePanelState).toEqual({ width: 400, height: 300 });
     });
 
     it('should restore state from auto-save', async () => {
@@ -169,7 +169,7 @@ describe('Auto-Save State Persistence', () => {
             connections: [{ from: 1, fromPort: 0, to: 2, toPort: 0 }],
             nextId: 2,
             currentBoardName: 'RestoredBoard',
-            truthTableState: { width: 500, height: 400 }
+            truthTablePanelState: { width: 500, height: 400 }
         };
 
         // Simulate double-stringify that happens in actual save flow
@@ -181,7 +181,7 @@ describe('Auto-Save State Persistence', () => {
         expect(state.getComponents()).toHaveLength(2);
         expect(state.getConnections()).toHaveLength(1);
         expect(state.getCurrentBoardName()).toBe('RestoredBoard');
-        expect(state.getTruthTableState()).toEqual({ width: 500, height: 400 });
+        expect(state.getTruthTablePanelState()).toEqual({ width: 500, height: 400 });
     });
 
     it('should handle missing auto-save data gracefully', async () => {
@@ -230,12 +230,12 @@ describe('Context Switching', () => {
         boardManager = new BoardManager(storageAdapter);
         componentLibrary = new ComponentLibrary(storageAdapter);
 
-        const truthTableManager = new TruthTableManager({ state });
+        const circuitAnalysisManager = new CircuitAnalysisManager({ state });
         const contextManager = new ContextManager({
             state,
             boardManager,
             componentLibrary,
-            truthTableManager
+            circuitAnalysisManager
         });
 
         boardOperations = new BoardOperations({
@@ -275,17 +275,17 @@ describe('Context Switching', () => {
         // Setup Board A with truth table state
         state.addComponent({ id: 1, type: 'INPUT', x: 100, y: 100, label: 'I1', inputs: [], inputPorts: [], outputPorts: [{}] });
         state.addComponent({ id: 2, type: 'OUTPUT', x: 200, y: 100, label: 'O1', inputs: [null], inputPorts: [{}], outputPorts: [] });
-        state.setTruthTableState({ width: 400, height: 300, columnOrder: ['I1', 'O1'] });
+        state.setTruthTablePanelState({ width: 400, height: 300, columnOrder: ['I1', 'O1'] });
         await boardOperations.saveCurrentBoard('BoardWithTable');
 
         // Clear and reload
         state.clearComponents();
         state.setCurrentBoardName(null);
-        state.setTruthTableState(null);
+        state.setTruthTablePanelState(null);
 
         await boardOperations.loadBoard('BoardWithTable');
 
-        expect(state.getTruthTableState()).toEqual({
+        expect(state.getTruthTablePanelState()).toEqual({
             width: 400,
             height: 300,
             columnOrder: ['I1', 'O1']
@@ -368,10 +368,10 @@ describe('Auto-Save Event Triggers', () => {
         expect(saveSpy).toHaveBeenCalled();
     });
 
-    it('should trigger auto-save on TRUTH_TABLE_STATE_CHANGED event', () => {
+    it('should trigger auto-save on TRUTH_TABLE_PANEL_STATE_CHANGED event', () => {
         const saveSpy = vi.spyOn(autoSaveManager, 'saveBoardState');
 
-        state.setTruthTableState({ width: 500 });
+        state.setTruthTablePanelState({ width: 500 });
 
         vi.advanceTimersByTime(1100);
 

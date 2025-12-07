@@ -250,11 +250,16 @@ describe('EventBus', () => {
             expect(EVENT_TYPES.BOARD_CLEARED).toBe('board:cleared');
         });
 
-        it('should have truth table events defined', () => {
+        it('should have truth table panel events defined', () => {
             expect(EVENT_TYPES.TRUTH_TABLE_GENERATE).toBe('truthTable:generate');
             expect(EVENT_TYPES.TRUTH_TABLE_SHOWN).toBe('truthTable:shown');
             expect(EVENT_TYPES.TRUTH_TABLE_HIDDEN).toBe('truthTable:hidden');
-            expect(EVENT_TYPES.TRUTH_TABLE_STATE_CHANGED).toBe('truthTable:stateChanged');
+            expect(EVENT_TYPES.TRUTH_TABLE_PANEL_STATE_CHANGED).toBe('truthTable:panelStateChanged');
+        });
+
+        it('should have circuit analysis events defined', () => {
+            expect(EVENT_TYPES.CIRCUIT_ANALYSIS_COMPUTED).toBe('circuitAnalysis:computed');
+            expect(EVENT_TYPES.CIRCUIT_ANALYSIS_COMPUTING).toBe('circuitAnalysis:computing');
         });
 
         it('should have theme events defined', () => {

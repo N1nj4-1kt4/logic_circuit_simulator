@@ -41,7 +41,7 @@ export class BoardOperations {
             connections: this.state.getConnections(),
             nextId: this.state.getNextId(),
             customComponents: this.state.getCustomComponents(),
-            truthTableState: this.state.getTruthTableState()
+            truthTablePanelState: this.state.getTruthTablePanelState()
         };
 
         const success = await this.boardManager.saveBoard(boardName, boardData);
@@ -145,14 +145,14 @@ export class BoardOperations {
             components: lastSavedState.components || [],
             connections: lastSavedState.connections || [],
             nextId: lastSavedState.nextId || 1,
-            truthTableState: lastSavedState.truthTableState || null,
+            truthTablePanelState: lastSavedState.truthTablePanelState || null,
             currentBoardName: this.state.getCurrentBoardName(),
             currentComponentName: this.state.getCurrentComponentName()
         });
 
-        // Restore truth table state if present
-        if (lastSavedState.truthTableState) {
-            this.state.setTruthTableState(lastSavedState.truthTableState);
+        // Restore truth table panel state if present
+        if (lastSavedState.truthTablePanelState) {
+            this.state.setTruthTablePanelState(lastSavedState.truthTablePanelState);
         }
 
         // Emit events to update UI

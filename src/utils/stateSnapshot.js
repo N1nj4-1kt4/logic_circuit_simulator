@@ -11,11 +11,11 @@ import { deepClone } from './serialization.js';
  * Capture a snapshot of the current circuit state
  * @param {CircuitState} state - The CircuitState instance
  * @param {Object} options - Options for what to include
- * @param {boolean} options.includeTruthTableState - Include truth table UI state (default: false)
+ * @param {boolean} options.includeTruthTablePanelState - Include truth table panel UI state (default: false)
  * @returns {Object} State snapshot containing components, connections, nextId
  */
 export function captureCircuitSnapshot(state, options = {}) {
-    const { includeTruthTableState = false } = options;
+    const { includeTruthTablePanelState = false } = options;
 
     const snapshot = {
         components: deepClone(state.getComponents()),
@@ -23,9 +23,9 @@ export function captureCircuitSnapshot(state, options = {}) {
         nextId: state.getNextId()
     };
 
-    if (includeTruthTableState) {
-        const truthTableState = state.getTruthTableState();
-        snapshot.truthTableState = truthTableState ? deepClone(truthTableState) : null;
+    if (includeTruthTablePanelState) {
+        const truthTablePanelState = state.getTruthTablePanelState();
+        snapshot.truthTablePanelState = truthTablePanelState ? deepClone(truthTablePanelState) : null;
     }
 
     return snapshot;
@@ -46,7 +46,7 @@ export function restoreCircuitSnapshot(state, snapshot, options = {}) {
         components: snapshot.components,
         connections: snapshot.connections,
         nextId: snapshot.nextId,
-        truthTableState: snapshot.truthTableState || null
+        truthTablePanelState: snapshot.truthTablePanelState || null
     });
 
     // loadState already emits BOARD_LOADED event if emitEvents is default

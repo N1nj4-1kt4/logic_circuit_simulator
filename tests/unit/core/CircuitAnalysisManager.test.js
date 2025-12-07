@@ -1,13 +1,13 @@
 /**
- * Unit tests for TruthTableManager
+ * Unit tests for CircuitAnalysisManager
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { TruthTableManager } from '../../../src/core/TruthTableManager.js';
+import { CircuitAnalysisManager } from '../../../src/core/CircuitAnalysisManager.js';
 import { CircuitState } from '../../../src/core/CircuitState.js';
 import { eventBus, EVENT_TYPES } from '../../../src/utils/eventBus.js';
 
-describe('TruthTableManager', () => {
+describe('CircuitAnalysisManager', () => {
     let state;
     let manager;
 
@@ -20,7 +20,7 @@ describe('TruthTableManager', () => {
         // Clear timers
         vi.useFakeTimers();
 
-        manager = new TruthTableManager({
+        manager = new CircuitAnalysisManager({
             state
         });
     });
@@ -45,13 +45,13 @@ describe('TruthTableManager', () => {
                 value: null, label: 'O1'
             });
 
-            manager.recomputeTruthTable();
+            manager.recomputeAnalysis();
 
-            const cache = state.getTruthTableCache();
+            const cache = state.getCircuitAnalysis();
             expect(cache).not.toBeNull();
         });
 
-        it('emits TRUTH_TABLE_COMPUTED event', () => {
+        it('emits CIRCUIT_ANALYSIS_COMPUTED event', () => {
             state.addComponent({
                 id: 1, type: 'INPUT', x: 100, y: 100,
                 inputs: [], outputs: [{ x: 120, y: 100 }],
@@ -64,14 +64,14 @@ describe('TruthTableManager', () => {
             });
 
             const handler = vi.fn();
-            eventBus.on(EVENT_TYPES.TRUTH_TABLE_COMPUTED, handler);
+            eventBus.on(EVENT_TYPES.CIRCUIT_ANALYSIS_COMPUTED, handler);
 
-            manager.recomputeTruthTable();
+            manager.recomputeAnalysis();
 
             expect(handler).toHaveBeenCalled();
         });
 
-        it('sets truthTableCache with isValid property', () => {
+        it('sets circuitAnalysis with isValid property', () => {
             state.addComponent({
                 id: 1, type: 'INPUT', x: 100, y: 100,
                 inputs: [], outputs: [{ x: 120, y: 100 }],
@@ -83,15 +83,15 @@ describe('TruthTableManager', () => {
                 value: null, label: 'O1'
             });
 
-            manager.recomputeTruthTable();
+            manager.recomputeAnalysis();
 
-            const cache = state.getTruthTableCache();
+            const cache = state.getCircuitAnalysis();
             expect(cache).toHaveProperty('isValid');
         });
 
         it('handles debounced recomputation setup', () => {
             // Verify the debounce timer property exists
-            expect(manager.truthTableDebounceTimer).toBeDefined();
+            expect(manager.analysisDebounceTimer).toBeDefined();
         });
     });
 
@@ -112,7 +112,7 @@ describe('TruthTableManager', () => {
 
         it('recomputes truth table on BOARD_CHANGED event', () => {
             const handler = vi.fn();
-            eventBus.on(EVENT_TYPES.TRUTH_TABLE_COMPUTED, handler);
+            eventBus.on(EVENT_TYPES.CIRCUIT_ANALYSIS_COMPUTED, handler);
 
             // Emit board changed event
             eventBus.emit(EVENT_TYPES.BOARD_CHANGED);
@@ -125,7 +125,7 @@ describe('TruthTableManager', () => {
 
         it('recomputes truth table on COMPONENT_LABEL_CHANGED event', () => {
             const handler = vi.fn();
-            eventBus.on(EVENT_TYPES.TRUTH_TABLE_COMPUTED, handler);
+            eventBus.on(EVENT_TYPES.CIRCUIT_ANALYSIS_COMPUTED, handler);
 
             // Emit label changed event
             eventBus.emit(EVENT_TYPES.COMPONENT_LABEL_CHANGED, {
@@ -142,18 +142,18 @@ describe('TruthTableManager', () => {
 
         it('clears cache on BOARD_CLEARED event', () => {
             // First compute truth table
-            manager.recomputeTruthTable();
-            expect(state.getTruthTableCache()).not.toBeNull();
+            manager.recomputeAnalysis();
+            expect(state.getCircuitAnalysis()).not.toBeNull();
 
             // Emit board cleared event
             eventBus.emit(EVENT_TYPES.BOARD_CLEARED);
 
-            expect(state.getTruthTableCache()).toBeNull();
+            expect(state.getCircuitAnalysis()).toBeNull();
         });
 
         it('debounces rapid BOARD_CHANGED events', () => {
             const handler = vi.fn();
-            eventBus.on(EVENT_TYPES.TRUTH_TABLE_COMPUTED, handler);
+            eventBus.on(EVENT_TYPES.CIRCUIT_ANALYSIS_COMPUTED, handler);
 
             // Emit multiple rapid changes
             eventBus.emit(EVENT_TYPES.BOARD_CHANGED);
@@ -168,7 +168,7 @@ describe('TruthTableManager', () => {
 
         it('recomputes truth table immediately on BOARD_LOADED event', () => {
             const handler = vi.fn();
-            eventBus.on(EVENT_TYPES.TRUTH_TABLE_COMPUTED, handler);
+            eventBus.on(EVENT_TYPES.CIRCUIT_ANALYSIS_COMPUTED, handler);
 
             // Emit board loaded event (simulating revert to saved or board load)
             eventBus.emit(EVENT_TYPES.BOARD_LOADED);
@@ -179,13 +179,13 @@ describe('TruthTableManager', () => {
 
         it('recomputes truth table on BOARD_LOADED even with no prior cache', () => {
             // Clear any existing cache
-            state.setTruthTableCache(null);
+            state.setCircuitAnalysis(null);
 
             // Emit board loaded event
             eventBus.emit(EVENT_TYPES.BOARD_LOADED);
 
             // Cache should now be populated
-            expect(state.getTruthTableCache()).not.toBeNull();
+            expect(state.getCircuitAnalysis()).not.toBeNull();
         });
     });
 
@@ -198,12 +198,12 @@ describe('TruthTableManager', () => {
             manager.destroy();
 
             // Timer should be cleared
-            expect(manager.truthTableDebounceTimer).toBeNull();
+            expect(manager.analysisDebounceTimer).toBeNull();
         });
 
         it('removes event listeners on destroy', () => {
             const handler = vi.fn();
-            eventBus.on(EVENT_TYPES.TRUTH_TABLE_COMPUTED, handler);
+            eventBus.on(EVENT_TYPES.CIRCUIT_ANALYSIS_COMPUTED, handler);
 
             // Destroy the manager
             manager.destroy();
@@ -213,7 +213,7 @@ describe('TruthTableManager', () => {
             vi.advanceTimersByTime(200);
 
             // Handler should not be called because manager's listeners are removed
-            // (Note: The TRUTH_TABLE_COMPUTED handler we added should still exist,
+            // (Note: The CIRCUIT_ANALYSIS_COMPUTED handler we added should still exist,
             // but there's nothing to emit it since manager's listeners are gone)
             expect(handler).not.toHaveBeenCalled();
         });

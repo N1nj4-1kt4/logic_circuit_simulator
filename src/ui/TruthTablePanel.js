@@ -37,8 +37,8 @@ export class TruthTablePanel {
         this.panel = null;
         this.state = null;
 
-        // Truth table data
-        this.truthTableData = null;
+        // Circuit analysis data (pre-computed input/output mappings)
+        this.circuitAnalysis = null;
         this.columnOrder = null;
 
         // Interaction setup flag
@@ -75,10 +75,10 @@ export class TruthTablePanel {
         eventBus.on(EVENT_TYPES.CIRCUIT_VALIDITY_CHANGED, this._boundHandleValidityChanged);
 
         // Progress updates during async computation
-        eventBus.on(EVENT_TYPES.TRUTH_TABLE_COMPUTING, this._boundHandleComputing);
+        eventBus.on(EVENT_TYPES.CIRCUIT_ANALYSIS_COMPUTING, this._boundHandleComputing);
 
         // Computation complete - refresh table if visible
-        eventBus.on(EVENT_TYPES.TRUTH_TABLE_COMPUTED, this._boundHandleComputed);
+        eventBus.on(EVENT_TYPES.CIRCUIT_ANALYSIS_COMPUTED, this._boundHandleComputed);
     }
 
     /**
@@ -97,13 +97,13 @@ export class TruthTablePanel {
      */
     _handleValidityChanged(data) {
         // Only act if panel is visible and circuit became invalid
-        if (this.isVisible() && !data.canSimulate && this.truthTableData) {
-            // Update truthTableData to reflect invalid state
-            this.truthTableData.isValid = false;
-            this.truthTableData.reason = data.reason;
+        if (this.isVisible() && !data.canSimulate && this.circuitAnalysis) {
+            // Update circuitAnalysis to reflect invalid state
+            this.circuitAnalysis.isValid = false;
+            this.circuitAnalysis.reason = data.reason;
 
             // If we have no table data, show invalid message
-            if (this.truthTableData.table.length === 0) {
+            if (this.circuitAnalysis.table.length === 0) {
                 this.displayInvalidMessage(true);
             }
         }
@@ -120,7 +120,7 @@ export class TruthTablePanel {
     }
 
     /**
-     * Handle truth table computed event
+     * Handle circuit analysis computed event
      * @private
      */
     _handleComputed() {
@@ -129,21 +129,21 @@ export class TruthTablePanel {
 
         // If panel is visible, refresh it with new data
         if (this.isVisible()) {
-            // Refresh the table with new cached data
-            const cache = this.circuitState.getTruthTableCache();
-            if (cache) {
-                this.truthTableData = {
-                    inputs: (cache.inputs || []).map(inp => ({ ...inp })),
-                    outputs: (cache.outputs || []).map(out => ({ ...out })),
-                    table: cache.table || [],
-                    isValid: cache.isValid,
-                    reason: cache.reason
+            // Refresh the table with new analysis data
+            const analysis = this.circuitState.getCircuitAnalysis();
+            if (analysis) {
+                this.circuitAnalysis = {
+                    inputs: (analysis.inputs || []).map(inp => ({ ...inp })),
+                    outputs: (analysis.outputs || []).map(out => ({ ...out })),
+                    table: analysis.table || [],
+                    isValid: analysis.isValid,
+                    reason: analysis.reason
                 };
 
                 if (this.table) {
                     // Table exists - just update data
-                    this.table.setData(this.truthTableData.table);
-                } else if (this.truthTableData.table.length > 0) {
+                    this.table.setData(this.circuitAnalysis.table);
+                } else if (this.circuitAnalysis.table.length > 0) {
                     // Table doesn't exist (was showing "computing" message) - need full display
                     // The display() method will create the Tabulator instance
                     this.display();
@@ -221,17 +221,17 @@ export class TruthTablePanel {
     }
 
     /**
-     * Generate and display the truth table from pre-computed cache
+     * Generate and display the truth table from pre-computed circuit analysis
      * @returns {boolean|'computing'} - true if ready, 'computing' if async in progress, false if failed
      */
     generate() {
-        // Read from pre-computed cache
-        const cache = this.circuitState.getTruthTableCache();
+        // Read from pre-computed circuit analysis
+        const analysis = this.circuitState.getCircuitAnalysis();
 
-        if (!cache) {
-            // Cache not available yet - show panel with "computing" state
+        if (!analysis) {
+            // Analysis not available yet - show panel with "computing" state
             // Initialize with empty data so panel can display
-            this.truthTableData = {
+            this.circuitAnalysis = {
                 inputs: [],
                 outputs: [],
                 table: [],
@@ -241,11 +241,11 @@ export class TruthTablePanel {
             return 'computing';
         }
 
-        const { inputs, outputs, table, isValid, reason } = cache;
+        const { inputs, outputs, table, isValid, reason } = analysis;
 
-        // Store truth table data from cache (including invalid circuits)
+        // Store circuit analysis data (including invalid circuits)
         // Deep copy inputs/outputs to capture current labels (avoid reference issues)
-        this.truthTableData = {
+        this.circuitAnalysis = {
             inputs: (inputs || []).map(inp => ({ ...inp })),
             outputs: (outputs || []).map(out => ({ ...out })),
             table: table || [],
@@ -270,7 +270,7 @@ export class TruthTablePanel {
      * Note: _isRestoring flag is set by setState() when restoring from saved state
      */
     display() {
-        if (!this.truthTableData) {
+        if (!this.circuitAnalysis) {
             return;
         }
 
@@ -288,7 +288,7 @@ export class TruthTablePanel {
         // Detect if structure changed since state was saved (e.g., inputs/outputs added while panel was closed)
         // If structure changed, clear saved dimensions so panel auto-fits to new content
         if (this.state && this.state.columnOrder) {
-            const currentColumnCount = this.truthTableData.inputs.length + this.truthTableData.outputs.length;
+            const currentColumnCount = this.circuitAnalysis.inputs.length + this.circuitAnalysis.outputs.length;
             const savedColumnCount = this.state.columnOrder.length;
             if (currentColumnCount !== savedColumnCount) {
                 this.state.width = '';
@@ -338,9 +338,9 @@ export class TruthTablePanel {
 
         // Handle cases with no table data (no inputs or no outputs)
         // If table has data, display it normally even for invalid circuits
-        if (this.truthTableData.table.length === 0) {
+        if (this.circuitAnalysis.table.length === 0) {
             // Check if we're in "computing" state
-            if (this.truthTableData.reason === 'Computing truth table...') {
+            if (this.circuitAnalysis.reason === 'Computing truth table...') {
                 this.displayComputingMessage(wasVisible);
             } else {
                 this.displayInvalidMessage(wasVisible);
@@ -358,7 +358,7 @@ export class TruthTablePanel {
         // Initialize Tabulator with virtual DOM - it handles large datasets efficiently
         this.table = new Tabulator(content, {
             columns: columns,
-            data: this.truthTableData.table,
+            data: this.circuitAnalysis.table,
             layout: 'fitColumns',
             selectable: 1, // Single row selection
             movableColumns: true,
@@ -466,7 +466,7 @@ export class TruthTablePanel {
         content.innerHTML = `
             <div class="truth-table-invalid-message">
                 <div class="icon">${UI.ICONS.WARNING}</div>
-                <div class="message">${this.truthTableData.reason || 'Circuit incomplete'}</div>
+                <div class="message">${this.circuitAnalysis.reason || 'Circuit incomplete'}</div>
             </div>
         `;
 
@@ -553,7 +553,7 @@ export class TruthTablePanel {
      * Generate Tabulator column definitions with groups
      */
     generateColumns() {
-        const { inputs, outputs } = this.truthTableData;
+        const { inputs, outputs } = this.circuitAnalysis;
 
         // Create all column definitions
         const inputCols = inputs.map((input, i) => ({
@@ -631,14 +631,14 @@ export class TruthTablePanel {
      * Update row highlighting to match current circuit state
      */
     updateHighlight() {
-        if (!this.table || !this.truthTableData) return;
+        if (!this.table || !this.circuitAnalysis) return;
 
         // No highlighting if there's no table data
-        if (!this.truthTableData.table || this.truthTableData.table.length === 0) {
+        if (!this.circuitAnalysis.table || this.circuitAnalysis.table.length === 0) {
             return;
         }
 
-        const { inputs } = this.truthTableData;
+        const { inputs } = this.circuitAnalysis;
 
         // Get current input values
         const inputValues = inputs.map(input => input.value);
@@ -1029,8 +1029,8 @@ export class TruthTablePanel {
     }
 
     /**
-     * Refresh the truth table with updated cache data
-     * Called when TRUTH_TABLE_COMPUTED event fires
+     * Refresh the truth table with updated analysis data
+     * Called when CIRCUIT_ANALYSIS_COMPUTED event fires
      */
     refresh() {
         // Don't refresh if panel doesn't exist
@@ -1039,20 +1039,20 @@ export class TruthTablePanel {
         // Don't refresh if panel is hidden
         if (this.panel.classList.contains('hidden')) return;
 
-        const cache = this.circuitState.getTruthTableCache();
+        const analysis = this.circuitState.getCircuitAnalysis();
 
-        // Hide panel only if no cache at all
-        if (!cache) {
+        // Hide panel only if no analysis at all
+        if (!analysis) {
             this.hide();
             return;
         }
 
-        const { inputs, outputs, table, isValid, reason } = cache;
+        const { inputs, outputs, table, isValid, reason } = analysis;
 
         // If no table data (no inputs or no outputs), show invalid message
         if (!table || table.length === 0) {
             // Deep copy inputs/outputs to capture current labels (avoid reference issues)
-            this.truthTableData = {
+            this.circuitAnalysis = {
                 inputs: (inputs || []).map(inp => ({ ...inp })),
                 outputs: (outputs || []).map(out => ({ ...out })),
                 table: [],
@@ -1064,19 +1064,19 @@ export class TruthTablePanel {
         }
 
         // Check if we're transitioning from no-table state to having table
-        const hadNoTable = this.truthTableData && this.truthTableData.table.length === 0;
+        const hadNoTable = this.circuitAnalysis && this.circuitAnalysis.table.length === 0;
 
         // Check if column structure changed (inputs/outputs added/removed)
         const countChanged =
             hadNoTable ||
-            !this.truthTableData ||
-            inputs.length !== this.truthTableData.inputs.length ||
-            outputs.length !== this.truthTableData.outputs.length;
+            !this.circuitAnalysis ||
+            inputs.length !== this.circuitAnalysis.inputs.length ||
+            outputs.length !== this.circuitAnalysis.outputs.length;
 
         // Check if labels changed (need to update column headers)
-        const labelsChanged = !countChanged && this.truthTableData && (
-            inputs.some((input, i) => input.label !== this.truthTableData.inputs[i]?.label) ||
-            outputs.some((output, i) => output.label !== this.truthTableData.outputs[i]?.label)
+        const labelsChanged = !countChanged && this.circuitAnalysis && (
+            inputs.some((input, i) => input.label !== this.circuitAnalysis.inputs[i]?.label) ||
+            outputs.some((output, i) => output.label !== this.circuitAnalysis.outputs[i]?.label)
         );
 
         if (countChanged) {
@@ -1098,7 +1098,7 @@ export class TruthTablePanel {
 
             // Update data and reset column order for new structure
             // Deep copy inputs/outputs to capture current labels (avoid reference issues)
-            this.truthTableData = {
+            this.circuitAnalysis = {
                 inputs: inputs.map(inp => ({ ...inp })),
                 outputs: outputs.map(out => ({ ...out })),
                 table,
@@ -1111,7 +1111,7 @@ export class TruthTablePanel {
         } else if (labelsChanged) {
             // Labels changed but column count is the same - update headers in place
             // Deep copy inputs/outputs to capture current labels (avoid reference issues)
-            this.truthTableData = {
+            this.circuitAnalysis = {
                 inputs: inputs.map(inp => ({ ...inp })),
                 outputs: outputs.map(out => ({ ...out })),
                 table,
@@ -1124,7 +1124,7 @@ export class TruthTablePanel {
         } else {
             // Same structure - just update data in place (fast path)
             // Deep copy inputs/outputs to capture current labels (avoid reference issues)
-            this.truthTableData = {
+            this.circuitAnalysis = {
                 inputs: inputs.map(inp => ({ ...inp })),
                 outputs: outputs.map(out => ({ ...out })),
                 table,
@@ -1147,7 +1147,7 @@ export class TruthTablePanel {
     _updateColumnHeaders() {
         if (!this.table) return;
 
-        // Generate new column definitions with updated labels from this.truthTableData
+        // Generate new column definitions with updated labels from this.circuitAnalysis
         const newColumns = this.generateColumns();
 
         // Use setColumns to update all column headers at once
@@ -1274,8 +1274,8 @@ export class TruthTablePanel {
         // Unsubscribe from events
         eventBus.off(EVENT_TYPES.SIMULATION_STEP_COMPLETED, this._boundHandleStepCompleted);
         eventBus.off(EVENT_TYPES.CIRCUIT_VALIDITY_CHANGED, this._boundHandleValidityChanged);
-        eventBus.off(EVENT_TYPES.TRUTH_TABLE_COMPUTING, this._boundHandleComputing);
-        eventBus.off(EVENT_TYPES.TRUTH_TABLE_COMPUTED, this._boundHandleComputed);
+        eventBus.off(EVENT_TYPES.CIRCUIT_ANALYSIS_COMPUTING, this._boundHandleComputing);
+        eventBus.off(EVENT_TYPES.CIRCUIT_ANALYSIS_COMPUTED, this._boundHandleComputed);
 
         // Destroy Tabulator instance
         if (this.table) {

@@ -5,7 +5,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { CircuitState } from '../../src/core/CircuitState.js';
-import { TruthTableManager } from '../../src/core/TruthTableManager.js';
+import { CircuitAnalysisManager } from '../../src/core/CircuitAnalysisManager.js';
 import { SimulationController } from '../../src/core/SimulationController.js';
 import { CircuitValidityManager } from '../../src/core/CircuitValidityManager.js';
 import { eventBus, EVENT_TYPES } from '../../src/utils/eventBus.js';
@@ -56,7 +56,7 @@ function createComponent(id, type, label, x = 100, y = 100) {
 
 describe('Truth Table Cache - Core Functionality', () => {
     let state;
-    let truthTableManager;
+    let circuitAnalysisManager;
     let mockStorage;
 
     beforeEach(() => {
@@ -68,7 +68,7 @@ describe('Truth Table Cache - Core Functionality', () => {
         global.localStorage = mockStorage;
 
         state = new CircuitState();
-        truthTableManager = new TruthTableManager({ state });
+        circuitAnalysisManager = new CircuitAnalysisManager({ state });
     });
 
     afterEach(() => {
@@ -77,7 +77,7 @@ describe('Truth Table Cache - Core Functionality', () => {
 
     describe('Cache Initialization', () => {
         it('should have null cache initially', () => {
-            expect(state.getTruthTableCache()).toBeNull();
+            expect(state.getCircuitAnalysis()).toBeNull();
         });
 
         it('should compute cache after debounce on BOARD_CHANGED event', () => {
@@ -98,13 +98,13 @@ describe('Truth Table Cache - Core Functionality', () => {
             state.addConnection({ from: 3, fromPort: 0, to: 4, toPort: 0 });
 
             // Cache should not be computed yet (still debouncing)
-            expect(state.getTruthTableCache()).toBeNull();
+            expect(state.getCircuitAnalysis()).toBeNull();
 
             // Advance past debounce time
             vi.advanceTimersByTime(TIMING.TRUTH_TABLE_DEBOUNCE + 10);
 
             // Cache should now be computed
-            const cache = state.getTruthTableCache();
+            const cache = state.getCircuitAnalysis();
             expect(cache).not.toBeNull();
             expect(cache.isValid).toBe(true);
             expect(cache.table).toHaveLength(4);
@@ -122,7 +122,7 @@ describe('Truth Table Cache - Core Functionality', () => {
 
             vi.advanceTimersByTime(TIMING.TRUTH_TABLE_DEBOUNCE + 10);
 
-            const initialCache = state.getTruthTableCache();
+            const initialCache = state.getCircuitAnalysis();
             expect(initialCache).not.toBeNull();
 
             // Add a gate
@@ -131,7 +131,7 @@ describe('Truth Table Cache - Core Functionality', () => {
 
             vi.advanceTimersByTime(TIMING.TRUTH_TABLE_DEBOUNCE + 10);
 
-            const newCache = state.getTruthTableCache();
+            const newCache = state.getCircuitAnalysis();
             expect(newCache).not.toBe(initialCache);
         });
 
@@ -152,7 +152,7 @@ describe('Truth Table Cache - Core Functionality', () => {
 
             vi.advanceTimersByTime(TIMING.TRUTH_TABLE_DEBOUNCE + 10);
 
-            const initialCache = state.getTruthTableCache();
+            const initialCache = state.getCircuitAnalysis();
             expect(initialCache.isValid).toBe(true);
             expect(initialCache.table).toHaveLength(4); // 2 inputs = 4 rows
 
@@ -161,7 +161,7 @@ describe('Truth Table Cache - Core Functionality', () => {
 
             vi.advanceTimersByTime(TIMING.TRUTH_TABLE_DEBOUNCE + 10);
 
-            const newCache = state.getTruthTableCache();
+            const newCache = state.getCircuitAnalysis();
             // Cache should be recomputed (but might be invalid due to missing connection)
             expect(newCache).not.toBe(initialCache);
         });
@@ -178,7 +178,7 @@ describe('Truth Table Cache - Core Functionality', () => {
             vi.advanceTimersByTime(TIMING.TRUTH_TABLE_DEBOUNCE + 10);
 
             // Initially invalid (not connected)
-            const initialCache = state.getTruthTableCache();
+            const initialCache = state.getCircuitAnalysis();
             expect(initialCache.isValid).toBe(false);
 
             // Add connections
@@ -187,7 +187,7 @@ describe('Truth Table Cache - Core Functionality', () => {
 
             vi.advanceTimersByTime(TIMING.TRUTH_TABLE_DEBOUNCE + 10);
 
-            const newCache = state.getTruthTableCache();
+            const newCache = state.getCircuitAnalysis();
             expect(newCache.isValid).toBe(true);
         });
 
@@ -204,19 +204,19 @@ describe('Truth Table Cache - Core Functionality', () => {
 
             vi.advanceTimersByTime(TIMING.TRUTH_TABLE_DEBOUNCE + 10);
 
-            expect(state.getTruthTableCache()).not.toBeNull();
+            expect(state.getCircuitAnalysis()).not.toBeNull();
 
             // Clear the board
             state.clearComponents();
 
             // Cache should be cleared immediately (no debounce)
-            expect(state.getTruthTableCache()).toBeNull();
+            expect(state.getCircuitAnalysis()).toBeNull();
         });
     });
 
     describe('Debouncing', () => {
         it('should debounce multiple rapid changes', () => {
-            const recomputeSpy = vi.spyOn(truthTableManager, 'recomputeTruthTable');
+            const recomputeSpy = vi.spyOn(circuitAnalysisManager, 'recomputeAnalysis');
 
             // Make many rapid changes
             for (let i = 0; i < 10; i++) {
@@ -237,7 +237,7 @@ describe('Truth Table Cache - Core Functionality', () => {
         });
 
         it('should reset debounce timer on each change', () => {
-            const recomputeSpy = vi.spyOn(truthTableManager, 'recomputeTruthTable');
+            const recomputeSpy = vi.spyOn(circuitAnalysisManager, 'recomputeAnalysis');
 
             // First change
             state.addComponent(createComponent(1, 'INPUT', 'I1'));
@@ -260,10 +260,10 @@ describe('Truth Table Cache - Core Functionality', () => {
         });
     });
 
-    describe('TRUTH_TABLE_COMPUTED Event', () => {
-        it('should emit TRUTH_TABLE_COMPUTED event after recomputation', () => {
+    describe('CIRCUIT_ANALYSIS_COMPUTED Event', () => {
+        it('should emit CIRCUIT_ANALYSIS_COMPUTED event after recomputation', () => {
             const eventHandler = vi.fn();
-            eventBus.on(EVENT_TYPES.TRUTH_TABLE_COMPUTED, eventHandler);
+            eventBus.on(EVENT_TYPES.CIRCUIT_ANALYSIS_COMPUTED, eventHandler);
 
             const input = createComponent(1, 'INPUT', 'I1');
             const notGate = createComponent(2, 'NOT', null, 200, 100);
@@ -302,9 +302,9 @@ describe('Truth Table Cache - Simulation Integration', () => {
         state = new CircuitState();
         validityManager = new CircuitValidityManager(state);
 
-        // TruthTableManager is needed to set up truth table cache recomputation on BOARD_CHANGED
+        // CircuitAnalysisManager is needed to set up truth table cache recomputation on BOARD_CHANGED
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const truthTableManager = new TruthTableManager({ state });
+        const circuitAnalysisManager = new CircuitAnalysisManager({ state });
 
         simulationController = new SimulationController({
             circuitState: state,
@@ -335,7 +335,7 @@ describe('Truth Table Cache - Simulation Integration', () => {
         // Wait for cache to be computed
         vi.advanceTimersByTime(TIMING.TRUTH_TABLE_DEBOUNCE + 10);
 
-        const cache = state.getTruthTableCache();
+        const cache = state.getCircuitAnalysis();
         expect(cache.isValid).toBe(true);
 
         // Spy on SimulationController's _simulate to verify cache is used
@@ -401,9 +401,9 @@ describe('Truth Table Cache - State Preservation', () => {
 
         state = new CircuitState();
 
-        // TruthTableManager sets up truth table cache recomputation
+        // CircuitAnalysisManager sets up truth table cache recomputation
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const truthTableManager = new TruthTableManager({ state });
+        const circuitAnalysisManager = new CircuitAnalysisManager({ state });
     });
 
     afterEach(() => {
@@ -459,7 +459,7 @@ describe('Truth Table Cache - State Preservation', () => {
 
 describe('Truth Table Cache - Edge Cases', () => {
     let state;
-    let truthTableManager;
+    let circuitAnalysisManager;
     let mockStorage;
 
     beforeEach(() => {
@@ -471,7 +471,7 @@ describe('Truth Table Cache - Edge Cases', () => {
         global.localStorage = mockStorage;
 
         state = new CircuitState();
-        truthTableManager = new TruthTableManager({ state });
+        circuitAnalysisManager = new CircuitAnalysisManager({ state });
     });
 
     afterEach(() => {
@@ -480,9 +480,9 @@ describe('Truth Table Cache - Edge Cases', () => {
 
     it('should handle empty circuit gracefully', () => {
         // Manually trigger recomputation on empty circuit
-        truthTableManager.recomputeTruthTable();
+        circuitAnalysisManager.recomputeAnalysis();
 
-        const cache = state.getTruthTableCache();
+        const cache = state.getCircuitAnalysis();
         expect(cache).not.toBeNull();
         expect(cache.isValid).toBe(false);
     });
@@ -493,7 +493,7 @@ describe('Truth Table Cache - Edge Cases', () => {
 
         vi.advanceTimersByTime(TIMING.TRUTH_TABLE_DEBOUNCE + 10);
 
-        const cache = state.getTruthTableCache();
+        const cache = state.getCircuitAnalysis();
         expect(cache.isValid).toBe(false);
         expect(cache.reason).toContain('output');
     });
@@ -504,13 +504,13 @@ describe('Truth Table Cache - Edge Cases', () => {
 
         vi.advanceTimersByTime(TIMING.TRUTH_TABLE_DEBOUNCE + 10);
 
-        const cache = state.getTruthTableCache();
+        const cache = state.getCircuitAnalysis();
         expect(cache.isValid).toBe(false);
         expect(cache.reason).toContain('input');
     });
 
     it('should handle rapid add/remove cycles', () => {
-        const recomputeSpy = vi.spyOn(truthTableManager, 'recomputeTruthTable');
+        const recomputeSpy = vi.spyOn(circuitAnalysisManager, 'recomputeAnalysis');
 
         // Add and remove rapidly
         for (let i = 0; i < 5; i++) {
@@ -536,7 +536,7 @@ describe('Truth Table Cache - Edge Cases', () => {
 
         vi.advanceTimersByTime(TIMING.TRUTH_TABLE_DEBOUNCE + 10);
 
-        const cache = state.getTruthTableCache();
+        const cache = state.getCircuitAnalysis();
         // Cache should reflect final state of all changes
         expect(cache).not.toBeNull();
     });

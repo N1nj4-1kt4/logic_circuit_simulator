@@ -7,7 +7,7 @@
  */
 
 import { eventBus, EVENT_TYPES } from '../utils/eventBus.js';
-import { validateCircuitForTruthTable } from './TruthTableComputer.js';
+import { validateCircuitForAnalysis } from './CircuitAnalyzer.js';
 
 /**
  * Circuit validity states
@@ -71,7 +71,7 @@ export class CircuitValidityManager {
     revalidate() {
         const components = this.circuitState.getComponents();
         const connections = this.circuitState.getConnections();
-        const validation = validateCircuitForTruthTable(components, connections);
+        const validation = validateCircuitForAnalysis(components, connections);
 
         const newValidity = this._computeValidity(validation, components);
         const oldValidity = this.currentValidity;
@@ -171,7 +171,7 @@ export class CircuitValidityManager {
      * @returns {{ isValid: boolean, reason: string|null, validity: string }}
      */
     wouldBeValidAfter(proposedComponents, proposedConnections) {
-        const validation = validateCircuitForTruthTable(proposedComponents, proposedConnections);
+        const validation = validateCircuitForAnalysis(proposedComponents, proposedConnections);
         return {
             isValid: validation.isValid,
             reason: validation.reason,

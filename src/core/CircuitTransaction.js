@@ -5,7 +5,7 @@
  * committing them. It separates "what would happen" from "make it happen".
  */
 
-import { validateCircuitForTruthTable } from './TruthTableComputer.js';
+import { validateCircuitForAnalysis } from './CircuitAnalyzer.js';
 
 /**
  * Transaction for circuit changes
@@ -72,7 +72,7 @@ export class CircuitTransaction {
      * @returns {Object} Analysis result
      */
     analyze() {
-        const validation = validateCircuitForTruthTable(
+        const validation = validateCircuitForAnalysis(
             this.simulatedComponents,
             this.simulatedConnections
         );

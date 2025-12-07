@@ -1,19 +1,20 @@
 /**
- * TruthTableComputer - Pure computation of truth tables
+ * CircuitAnalyzer - Pure computation of circuit analysis (truth tables)
  *
- * This module computes truth tables without modifying the original circuit state.
+ * This module computes circuit analysis (input/output mappings for all combinations)
+ * without modifying the original circuit state.
  * It uses cloned components for simulation to ensure the circuit remains unchanged.
  */
 
 import { simulateCircuit } from './circuitEvaluator.js';
 
 /**
- * Validate if the circuit is suitable for truth table computation
+ * Validate if the circuit is suitable for analysis
  * @param {Array} components - Circuit components
  * @param {Array} connections - Circuit connections
  * @returns {{ isValid: boolean, reason: string|null, inputs: Array, outputs: Array }}
  */
-export function validateCircuitForTruthTable(components, connections) {
+export function validateCircuitForAnalysis(components, connections) {
     const inputs = components
         .filter(c => c.type === 'INPUT')
         .sort((a, b) => (a.label || '').localeCompare(b.label || ''));
@@ -94,14 +95,14 @@ export function validateCircuitForTruthTable(components, connections) {
 }
 
 /**
- * Generate a truth table for an invalid circuit
+ * Generate analysis for an invalid circuit
  * Shows current input values and simulates to get output values (which may be null/?)
  * @param {Array} components - Circuit components
  * @param {Array} connections - Circuit connections
- * @param {Object} validation - Validation result from validateCircuitForTruthTable
+ * @param {Object} validation - Validation result from validateCircuitForAnalysis
  * @returns {{ inputs: Array, outputs: Array, table: Array, isValid: boolean, reason: string|null }}
  */
-function generateInvalidCircuitTable(components, connections, validation) {
+function generateInvalidCircuitAnalysis(components, connections, validation) {
     const { inputs, outputs, reason } = validation;
 
     // If no inputs or no outputs, return empty table
@@ -177,19 +178,19 @@ function generateInvalidCircuitTable(components, connections, validation) {
 }
 
 /**
- * Compute truth table for a circuit without modifying the original components
+ * Compute circuit analysis without modifying the original components
  * @param {Array} components - Circuit components (will NOT be modified)
  * @param {Array} connections - Circuit connections
  * @returns {{ inputs: Array, outputs: Array, table: Array, isValid: boolean, reason: string|null }}
  */
-export function computeTruthTable(components, connections) {
+export function computeCircuitAnalysis(components, connections) {
     // Validate circuit first
-    const validation = validateCircuitForTruthTable(components, connections);
+    const validation = validateCircuitForAnalysis(components, connections);
 
     if (!validation.isValid) {
-        // For invalid circuits, still generate a table reflecting current state
-        // This allows Truth Table to display even when circuit is incomplete
-        return generateInvalidCircuitTable(components, connections, validation);
+        // For invalid circuits, still generate analysis reflecting current state
+        // This allows Truth Table panel to display even when circuit is incomplete
+        return generateInvalidCircuitAnalysis(components, connections, validation);
     }
 
     const { inputs, outputs } = validation;
@@ -260,7 +261,7 @@ export function computeTruthTable(components, connections) {
 }
 
 /**
- * Compute truth table asynchronously with chunked processing
+ * Compute circuit analysis asynchronously with chunked processing
  * Yields to the browser between chunks to keep UI responsive
  * @param {Array} components - Circuit components (will NOT be modified)
  * @param {Array} connections - Circuit connections
@@ -269,15 +270,15 @@ export function computeTruthTable(components, connections) {
  * @param {number} options.chunkSize - Rows to compute per chunk (default: 64)
  * @returns {Promise<{ inputs: Array, outputs: Array, table: Array, isValid: boolean, reason: string|null }>}
  */
-export async function computeTruthTableAsync(components, connections, options = {}) {
+export async function computeCircuitAnalysisAsync(components, connections, options = {}) {
     const { onProgress, chunkSize = 64 } = options;
 
     // Validate circuit first
-    const validation = validateCircuitForTruthTable(components, connections);
+    const validation = validateCircuitForAnalysis(components, connections);
 
     if (!validation.isValid) {
         // For invalid circuits, use sync version (usually small or empty)
-        return generateInvalidCircuitTable(components, connections, validation);
+        return generateInvalidCircuitAnalysis(components, connections, validation);
     }
 
     const { inputs, outputs } = validation;
@@ -357,13 +358,13 @@ export async function computeTruthTableAsync(components, connections, options = 
 }
 
 /**
- * Look up output values for a given input combination from a pre-computed truth table
- * @param {Object} cache - Pre-computed truth table cache
+ * Look up output values for a given input combination from a pre-computed circuit analysis
+ * @param {Object} analysis - Pre-computed circuit analysis
  * @param {Array} inputValues - Array of input values (0 or 1)
- * @returns {Object|null} - Row from truth table or null if not found
+ * @returns {Object|null} - Row from analysis or null if not found
  */
-export function lookupTruthTableRow(cache, inputValues) {
-    if (!cache || !cache.isValid || !cache.table) {
+export function lookupAnalysisRow(analysis, inputValues) {
+    if (!analysis || !analysis.isValid || !analysis.table) {
         return null;
     }
 
@@ -374,8 +375,8 @@ export function lookupTruthTableRow(cache, inputValues) {
         rowIndex = (rowIndex << 1) | (value ? 1 : 0);
     });
 
-    if (rowIndex >= 0 && rowIndex < cache.table.length) {
-        return cache.table[rowIndex];
+    if (rowIndex >= 0 && rowIndex < analysis.table.length) {
+        return analysis.table[rowIndex];
     }
 
     return null;
@@ -383,12 +384,12 @@ export function lookupTruthTableRow(cache, inputValues) {
 
 /**
  * Get the row index that matches the current input state
- * @param {Object} cache - Pre-computed truth table cache
+ * @param {Object} analysis - Pre-computed circuit analysis
  * @param {Array} components - Current circuit components (to read input values)
  * @returns {number} - Row index or -1 if not found
  */
-export function getCurrentRowIndex(cache, components) {
-    if (!cache || !cache.isValid || !cache.inputs) {
+export function getCurrentRowIndex(analysis, components) {
+    if (!analysis || !analysis.isValid || !analysis.inputs) {
         return -1;
     }
 
@@ -397,7 +398,7 @@ export function getCurrentRowIndex(cache, components) {
         .filter(c => c.type === 'INPUT')
         .sort((a, b) => a.label.localeCompare(b.label));
 
-    if (inputs.length !== cache.inputs.length) {
+    if (inputs.length !== analysis.inputs.length) {
         return -1;
     }
 
