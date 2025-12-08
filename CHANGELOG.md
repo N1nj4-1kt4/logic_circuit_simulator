@@ -4,7 +4,42 @@ All notable changes to the Logic Circuit Simulator are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [2.0.0] - 2024-12-04
+## [Unreleased] - 2025-12-09
+
+### Refactored
+
+#### TruthTablePanel Modernization
+- **Section-based organization**: Code organized into clear sections (Constructor & Initialization, Event Handling, Progress UI, Visibility & Lifecycle, Data Management, Table Rendering, Row Highlighting, Layout & Sizing, Drag & Resize, State Persistence)
+- **Explicit lifecycle**: Added `init(savedState)` method for explicit initialization before `show()`
+- **Renamed property**: `table` → `tabulatorInstance` for clarity
+- **Private methods**: All internal methods prefixed with `_` (e.g., `_renderTabulator`, `_saveState`, `_updateHighlight`)
+- **Async pattern**: `show()`, `_handleComputed()`, and `refresh()` are now async methods; `_renderTabulator()` returns a Promise
+- **Two-level lifecycle**: Table rebuild (structure changes) vs Full destroy (board switch) clearly documented
+
+#### Extracted Pure Functions to truthTableUtils.js
+- **Column Definitions**: `buildTruthTableColumns()` - builds Tabulator column definitions with Input/Output groups
+- **Table Layout**: `calculateRowLayout()`, `calculateTableLayout()` - row height and table sizing calculations
+- **Layout Constants**: `MIN_ROW_HEIGHT`, `MAX_ROW_HEIGHT`, `CONTENT_HEIGHT` exported
+- **Panel Bounds**: `clampPanelPosition()`, `clampDimension()`, `sanitizePosition()` - viewport boundary enforcement
+- **Row Search**: `inputValuesToIndex()`, `indexToInputValues()` - binary conversion for row lookup
+
+### Added
+- `src/utils/truthTableUtils.js` - New utility module with pure functions extracted from TruthTablePanel
+- `tests/unit/utils/truthTableUtils.test.js` - Comprehensive tests for truth table utilities (714 lines)
+- `docs/specs/truth-table-panel-feature-spec.md` - Complete feature specification
+- `docs/specs/truth-table-panel-internal-flow.md` - Internal flow documentation
+- `docs/specs/truth-table-panel-prd.md` - Product requirements document
+- `docs/manual-tests/truth-table-panel.md` - Manual testing checklist
+
+### Changed
+- `circuit-simulator.js` - Updated TruthTablePanel integration with new `init()` lifecycle
+- `src/core/CircuitAnalysisManager.js` - Minor updates for clarity
+
+### Documentation
+- Updated `ARCHITECTURE.md` with TruthTablePanel section details
+- Updated `CLAUDE.md` with new guidelines for minimal public API and private method conventions
+
+## [2.0.0] - 2025-12-04
 
 ### Major Refactoring Release
 

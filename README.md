@@ -246,7 +246,8 @@ src/
 └── utils/              # Utilities
     ├── eventBus.js          # Event pub/sub system
     ├── geometry.js          # Geometry calculations
-    └── serialization.js     # JSON serialization
+    ├── serialization.js     # JSON serialization
+    └── truthTableUtils.js   # Truth table panel utilities
 ```
 
 ### Simulation Engine
@@ -270,7 +271,7 @@ src/
 - Export/import via JSON files
 
 ### Testing
-- **453 automated tests** covering:
+- **1175 automated tests** covering:
   - Storage layer (60 tests)
   - Gate logic (58 tests)
   - Circuit simulation (30 tests)
@@ -280,6 +281,10 @@ src/
   - Event bus consistency (30 tests)
   - Auto-save (15 tests)
   - Full workflows (122 tests)
+  - Truth table utilities (76 tests)
+  - UI components (340 tests)
+  - Geometry & hit detection (100 tests)
+  - And more...
 
 Run tests with: `npm test`
 
