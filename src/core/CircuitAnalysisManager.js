@@ -66,10 +66,20 @@ export class CircuitAnalysisManager {
 
     /**
      * Handle COMPONENT_LABEL_CHANGED event
+     * Labels are display metadata only - no need to recompute truth table.
+     * Just patch the label in the existing analysis.
      * @private
      */
-    _handleLabelChanged() {
-        this._debouncedRecomputeAnalysis();
+    _handleLabelChanged({ component, newLabel }) {
+        const analysis = this.state.getCircuitAnalysis();
+        if (!analysis) return;
+
+        const list = component.type === 'INPUT' ? analysis.inputs : analysis.outputs;
+        const item = list.find(i => i.id === component.id);
+        if (item) item.label = newLabel;
+
+        this.state.setCircuitAnalysis(analysis);
+        eventBus.emit(EVENT_TYPES.CIRCUIT_ANALYSIS_COMPUTED, analysis);
     }
 
     /**

@@ -80,23 +80,25 @@
                                  │
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  TruthTablePanel.show() - NEW METHOD (lines 1222-1246)                  │
+│  TruthTablePanel.show()                                                  │
+│                                                                          │
+│  Lifecycle: Constructor → init(savedState) → show() → _renderTabulator()│
+│             → hide() → destroy()                                         │
 │                                                                          │
 │  ┌─────────────────────────────────────────────────────────────────┐    │
-│  │  if (this.table && this.panel) {                                │    │
-│  │      // FAST PATH: Table already exists, just reveal it         │    │
+│  │  if (this.tabulatorInstance && this.panel) {                    │    │
+│  │      // FAST PATH: Tabulator already exists, just reveal it     │    │
 │  │      panel.classList.remove('hidden')                           │    │
 │  │      panel.style.display = 'block'                              │    │
 │  │      panel.style.opacity = '1'                                  │    │
-│  │      updateHighlight()                                          │    │
+│  │      _updateHighlight()                                         │    │
 │  │      emit(TRUTH_TABLE_SHOWN)                                    │    │
-│  │      return true  ◄──────────────── INSTANT! No rebuild         │    │
+│  │      return  ◄──────────────────── INSTANT! No rebuild          │    │
 │  │  }                                                              │    │
 │  │                                                                 │    │
-│  │  // SLOW PATH: No table exists, need to build                   │    │
-│  │  if (!generate()) return false                                  │    │
-│  │  display()                                                      │    │
-│  │  return true                                                    │    │
+│  │  // SLOW PATH: No Tabulator exists, need to build               │    │
+│  │  _setCircuitAnalysisLocalCopy()  // Sets this.circuitAnalysis   │    │
+│  │  await _renderTabulator()                                       │    │
 │  └─────────────────────────────────────────────────────────────────┘    │
 └──────────────────┬──────────────────────────────┬───────────────────────┘
                    │                              │
@@ -107,30 +109,46 @@
                    │                             │
                    ▼                             ▼
         ┌─────────────────────┐      ┌─────────────────────────────────┐
-        │  Panel revealed     │      │  generate() - Load cache data   │
-        │  instantly!         │      │                                 │
-        │  (~0ms)             │      │  Check circuitState cache:      │
-        └─────────────────────┘      │  - Cache exists → use it        │
-                                     │  - Computing → return 'computing'│
-                                     │  - No cache → return false       │
+        │  Panel revealed     │      │  _setCircuitAnalysisLocalCopy() │
+        │  instantly!         │      │  - Load cache data              │
+        │  (~0ms)             │      │  Sets this.circuitAnalysis:     │
+        └─────────────────────┘      │  - Cache exists → deep copy it  │
+                                     │  - No cache → placeholder with  │
+                                     │    reason: 'Computing...'       │
                                      └───────────────┬─────────────────┘
                                                      │
                                                      ▼
                                      ┌─────────────────────────────────┐
-                                     │  display() - Create Tabulator   │
+                                     │  _renderTabulator() - Create    │
+                                     │  Tabulator (async, returns      │
+                                     │  Promise<void>)                 │
+                                     │                                 │
+                                     │  Uses pure functions from       │
+                                     │  truthTableUtils.js:            │
+                                     │  • buildTruthTableColumns()     │
+                                     │  • calculateRowLayout()         │
+                                     │  • clampPanelPosition()         │
                                      │                                 │
                                      │  1. Destroy old table if exists │
-                                     │  2. Apply saved position/size   │
-                                     │  3. Show panel (opacity: 0)     │
-                                     │  4. Create Tabulator with ALL   │
+                                     │  2. Apply saved dimensions      │
+                                     │  3. Create Tabulator with ALL   │
                                      │     data (virtual DOM handles   │
                                      │     large datasets)             │
-                                     │  5. tableBuilt callback:        │
-                                     │     - Setup drag/resize         │
-                                     │     - Position smartly          │
-                                     │     - Apply dimensions          │
-                                     │     - Reveal (opacity: 1)       │
-                                     │  6. emit(TRUTH_TABLE_SHOWN)     │
+                                     │  4. tableBuilt callback:        │
+                                     │     - _updateHighlight()        │
+                                     │     - _applyTableHeight()       │
+                                     │     - _applyTableWidth()        │
+                                     │     - _saveState() (if not      │
+                                     │       restoring)                │
+                                     │     - resolve()  ◄── Promise    │
+                                     │       resolves here             │
+                                     │                                 │
+                                     │  Then show() handles common     │
+                                     │  post-render for ALL paths:     │
+                                     │  - _positionPanelIfNeeded()     │
+                                     │  - _setupInteractions()         │
+                                     │  - panel.style.opacity = '1'    │
+                                     │  - emit(TRUTH_TABLE_SHOWN)      │
                                      └─────────────────────────────────┘
 ```
 
@@ -217,19 +235,19 @@
                                  │
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  _handleComputed() (lines 127-153)                                      │
+│  _handleComputed() (async)                                              │
 │                                                                          │
 │  1. _hideProgress() - remove progress bar if showing                    │
 │  2. If panel visible:                                                    │
-│     - Get cache from circuitState                                       │
-│     - Update this.circuitAnalysis                                        │
-│     - If table exists: table.setData(newData)  ◄── FAST UPDATE         │
-│     - If no table (was showing "computing"): display()                  │
+│     - Get analysis from circuitState                                    │
+│     - Deep copy via _deepCopyAnalysis()                                 │
+│     - If tabulatorInstance exists: setData(newData)  ◄── FAST UPDATE   │
+│     - Else if table.length > 0: await _renderTabulator(content, true)  │
 └────────────────────────────────┬────────────────────────────────────────┘
                                  │
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  refresh() - Smart update detection (lines 1028-1120)                   │
+│  refresh() - Smart update detection (lines 1021-1108)                   │
 │                                                                          │
 │  Compare old circuitAnalysis with new cache:                             │
 │                                                                          │
@@ -237,9 +255,9 @@
 │  │  STRUCTURE CHANGED? (input/output count different)               │   │
 │  │  ─────────────────────────────────────────────────────────────── │   │
 │  │  YES → Full rebuild required                                     │   │
-│  │        - saveState() (preserve position)                         │   │
+│  │        - _saveState() (preserve position)                        │   │
 │  │        - Clear saved dimensions (auto-fit new content)           │   │
-│  │        - display() (recreate Tabulator)                          │   │
+│  │        - await _renderTabulator() (recreate Tabulator)           │   │
 │  └──────────────────────────────────────────────────────────────────┘   │
 │                                                                          │
 │  ┌──────────────────────────────────────────────────────────────────┐   │
@@ -255,7 +273,7 @@
 │  │  ─────────────────────────────────────────────────────────────── │   │
 │  │  YES → Fast data update                                          │   │
 │  │        - table.setData(newData)  ◄── Tabulator optimizes this   │   │
-│  │        - updateHighlight()                                       │   │
+│  │        - _updateHighlight()                                      │   │
 │  └──────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -271,15 +289,15 @@
                                  │
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  hide() (lines 1188-1197)                                               │
+│  hide() (lines 1142-1151)                                               │
 │                                                                          │
-│  1. saveState() - BEFORE hiding (position becomes 0 after display:none) │
+│  1. _saveState() - BEFORE hiding (position becomes 0 after display:none)│
 │  2. panel.style.opacity = '0'                                           │
 │  3. panel.style.pointerEvents = 'none'                                  │
 │  4. panel.classList.add('hidden')                                       │
 │  5. panel.style.display = 'none'                                        │
 │                                                                          │
-│  NOTE: Tabulator instance is PRESERVED (this.table still exists)        │
+│  NOTE: Tabulator instance is PRESERVED (this.tabulatorInstance exists)  │
 │        This is the KEY OPTIMIZATION - no rebuild on next show()         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -295,13 +313,13 @@
                                  │
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  Interact.js event handlers (dragMoveListener / resizeMoveListener)     │
+│  Interact.js event handlers (_dragMoveListener / _resizeMoveListener)   │
 │  or Tabulator columnMoved event                                         │
 └────────────────────────────────┬────────────────────────────────────────┘
                                  │
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  saveState()                                                            │
+│  _saveState()                                                           │
 │                                                                          │
 │  Captures: { columnOrder, width, height, x, y, visible }               │
 └────────────────────────────────┬────────────────────────────────────────┘
@@ -345,7 +363,9 @@ CIRCUIT_ANALYSIS_COMPUTED
     └── circuit-simulator.js → backward compat
 
 TRUTH_TABLE_SHOWN
-├── Emitted by: TruthTablePanel.display() / show() / displayInvalidMessage()
+├── Emitted by: TruthTablePanel.show() (inlined at end of all paths):
+│   - show() fast path (table already exists) - emits directly
+│   - show() slow path - emits after common post-render setup
 ├── Payload: (none)
 └── Listened by: (internal tracking)
 
@@ -372,7 +392,7 @@ BOARD_CLEARED
 
 SIMULATION_STEP_COMPLETED
 ├── Emitted by: Simulation system
-└── Listened by: TruthTablePanel._handleStepCompleted() → highlight row
+└── Listened by: TruthTablePanel._handleStepCompleted() → _highlightRowByIndex()
 
 CIRCUIT_VALIDITY_CHANGED
 ├── Emitted by: CircuitValidityManager
@@ -382,6 +402,25 @@ CIRCUIT_VALIDITY_CHANGED
 ---
 
 ## 8. DATA STRUCTURES
+
+### Naming Clarification: tabulatorInstance vs circuitAnalysis.table
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  IMPORTANT NAMING DISTINCTION                                           │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  tabulatorInstance = Tabulator.js library instance (UI component)        │
+│                      - Created in _renderTabulator()                    │
+│                      - Has methods: .setData(), .destroy(), etc.        │
+│                      - Renders the visual grid                          │
+│                                                                          │
+│  circuitAnalysis.table = Truth table data array                         │
+│                          - Array of row objects [{input0, output0,...}] │
+│                          - Pure data, no UI concerns                    │
+│                          - Passed to tabulatorInstance.setData()        │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
 
 ### Circuit Analysis Object (CircuitState.circuitAnalysis)
 ```javascript
@@ -435,9 +474,60 @@ CIRCUIT_VALIDITY_CHANGED
 
 ## 10. KEY CHANGES MADE (SUMMARY)
 
+### Refactored: TruthTablePanel Architecture (Latest)
+
+**Lifecycle symmetry with `init()` method:**
+```
+Constructor → init(savedState) → show() → _renderTabulator() → hide() → destroy()
+```
+
+**Method renames for clarity:**
+| Old Name | New Name | Reason |
+|----------|----------|--------|
+| `display()` | `_renderTabulator()` | Internal, builds Tabulator, returns Promise<void> |
+| `displayInvalidMessage()` | `_renderInvalidState()` | Internal, shows error, sync |
+| `displayComputingMessage()` | `_renderComputingState()` | Internal, shows progress, sync |
+
+**Extracted pure functions for testability:**
+All utility functions consolidated into `src/utils/truthTableUtils.js`:
+
+| Section | Functions | Tests |
+|---------|-----------|-------|
+| Column Definitions | `buildTruthTableColumns()` | 19 tests |
+| Table Layout | `calculateRowLayout()`, `calculateTableLayout()` | 20 tests |
+| Panel Bounds | `clampPanelPosition()`, `clampDimension()`, `sanitizePosition()` | 25 tests |
+| Row Search | `inputValuesToIndex()`, `indexToInputValues()` | 12 tests |
+
+Test file: `tests/unit/utils/truthTableUtils.test.js` (85 tests total)
+
+**Section organization:** Added 10 clear section comment blocks in TruthTablePanel.js
+
+**Extracted internal helper methods (latest refactoring):**
+
+| Helper Method | Consolidated From | Purpose |
+|---------------|-------------------|---------|
+| `_positionPanelIfNeeded(wasVisible)` | show() | Smart panel positioning (smart position or restore) |
+| `_deepCopyAnalysis(analysis)` | 5+ locations | Deep copy of circuitAnalysis to prevent reference issues |
+| `_applyRowStyles(content, rowHeight)` | 2 locations | Apply consistent row/cell styles |
+| `_setupInteractions()` | Made idempotent | Guard inside method (safe to call multiple times) |
+
+**async/await refactoring:**
+- `show()` is now `async show()` and uses `await _renderTabulator()`
+- `_renderTabulator()` returns `Promise<void>` that resolves when `tableBuilt` fires
+- Common post-render setup is inlined in `show()` for ALL paths (not duplicated in render methods)
+- `_handleComputed()` and `refresh()` are also async
+
+**Key architectural pattern:**
+Render methods (`_renderTabulator`, `_renderInvalidState`, `_renderComputingState`) now ONLY handle content.
+The caller (`show()`) handles all common post-render setup:
+1. `_positionPanelIfNeeded(wasVisible)` - positioning
+2. `_setupInteractions()` - drag/resize (idempotent)
+3. `panel.style.opacity = '1'` - reveal
+4. `eventBus.emit(TRUTH_TABLE_SHOWN)` - notify listeners
+
 ### Added: `show()` method in TruthTablePanel
 - Fast path: if table exists, just reveal panel (instant)
-- Slow path: if no table, call generate() + display()
+- Slow path: if no table, call `_setCircuitAnalysisLocalCopy()` + `await _renderTabulator()`
 
 ### Removed: Progressive Loading
 - Was loading initial 100 rows, then adding 500 at a time
@@ -445,7 +535,8 @@ CIRCUIT_VALIDITY_CHANGED
 - The bottleneck was Tabulator INIT, not rendering
 
 ### Changed: circuit-simulator.js
-- Now calls `panel.show()` instead of `generate()` + `display()`
+- Now calls `panel.init(savedState)` during initialization
+- Then calls `panel.show()` instead of `_setCircuitAnalysisLocalCopy()` + `display()`
 
 ### Preserved: Async Computation
 - CircuitAnalysisManager still uses async for 8+ inputs

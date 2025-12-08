@@ -772,12 +772,9 @@ class CircuitSimulator {
                 // Event system will trigger auto-save via TRUTH_TABLE_PANEL_STATE_CHANGED event
             };
 
-            // Restore saved state if available (position, size, etc.)
-            // setState() sets _isRestoring flag to skip saveState() during initial display
+            // Initialize with saved state (caches DOM, sets up close button)
             const truthTablePanelState = this.state.getTruthTablePanelState();
-            if (truthTablePanelState) {
-                this.truthTablePanel.setState(truthTablePanelState);
-            }
+            this.truthTablePanel.init(truthTablePanelState);
         }
 
         // Show truth table (reuses existing table if available, or builds new one)

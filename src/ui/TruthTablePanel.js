@@ -3,6 +3,7 @@ import 'tabulator-tables/dist/css/tabulator.min.css';
 import 'tabulator-tables/dist/css/tabulator_midnight.min.css';
 import interact from 'interactjs';
 import { positionPanelSmartly } from '../utils/positioning.js';
+import { buildTruthTableColumns, inputValuesToIndex } from '../utils/truthTableUtils.js';
 import { UI } from '../constants.js';
 import { eventBus, EVENT_TYPES } from '../utils/eventBus.js';
 
@@ -21,6 +22,10 @@ import { eventBus, EVENT_TYPES } from '../utils/eventBus.js';
  * - CIRCUIT_VALIDITY_CHANGED: Shows invalid message when circuit becomes incomplete
  */
 export class TruthTablePanel {
+    // ============================================================================
+    // SECTION: Constructor & Initialization
+    // ============================================================================
+
     /**
      * @param {HTMLCanvasElement} canvas - Main canvas element
      * @param {Array} components - Circuit components array
@@ -33,7 +38,15 @@ export class TruthTablePanel {
         this.connections = connections;
         this.circuitState = circuitState;
 
-        this.table = null;
+        /**
+         * Tabulator.js instance for rendering the truth table grid.
+         *
+         * LIFECYCLE NOTE: This is destroyed and recreated during table rebuilds
+         * (structure changes) but preserved during show/hide cycles.
+         * See _renderTable() and destroy() for the two-level lifecycle.
+         * @type {Tabulator|null}
+         */
+        this.tabulatorInstance = null;
         this.panel = null;
         this.state = null;
 
@@ -61,7 +74,54 @@ export class TruthTablePanel {
 
         // Subscribe to declarative events
         this._setupEventListeners();
+
+        // Initialization flag
+        this._initialized = false;
     }
+
+    /**
+     * Initialize the panel (first-time setup)
+     * Call once after construction before show()
+     * @param {Object} savedState - Optional saved state to restore
+     */
+    init(savedState = null) {
+        // 1. Cache DOM references
+        this.panel = document.getElementById('truthTablePanel');
+        const content = document.getElementById('truthTableContent');
+
+        if (!this.panel || !content) {
+            throw new Error('TruthTablePanel: Required DOM elements not found');
+        }
+
+        // 2. Restore saved state
+        if (savedState) {
+            this._setState(savedState);
+            this._isRestoring = true;  // Skip _saveState() during initial display
+        }
+
+        // 3. Setup close button (one-time)
+        this._setupCloseButton();
+
+        // 4. Mark as initialized
+        this._initialized = true;
+    }
+
+    /**
+     * Setup close button listener
+     * @private
+     */
+    _setupCloseButton() {
+        const closeButton = document.getElementById('closeTruthTable');
+        if (closeButton) {
+            closeButton.addEventListener('click', () => {
+                this.hide();
+            });
+        }
+    }
+
+    // ============================================================================
+    // SECTION: Event Handling
+    // ============================================================================
 
     /**
      * Setup event listeners for declarative events
@@ -86,8 +146,8 @@ export class TruthTablePanel {
      * @private
      */
     _handleStepCompleted(data) {
-        if (this.isVisible()) {
-            this.highlightRowByIndex(data.cycleIndex);
+        if (this._isVisible()) {
+            this._highlightRowByIndex(data.cycleIndex);
         }
     }
 
@@ -97,14 +157,11 @@ export class TruthTablePanel {
      */
     _handleValidityChanged(data) {
         // Only act if panel is visible and circuit became invalid
-        if (this.isVisible() && !data.canSimulate && this.circuitAnalysis) {
-            // Update circuitAnalysis to reflect invalid state
-            this.circuitAnalysis.isValid = false;
-            this.circuitAnalysis.reason = data.reason;
-
-            // If we have no table data, show invalid message
-            if (this.circuitAnalysis.table.length === 0) {
-                this.displayInvalidMessage(true);
+        if (this._isVisible() && !data.canSimulate) {
+            const analysis = this.circuitAnalysis;
+            // If we have no table data, show invalid message with the reason from the event
+            if (analysis && analysis.table.length === 0) {
+                this._renderInvalidState(data.reason);
             }
         }
     }
@@ -114,7 +171,7 @@ export class TruthTablePanel {
      * @private
      */
     _handleComputing(data) {
-        if (this.isVisible()) {
+        if (this._isVisible()) {
             this._showProgress(data.percent, data.current, data.total);
         }
     }
@@ -123,34 +180,35 @@ export class TruthTablePanel {
      * Handle circuit analysis computed event
      * @private
      */
-    _handleComputed() {
+    async _handleComputed() {
         // Hide progress indicator
         this._hideProgress();
 
         // If panel is visible, refresh it with new data
-        if (this.isVisible()) {
+        if (this._isVisible()) {
             // Refresh the table with new analysis data
             const analysis = this.circuitState.getCircuitAnalysis();
             if (analysis) {
-                this.circuitAnalysis = {
-                    inputs: (analysis.inputs || []).map(inp => ({ ...inp })),
-                    outputs: (analysis.outputs || []).map(out => ({ ...out })),
-                    table: analysis.table || [],
-                    isValid: analysis.isValid,
-                    reason: analysis.reason
-                };
+                this.circuitAnalysis = this._deepCopyAnalysis(analysis);
 
-                if (this.table) {
+                if (this.tabulatorInstance) {
                     // Table exists - just update data
-                    this.table.setData(this.circuitAnalysis.table);
+                    this.tabulatorInstance.setData(this.circuitAnalysis.table);
                 } else if (this.circuitAnalysis.table.length > 0) {
-                    // Table doesn't exist (was showing "computing" message) - need full display
-                    // The display() method will create the Tabulator instance
-                    this.display();
+                    // Table doesn't exist (was showing "computing" message) - need full render
+                    // Panel is already visible with interactions set up, so no finishShow needed
+                    const content = document.getElementById('truthTableContent');
+                    if (content) {
+                        await this._renderTabulator(content, true); // true = panel was already visible
+                    }
                 }
             }
         }
     }
+
+    // ============================================================================
+    // SECTION: Progress UI
+    // ============================================================================
 
     /**
      * Show progress indicator in the panel
@@ -194,11 +252,16 @@ export class TruthTablePanel {
         }
     }
 
+    // ============================================================================
+    // SECTION: Visibility & Lifecycle
+    // ============================================================================
+
     /**
      * Check if panel is visible
      * @returns {boolean}
+     * @private
      */
-    isVisible() {
+    _isVisible() {
         return this.panel &&
                !this.panel.classList.contains('hidden') &&
                this.panel.style.display !== 'none';
@@ -207,13 +270,14 @@ export class TruthTablePanel {
     /**
      * Highlight row by cycle index (used by SIMULATION_STEP_COMPLETED)
      * @param {number} index - The row index to highlight
+     * @private
      */
-    highlightRowByIndex(index) {
-        if (!this.table) return;
+    _highlightRowByIndex(index) {
+        if (!this.tabulatorInstance) return;
 
-        this.table.deselectRow();
+        this.tabulatorInstance.deselectRow();
 
-        const rows = this.table.getRows();
+        const rows = this.tabulatorInstance.getRows();
         if (rows[index]) {
             rows[index].select();
             rows[index].scrollTo();
@@ -221,10 +285,56 @@ export class TruthTablePanel {
     }
 
     /**
-     * Generate and display the truth table from pre-computed circuit analysis
-     * @returns {boolean|'computing'} - true if ready, 'computing' if async in progress, false if failed
+     * Position panel on first open - either smart position or restore saved position
+     * @param {boolean} wasVisible - Whether panel was already visible before this call
+     * @private
      */
-    generate() {
+    _positionPanelIfNeeded(wasVisible) {
+        if (wasVisible) return;
+
+        // Check if we have a valid saved position
+        // Position (0, 0) is valid but indicates no previous drag occurred
+        // We only want to skip smart positioning if user has explicitly positioned the panel
+        const hasValidSavedPosition = this.state &&
+            this.state.x !== undefined &&
+            this.state.y !== undefined &&
+            (this.state.x !== 0 || this.state.y !== 0);
+
+        if (!hasValidSavedPosition) {
+            positionPanelSmartly(this.panel, this.canvas, this.components);
+        } else {
+            this._restoreState(this.state);
+        }
+    }
+
+    // ============================================================================
+    // SECTION: Data Management
+    // ============================================================================
+
+    /**
+     * Create a deep copy of circuit analysis data.
+     * Deep copy provides lifecycle safety - Tabulator holds reference to table array.
+     * @param {Object} analysis - The analysis object to copy
+     * @returns {Object} Deep copied analysis with inputs, outputs, table, isValid, reason
+     * @private
+     */
+    _deepCopyAnalysis(analysis) {
+        const { inputs, outputs, table, isValid, reason } = analysis;
+        return {
+            inputs: (inputs || []).map(inp => ({ ...inp })),
+            outputs: (outputs || []).map(out => ({ ...out })),
+            table: table || [],
+            isValid: isValid,
+            reason: reason
+        };
+    }
+
+    /**
+     * Set local copy of circuit analysis from circuitState.
+     * Deep copy provides lifecycle safety - Tabulator holds reference to table array.
+     * @private
+     */
+    _setCircuitAnalysisLocalCopy() {
         // Read from pre-computed circuit analysis
         const analysis = this.circuitState.getCircuitAnalysis();
 
@@ -238,52 +348,56 @@ export class TruthTablePanel {
                 isValid: false,
                 reason: 'Computing truth table...'
             };
-            return 'computing';
+            return;
         }
 
-        const { inputs, outputs, table, isValid, reason } = analysis;
-
-        // Store circuit analysis data (including invalid circuits)
-        // Deep copy inputs/outputs to capture current labels (avoid reference issues)
-        this.circuitAnalysis = {
-            inputs: (inputs || []).map(inp => ({ ...inp })),
-            outputs: (outputs || []).map(out => ({ ...out })),
-            table: table || [],
-            isValid: isValid,
-            reason: reason
-        };
+        this.circuitAnalysis = this._deepCopyAnalysis(analysis);
 
         // Initialize column order if not set (only for valid circuits with columns)
-        const columnCount = (inputs || []).length + (outputs || []).length;
+        const columnCount = this.circuitAnalysis.inputs.length + this.circuitAnalysis.outputs.length;
         if (!this.columnOrder && columnCount > 0) {
             this.columnOrder = [];
             for (let i = 0; i < columnCount; i++) {
                 this.columnOrder.push(i);
             }
         }
-
-        return true;
     }
 
+    // ============================================================================
+    // SECTION: Table Rendering (Tabulator)
+    // ============================================================================
+
     /**
-     * Display the truth table panel
+     * Build Tabulator instance and return Promise that resolves when table is ready.
+     * Only handles Tabulator creation - caller (show()) handles common post-render setup.
+     *
+     * ## Two-Level Lifecycle Architecture
+     *
+     * This method implements "Table Rebuild" - the fine-grained lifecycle level:
+     * - Destroys only the Tabulator instance and Interact.js bindings
+     * - Preserves panel state (position, size, column order)
+     * - Called when circuit structure changes (inputs/outputs added/removed)
+     *
+     * This is distinct from destroy() which implements "Full Destroy":
+     * - Destroys the entire TruthTablePanel object
+     * - Unsubscribes all EventBus listeners
+     * - Called by coordinator when switching/clearing boards
+     *
+     * | Level          | Method             | When                    | Preserves                     |
+     * |----------------|--------------------|-------------------------|-------------------------------|
+     * | Table Rebuild  | _renderTabulator() | Structure changes       | Position, size, subscriptions |
+     * | Full Destroy   | destroy()          | Board switch/clear      | Nothing (fresh start)         |
+     *
      * Note: _isRestoring flag is set by setState() when restoring from saved state
+     * @param {HTMLElement} content - The content container element
+     * @param {boolean} wasVisible - Whether panel was already visible before this call
+     * @returns {Promise<void>} Resolves when tableBuilt event fires
+     * @private
      */
-    display() {
-        if (!this.circuitAnalysis) {
-            return;
+    _renderTabulator(content, wasVisible) {
+        if (!this.circuitAnalysis || !content) {
+            return Promise.resolve();
         }
-
-        this.panel = document.getElementById('truthTablePanel');
-        const content = document.getElementById('truthTableContent');
-
-        if (!this.panel || !content) {
-            return;
-        }
-
-        // Check if panel was already visible BEFORE we show it
-        // Support both .hidden class and inline style for backwards compatibility
-        const wasVisible = !this.panel.classList.contains('hidden') && this.panel.style.display !== 'none';
 
         // Detect if structure changed since state was saved (e.g., inputs/outputs added while panel was closed)
         // If structure changed, clear saved dimensions so panel auto-fits to new content
@@ -300,63 +414,36 @@ export class TruthTablePanel {
             }
         }
 
-        // If table already exists, destroy it before creating a new one
-        if (this.table) {
-            this.table.destroy();
-            this.table = null;
-
-            // Unset Interact.js if it was set up
-            if (this.interactionsSetup && this.panel) {
-                interact(this.panel).unset();
-            }
-
-            // Reset interactions flag when destroying table
-            this.interactionsSetup = false;
-        }
-
-        // Apply saved position BEFORE making panel visible to avoid flicker
+        // Apply saved dimensions BEFORE Tabulator builds (so it can measure correctly)
         if (this.state && !wasVisible) {
-            // Apply the saved position before showing the panel
             if (this.state.width) {
                 this.panel.style.width = this.state.width;
             }
             if (this.state.height) {
                 this.panel.style.height = this.state.height;
             }
-            if (this.state.x !== undefined && this.state.y !== undefined) {
-                this.panel.style.left = '0';
-                this.panel.style.top = '0';
-                this.panel.style.transform = `translate(${this.state.x}px, ${this.state.y}px)`;
-                this.panel.setAttribute('data-x', this.state.x);
-                this.panel.setAttribute('data-y', this.state.y);
-            }
         }
-
-        // Show panel first (remove hidden class and ensure display is block)
-        this.panel.classList.remove('hidden');
-        this.panel.style.display = 'block';
-
-        // Handle cases with no table data (no inputs or no outputs)
-        // If table has data, display it normally even for invalid circuits
-        if (this.circuitAnalysis.table.length === 0) {
-            // Check if we're in "computing" state
-            if (this.circuitAnalysis.reason === 'Computing truth table...') {
-                this.displayComputingMessage(wasVisible);
-            } else {
-                this.displayInvalidMessage(wasVisible);
-            }
-            return;
-        }
-
-        // Panel in layout but invisible during construction (Tabulator can measure)
-        this.panel.style.opacity = '0';
-        this.panel.style.pointerEvents = 'auto';
 
         // Generate Tabulator columns with groups
-        const columns = this.generateColumns();
+        const columns = this._generateColumns();
+
+        // Destroy existing Tabulator instance right before creating a new one
+        // (kept close to recreation for clearer lifecycle management)
+        if (this.tabulatorInstance) {
+            this.tabulatorInstance.destroy();
+            this.tabulatorInstance = null;
+
+            // Unset Interact.js if it was set up
+            if (this.interactionsSetup && this.panel) {
+                interact(this.panel).unset();
+            }
+
+            // Reset interactions flag when destroying Tabulator
+            this.interactionsSetup = false;
+        }
 
         // Initialize Tabulator with virtual DOM - it handles large datasets efficiently
-        this.table = new Tabulator(content, {
+        this.tabulatorInstance = new Tabulator(content, {
             columns: columns,
             data: this.circuitAnalysis.table,
             layout: 'fitColumns',
@@ -375,140 +462,102 @@ export class TruthTablePanel {
             content.classList.add('tabulator-midnight');
         }
 
-        // Setup after table is built
-        this.table.on('tableBuilt', () => {
-            // Only setup interactions once
-            if (!this.interactionsSetup) {
-                this.setupInteractions();
-                this.interactionsSetup = true;
-            }
+        // Return Promise that resolves when tableBuilt fires
+        // Tabulator.js uses asynchronous initialization. The 'tableBuilt' event is fired
+        // internally by Tabulator after the table DOM is fully rendered and ready.
+        // We must wait for this event before calling Tabulator methods (getRows, deselectRow, etc.)
+        // or manipulating table DOM elements - doing so earlier causes inconsistent behavior or errors.
+        // See: https://tabulator.info/docs/6.3/events
+        return new Promise((resolve) => {
+            this.tabulatorInstance.on('tableBuilt', () => {
+                // Listen for column reorder (save state when user drags columns)
+                this.tabulatorInstance.on('columnMoved', () => {
+                    this._saveState();
+                });
 
-            // Position panel on first open
-            if (!wasVisible) {
-                // Check if we have a valid saved position
-                // Position (0, 0) is valid but indicates no previous drag occurred
-                // We only want to skip smart positioning if user has explicitly positioned the panel
-                const hasValidSavedPosition = this.state &&
-                    this.state.x !== undefined &&
-                    this.state.y !== undefined &&
-                    (this.state.x !== 0 || this.state.y !== 0);
+                // Highlight current row after table is built
+                this._updateHighlight();
 
-                if (!hasValidSavedPosition) {
-                    positionPanelSmartly(this.panel, this.canvas, this.components);
-                } else {
-                    // Position was already applied before display() to avoid flicker
-                    // Just validate it here with restoreState to ensure bounds checking
-                    this.restoreState(this.state);
+                // Apply height to Tabulator after table is built
+                // Calculate from panel dimensions for accuracy
+                const panelHeader = this.panel.querySelector('.panel-header');
+                const headerHeight = panelHeader ? panelHeader.offsetHeight : 0;
+                const panelStyles = getComputedStyle(this.panel);
+                const paddingTop = parseFloat(panelStyles.paddingTop) || 0;
+                const paddingBottom = parseFloat(panelStyles.paddingBottom) || 0;
+                const panelHeight = this.panel.offsetHeight;
+                const availableHeight = panelHeight - headerHeight - paddingTop - paddingBottom;
+
+                // Determine if we should fit the panel to content
+                // Fit panel when: no saved size state (new board or first open)
+                const hasValidSavedHeight = this.state && this.state.height && this.state.height !== '';
+                const hasValidSavedWidth = this.state && this.state.width && this.state.width !== '';
+
+                // Fit height if no saved height
+                if (availableHeight > 0) {
+                    this._applyTableHeight(availableHeight, { fitPanel: !hasValidSavedHeight });
                 }
-            }
 
-            // Highlight current row after table is built
-            this.updateHighlight();
+                // Fit width if no saved width
+                if (!hasValidSavedWidth) {
+                    this._applyTableWidth();
+                }
 
-            // Apply height to Tabulator after table is built
-            // Calculate from panel dimensions for accuracy
-            const panelHeader = this.panel.querySelector('.panel-header');
-            const headerHeight = panelHeader ? panelHeader.offsetHeight : 0;
-            const panelStyles = getComputedStyle(this.panel);
-            const paddingTop = parseFloat(panelStyles.paddingTop) || 0;
-            const paddingBottom = parseFloat(panelStyles.paddingBottom) || 0;
-            const panelHeight = this.panel.offsetHeight;
-            const availableHeight = panelHeight - headerHeight - paddingTop - paddingBottom;
+                // Save state after showing the panel, but NOT when restoring from saved state
+                // (restoring shouldn't trigger a change detection false positive)
+                if (!this._isRestoring) {
+                    this._saveState();
+                }
+                // Clear the restoring flag after initial display
+                this._isRestoring = false;
 
-            // Determine if we should fit the panel to content
-            // Fit panel when: no saved size state (new board or first open)
-            const hasValidSavedHeight = this.state && this.state.height && this.state.height !== '';
-            const hasValidSavedWidth = this.state && this.state.width && this.state.width !== '';
-
-            // Fit height if no saved height
-            if (availableHeight > 0) {
-                this.applyTableHeight(availableHeight, { fitPanel: !hasValidSavedHeight });
-            }
-
-            // Fit width if no saved width
-            if (!hasValidSavedWidth) {
-                this.applyTableWidth();
-            }
-
-            // Reveal panel with instant transition (table is fully constructed)
-            this.panel.style.opacity = '1';
-
-            // Save state after showing the panel, but NOT when restoring from saved state
-            // (restoring shouldn't trigger a change detection false positive)
-            if (!this._isRestoring) {
-                this.saveState();
-            }
-            // Clear the restoring flag after initial display
-            this._isRestoring = false;
-        });
-
-        // Listen for column reorder
-        this.table.on('columnMoved', () => {
-            this.saveState();
+                // Signal that table is ready for common post-render setup
+                resolve();
+            });
         });
     }
 
     /**
-     * Display an invalid circuit message instead of the truth table
-     * @param {boolean} wasVisible - Whether panel was already visible before this call
+     * Render an invalid circuit message instead of the truth table.
+     * Only handles content rendering - caller is responsible for positioning, interactions, and visibility.
+     * @param {string} [reason] - Optional reason (overrides cached analysis reason)
+     * @private
      */
-    displayInvalidMessage(wasVisible) {
+    _renderInvalidState(reason = null) {
         const content = document.getElementById('truthTableContent');
         if (!content) return;
 
-        // Destroy existing table if any
-        if (this.table) {
-            this.table.destroy();
-            this.table = null;
+        // Destroy existing Tabulator instance if any
+        if (this.tabulatorInstance) {
+            this.tabulatorInstance.destroy();
+            this.tabulatorInstance = null;
         }
+
+        // Use provided reason, or fall back to cached analysis reason
+        const displayReason = reason ?? this.circuitAnalysis?.reason ?? 'Circuit incomplete';
 
         // Clear content and show invalid message
         content.innerHTML = `
             <div class="truth-table-invalid-message">
                 <div class="icon">${UI.ICONS.WARNING}</div>
-                <div class="message">${this.circuitAnalysis.reason || 'Circuit incomplete'}</div>
+                <div class="message">${displayReason}</div>
             </div>
         `;
-
-        // Position panel on first open
-        if (!wasVisible) {
-            const hasValidSavedPosition = this.state &&
-                this.state.x !== undefined &&
-                this.state.y !== undefined &&
-                (this.state.x !== 0 || this.state.y !== 0);
-
-            if (!hasValidSavedPosition) {
-                positionPanelSmartly(this.panel, this.canvas, this.components);
-            } else {
-                this.restoreState(this.state);
-            }
-        }
-
-        // Setup interactions if not already setup
-        if (!this.interactionsSetup) {
-            this.setupInteractions();
-            this.interactionsSetup = true;
-        }
-
-        // Show panel
-        this.panel.style.opacity = '1';
-        this.panel.style.pointerEvents = 'auto';
-
-        eventBus.emit(EVENT_TYPES.TRUTH_TABLE_SHOWN);
     }
 
     /**
-     * Display a computing message with progress bar
-     * @param {boolean} wasVisible - Whether panel was already visible before this call
+     * Render a computing message with progress bar.
+     * Only handles content rendering - caller is responsible for positioning, interactions, and visibility.
+     * @private
      */
-    displayComputingMessage(wasVisible) {
+    _renderComputingState() {
         const content = document.getElementById('truthTableContent');
         if (!content) return;
 
-        // Destroy existing table if any
-        if (this.table) {
-            this.table.destroy();
-            this.table = null;
+        // Destroy existing Tabulator instance if any
+        if (this.tabulatorInstance) {
+            this.tabulatorInstance.destroy();
+            this.tabulatorInstance = null;
         }
 
         // Clear content and show computing message with progress bar
@@ -521,117 +570,29 @@ export class TruthTablePanel {
                 <div class="progress-detail">Starting computation...</div>
             </div>
         `;
-
-        // Position panel on first open
-        if (!wasVisible) {
-            const hasValidSavedPosition = this.state &&
-                this.state.x !== undefined &&
-                this.state.y !== undefined &&
-                (this.state.x !== 0 || this.state.y !== 0);
-
-            if (!hasValidSavedPosition) {
-                positionPanelSmartly(this.panel, this.canvas, this.components);
-            } else {
-                this.restoreState(this.state);
-            }
-        }
-
-        // Setup interactions if not already setup
-        if (!this.interactionsSetup) {
-            this.setupInteractions();
-            this.interactionsSetup = true;
-        }
-
-        // Show panel
-        this.panel.style.opacity = '1';
-        this.panel.style.pointerEvents = 'auto';
-
-        eventBus.emit(EVENT_TYPES.TRUTH_TABLE_SHOWN);
     }
+
+    // ============================================================================
+    // SECTION: Row Highlighting
+    // ============================================================================
 
     /**
      * Generate Tabulator column definitions with groups
+     * Delegates to pure function buildTruthTableColumns()
+     * @private
      */
-    generateColumns() {
+    _generateColumns() {
         const { inputs, outputs } = this.circuitAnalysis;
-
-        // Create all column definitions
-        const inputCols = inputs.map((input, i) => ({
-            title: input.label || `I${i}`,
-            field: `input${i}`,
-            minWidth: 60,
-            headerSort: false,
-            formatter: (cell) => cell.getValue() ? '1' : '0',
-            cssClass: 'input-cell'
-        }));
-
-        const outputCols = outputs.map((output, i) => ({
-            title: output.label || `O${i}`,
-            field: `output${i}`,
-            minWidth: 60,
-            headerSort: false,
-            formatter: (cell) => {
-                const value = cell.getValue();
-                return `<strong>${value === '?' ? '?' : (value ? '1' : '0')}</strong>`;
-            },
-            cssClass: 'output-cell'
-        }));
-
-        // If we have a saved column order, reorder the columns to match
-        if (this.state && this.state.columnOrder && this.state.columnOrder.length > 0) {
-            const orderedInputCols = [];
-            const orderedOutputCols = [];
-
-            // Reorder based on saved state
-            this.state.columnOrder.forEach(fieldName => {
-                if (!fieldName) return;
-
-                if (fieldName.startsWith('input')) {
-                    const index = parseInt(fieldName.replace('input', ''));
-                    if (inputCols[index]) {
-                        orderedInputCols.push(inputCols[index]);
-                    }
-                } else if (fieldName.startsWith('output')) {
-                    const index = parseInt(fieldName.replace('output', ''));
-                    if (outputCols[index]) {
-                        orderedOutputCols.push(outputCols[index]);
-                    }
-                }
-            });
-
-            // Use ordered columns if we successfully reordered them
-            if (orderedInputCols.length === inputCols.length && orderedOutputCols.length === outputCols.length) {
-                return [
-                    {
-                        title: 'Inputs',
-                        columns: orderedInputCols
-                    },
-                    {
-                        title: 'Outputs',
-                        columns: orderedOutputCols
-                    }
-                ];
-            }
-        }
-
-        // Default: return columns in original order
-        return [
-            {
-                title: 'Inputs',
-                columns: inputCols
-            },
-            {
-                title: 'Outputs',
-                columns: outputCols
-            }
-        ];
+        const savedColumnOrder = this.state?.columnOrder || null;
+        return buildTruthTableColumns(inputs, outputs, savedColumnOrder);
     }
 
     /**
      * Update row highlighting to match current circuit state
+     * @private
      */
-    updateHighlight() {
-        if (!this.table || !this.circuitAnalysis) return;
+    _updateHighlight() {
+        if (!this.tabulatorInstance || !this.circuitAnalysis) return;
 
         // No highlighting if there's no table data
         if (!this.circuitAnalysis.table || this.circuitAnalysis.table.length === 0) {
@@ -644,13 +605,13 @@ export class TruthTablePanel {
         const inputValues = inputs.map(input => input.value);
 
         // Find matching row index
-        const matchingIndex = this.findMatchingRow(inputValues);
+        const matchingIndex = this._findMatchingRow(inputValues);
 
         if (matchingIndex !== -1) {
-            this.table.deselectRow();
+            this.tabulatorInstance.deselectRow();
 
             // Get all rows and select by position
-            const rows = this.table.getRows();
+            const rows = this.tabulatorInstance.getRows();
             if (rows[matchingIndex]) {
                 rows[matchingIndex].select();
                 rows[matchingIndex].scrollTo();
@@ -660,14 +621,42 @@ export class TruthTablePanel {
 
     /**
      * Find row index matching given input values
+     * O(m) where m = number of inputs, using binary conversion
+     * @private
      */
-    findMatchingRow(inputValues) {
-        if (!this.table) return -1;
+    _findMatchingRow(inputValues) {
+        if (!this.tabulatorInstance || !inputValues || inputValues.length === 0) return -1;
+        return inputValuesToIndex(inputValues);
+    }
 
-        const data = this.table.getData();
-        return data.findIndex(row =>
-            inputValues.every((val, i) => row[`input${i}`] === val)
-        );
+    // ============================================================================
+    // SECTION: Layout & Sizing
+    // ============================================================================
+
+    /**
+     * Apply row height styles to all rows in the table content
+     * @param {HTMLElement} content - The content container element
+     * @param {number} rowHeight - The height to apply to each row
+     * @private
+     */
+    _applyRowStyles(content, rowHeight) {
+        // Calculate padding to vertically center content (assuming ~20px content height)
+        const contentHeight = 20;
+        const verticalPadding = Math.max(0, (rowHeight - contentHeight) / 2);
+
+        const rowElements = content.querySelectorAll('.tabulator-row');
+        rowElements.forEach(row => {
+            row.style.setProperty('height', rowHeight + 'px', 'important');
+            row.style.setProperty('min-height', rowHeight + 'px', 'important');
+            row.style.setProperty('max-height', rowHeight + 'px', 'important');
+
+            const cells = row.querySelectorAll('.tabulator-cell');
+            cells.forEach(cell => {
+                cell.style.setProperty('height', 'auto', 'important');
+                cell.style.setProperty('padding-top', verticalPadding + 'px', 'important');
+                cell.style.setProperty('padding-bottom', verticalPadding + 'px', 'important');
+            });
+        });
     }
 
     /**
@@ -676,13 +665,13 @@ export class TruthTablePanel {
      * @param {number} availableHeight - Maximum available height for the table content
      * @param {Object} options - Options object
      * @param {boolean} options.fitPanel - If true, resize the panel to fit content
-     * @returns {number} The actual height used
+     * @private
      */
-    applyTableHeight(availableHeight, { fitPanel = false } = {}) {
-        if (!this.table) return availableHeight;
+    _applyTableHeight(availableHeight, { fitPanel = false } = {}) {
+        if (!this.tabulatorInstance) return;
 
         const content = document.getElementById('truthTableContent');
-        if (!content) return availableHeight;
+        if (!content) return;
 
         // Get the header height to calculate available space for rows
         const headerEl = content.querySelector('.tabulator-header');
@@ -692,7 +681,7 @@ export class TruthTablePanel {
         const rowAreaHeight = availableHeight - headerHeight;
 
         // Get number of rows
-        const rows = this.table.getRows();
+        const rows = this.tabulatorInstance.getRows();
         const rowCount = rows.length;
 
         // Calculate the actual content height based on row count and appropriate row height
@@ -721,25 +710,7 @@ export class TruthTablePanel {
             actualRowAreaHeight = fitPanel ? neededHeight : Math.min(rowAreaHeight, neededHeight);
 
             // Apply row height via CSS on the rows and cells
-            // Use setProperty to add !important without wiping existing styles
-            const rowElements = content.querySelectorAll('.tabulator-row');
-            rowElements.forEach(row => {
-                row.style.setProperty('height', rowHeight + 'px', 'important');
-                row.style.setProperty('min-height', rowHeight + 'px', 'important');
-                row.style.setProperty('max-height', rowHeight + 'px', 'important');
-
-                // Set cell heights within this row
-                // Calculate padding to vertically center content (assuming ~20px content height)
-                const contentHeight = 20;
-                const verticalPadding = Math.max(0, (rowHeight - contentHeight) / 2);
-
-                const cells = row.querySelectorAll('.tabulator-cell');
-                cells.forEach(cell => {
-                    cell.style.setProperty('height', 'auto', 'important');
-                    cell.style.setProperty('padding-top', verticalPadding + 'px', 'important');
-                    cell.style.setProperty('padding-bottom', verticalPadding + 'px', 'important');
-                });
-            });
+            this._applyRowStyles(content, rowHeight);
         }
 
         // Calculate actual total height needed (header + rows)
@@ -788,17 +759,16 @@ export class TruthTablePanel {
 
             this.panel.style.height = newPanelHeight + 'px';
         }
-
         // Don't call redraw() as it resets our styles
-        return actualTotalHeight;
     }
 
     /**
      * Apply width to panel to fit table content
      * Called when panel needs to auto-fit to new column structure
+     * @private
      */
-    applyTableWidth() {
-        if (!this.panel || !this.table) {
+    _applyTableWidth() {
+        if (!this.panel || !this.tabulatorInstance) {
             return;
         }
 
@@ -820,19 +790,19 @@ export class TruthTablePanel {
         this.panel.style.width = newPanelWidth + 'px';
     }
 
-    /**
-     * Setup Interact.js for drag and resize, and close button listener
-     */
-    setupInteractions() {
-        const panel = this.panel;
+    // ============================================================================
+    // SECTION: Drag & Resize (Interact.js)
+    // ============================================================================
 
-        // Setup close button
-        const closeButton = document.getElementById('closeTruthTable');
-        if (closeButton) {
-            closeButton.addEventListener('click', () => {
-                this.hide();
-            });
-        }
+    /**
+     * Setup Interact.js for drag and resize (idempotent - safe to call multiple times)
+     * Note: Close button is setup in init() via _setupCloseButton()
+     * @private
+     */
+    _setupInteractions() {
+        if (this.interactionsSetup) return;
+
+        const panel = this.panel;
 
         interact(panel)
             .draggable({
@@ -845,15 +815,15 @@ export class TruthTablePanel {
                     })
                 ],
                 listeners: {
-                    move: this.dragMoveListener.bind(this),
-                    end: () => this.saveState()
+                    move: this._dragMoveListener.bind(this),
+                    end: () => this._saveState()
                 }
             })
             .resizable({
                 edges: { left: true, right: true, bottom: true, top: true },
                 listeners: {
-                    move: this.resizeMoveListener.bind(this),
-                    end: () => this.saveState()
+                    move: this._resizeMoveListener.bind(this),
+                    end: () => this._saveState()
                 },
                 modifiers: [
                     interact.modifiers.restrictSize({
@@ -861,12 +831,15 @@ export class TruthTablePanel {
                     })
                 ]
             });
+
+        this.interactionsSetup = true;
     }
 
     /**
      * Handle drag move events
+     * @private
      */
-    dragMoveListener(event) {
+    _dragMoveListener(event) {
         const target = event.target;
         const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
         const y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
@@ -878,8 +851,9 @@ export class TruthTablePanel {
 
     /**
      * Handle resize move events
+     * @private
      */
-    resizeMoveListener(event) {
+    _resizeMoveListener(event) {
         const target = event.target;
         const x = parseFloat(target.getAttribute('data-x')) || 0;
         const y = parseFloat(target.getAttribute('data-y')) || 0;
@@ -910,21 +884,26 @@ export class TruthTablePanel {
             cancelAnimationFrame(this.resizeRAF);
         }
         this.resizeRAF = requestAnimationFrame(() => {
-            if (this.table && availableHeight > 0) {
-                this.applyTableHeight(availableHeight);
+            if (this.tabulatorInstance && availableHeight > 0) {
+                this._applyTableHeight(availableHeight);
             }
         });
     }
 
+    // ============================================================================
+    // SECTION: State Persistence
+    // ============================================================================
+
     /**
      * Save panel state
+     * @private
      */
-    saveState() {
-        if (!this.panel || !this.table) {
+    _saveState() {
+        if (!this.panel || !this.tabulatorInstance) {
             return;
         }
 
-        const columns = this.table.getColumns().map(col => col.getField()).filter(f => f);
+        const columns = this.tabulatorInstance.getColumns().map(col => col.getField()).filter(f => f);
 
         // Read position from data-x/data-y attributes (set by both smart positioning and dragging)
         const x = parseFloat(this.panel.getAttribute('data-x')) || 0;
@@ -952,8 +931,9 @@ export class TruthTablePanel {
 
     /**
      * Restore panel state
+     * @private
      */
-    restoreState(state) {
+    _restoreState(state) {
         if (!state || !this.panel) return;
 
         // Cap dimensions to reasonable viewport percentages to prevent
@@ -1032,7 +1012,7 @@ export class TruthTablePanel {
      * Refresh the truth table with updated analysis data
      * Called when CIRCUIT_ANALYSIS_COMPUTED event fires
      */
-    refresh() {
+    async refresh() {
         // Don't refresh if panel doesn't exist
         if (!this.panel) return;
 
@@ -1047,19 +1027,12 @@ export class TruthTablePanel {
             return;
         }
 
-        const { inputs, outputs, table, isValid, reason } = analysis;
+        const { inputs, outputs, table, reason } = analysis;
 
         // If no table data (no inputs or no outputs), show invalid message
         if (!table || table.length === 0) {
-            // Deep copy inputs/outputs to capture current labels (avoid reference issues)
-            this.circuitAnalysis = {
-                inputs: (inputs || []).map(inp => ({ ...inp })),
-                outputs: (outputs || []).map(out => ({ ...out })),
-                table: [],
-                isValid: false,
-                reason: reason
-            };
-            this.displayInvalidMessage(true); // true = panel was already visible
+            this.circuitAnalysis = { inputs: [], outputs: [], table: [], isValid: false, reason };
+            this._renderInvalidState();
             return;
         }
 
@@ -1082,7 +1055,7 @@ export class TruthTablePanel {
         if (countChanged) {
             // Full rebuild needed - column count has changed
             // Save current position before rebuild
-            this.saveState();
+            this._saveState();
 
             // Clear saved height/width so panel auto-fits to new content
             // Keep position (x, y) so panel stays in same location
@@ -1097,46 +1070,24 @@ export class TruthTablePanel {
             this.panel.style.height = '';
 
             // Update data and reset column order for new structure
-            // Deep copy inputs/outputs to capture current labels (avoid reference issues)
-            this.circuitAnalysis = {
-                inputs: inputs.map(inp => ({ ...inp })),
-                outputs: outputs.map(out => ({ ...out })),
-                table,
-                isValid
-            };
+            this.circuitAnalysis = this._deepCopyAnalysis(analysis);
             this.columnOrder = null;
 
-            // Rebuild table with new columns (display() will restore position from state)
-            this.display();
+            // Rebuild table with new columns
+            // Panel is already visible with interactions set up, so no finishShow needed
+            const content = document.getElementById('truthTableContent');
+            if (content) {
+                await this._renderTabulator(content, true); // true = panel was already visible
+            }
         } else if (labelsChanged) {
-            // Labels changed but column count is the same - update headers in place
-            // Deep copy inputs/outputs to capture current labels (avoid reference issues)
-            this.circuitAnalysis = {
-                inputs: inputs.map(inp => ({ ...inp })),
-                outputs: outputs.map(out => ({ ...out })),
-                table,
-                isValid
-            };
+            // Labels changed but column count is the same - update headers only
+            // No need to replaceData/reapplyRowHeights/updateHighlight since table data is identical
+            this.circuitAnalysis = this._deepCopyAnalysis(analysis);
             this._updateColumnHeaders();
-            this.table.replaceData(table);
-            this.reapplyRowHeights();
-            this.updateHighlight();
-        } else {
-            // Same structure - just update data in place (fast path)
-            // Deep copy inputs/outputs to capture current labels (avoid reference issues)
-            this.circuitAnalysis = {
-                inputs: inputs.map(inp => ({ ...inp })),
-                outputs: outputs.map(out => ({ ...out })),
-                table,
-                isValid
-            };
-            this.table.replaceData(table);
-
-            // Re-apply row heights after replaceData since Tabulator resets styles
-            this.reapplyRowHeights();
-
-            this.updateHighlight();
         }
+        // Note: No "else" branch needed. refresh() is only called when CIRCUIT_ANALYSIS_COMPUTED
+        // fires, which only happens on structure changes (countChanged) or label changes (labelsChanged).
+        // Input value changes use a separate path: SIMULATION_STEP_COMPLETED → _highlightRowByIndex().
     }
 
     /**
@@ -1145,41 +1096,27 @@ export class TruthTablePanel {
      * @private
      */
     _updateColumnHeaders() {
-        if (!this.table) return;
+        if (!this.tabulatorInstance) return;
 
         // Generate new column definitions with updated labels from this.circuitAnalysis
-        const newColumns = this.generateColumns();
+        const newColumns = this._generateColumns();
 
         // Use setColumns to update all column headers at once
         // This is more efficient than full table rebuild and preserves data
-        this.table.setColumns(newColumns);
+        this.tabulatorInstance.setColumns(newColumns);
     }
 
     /**
      * Re-apply row heights to maintain consistent appearance after data updates
      * Called after replaceData() which resets Tabulator's internal row styles
+     * @private
      */
-    reapplyRowHeights() {
+    _reapplyRowHeights() {
         const content = document.getElementById('truthTableContent');
         if (!content) return;
 
         const rowHeight = 36; // Use max row height for consistent display
-        const contentHeight = 20;
-        const verticalPadding = Math.max(0, (rowHeight - contentHeight) / 2);
-
-        const rowElements = content.querySelectorAll('.tabulator-row');
-        rowElements.forEach(row => {
-            row.style.setProperty('height', rowHeight + 'px', 'important');
-            row.style.setProperty('min-height', rowHeight + 'px', 'important');
-            row.style.setProperty('max-height', rowHeight + 'px', 'important');
-
-            const cells = row.querySelectorAll('.tabulator-cell');
-            cells.forEach(cell => {
-                cell.style.setProperty('height', 'auto', 'important');
-                cell.style.setProperty('padding-top', verticalPadding + 'px', 'important');
-                cell.style.setProperty('padding-bottom', verticalPadding + 'px', 'important');
-            });
-        });
+        this._applyRowStyles(content, rowHeight);
     }
 
     /**
@@ -1188,7 +1125,7 @@ export class TruthTablePanel {
     hide() {
         if (this.panel) {
             // Save state BEFORE hiding - offsetWidth becomes 0 after display:none
-            this.saveState();
+            this._saveState();
             this.panel.style.opacity = '0';
             this.panel.style.pointerEvents = 'none';
             this.panel.classList.add('hidden');
@@ -1197,34 +1134,73 @@ export class TruthTablePanel {
     }
 
     /**
-     * Show the truth table panel (reusing existing table if available)
-     * Use this for simple show/hide toggling - no data reload.
-     * Use display() when data needs to be updated.
+     * Show the truth table panel.
+     * Orchestrates visibility, positioning, interactions, and delegates to appropriate render method.
      */
-    show() {
-        // If we already have a table, just reveal the panel
-        if (this.table && this.panel) {
+    async show() {
+        // Fast path: If we already have a Tabulator instance, just reveal the panel
+        if (this.tabulatorInstance && this.panel) {
             this.panel.classList.remove('hidden');
             this.panel.style.display = 'block';
             this.panel.style.opacity = '1';
             this.panel.style.pointerEvents = 'auto';
 
             // Update highlight to match current input state
-            this.updateHighlight();
+            this._updateHighlight();
 
             eventBus.emit(EVENT_TYPES.TRUTH_TABLE_SHOWN);
-            return true;
+            return;
         }
 
-        // No table exists - need to build it
-        // First ensure we have data
-        if (!this.generate()) {
-            return false;
+        // Slow path: Need to build content
+
+        // Get DOM elements
+        this.panel = document.getElementById('truthTablePanel');
+        const content = document.getElementById('truthTableContent');
+        if (!this.panel || !content) return;
+
+        // Compute wasVisible before showing
+        const wasVisible = !this.panel.classList.contains('hidden') && this.panel.style.display !== 'none';
+
+        // Ensure we have analysis data
+        this._setCircuitAnalysisLocalCopy();
+        if (!this.circuitAnalysis) return;
+
+        // Show panel (display:block, but opacity:0 until content ready)
+        this.panel.classList.remove('hidden');
+        this.panel.style.display = 'block';
+        this.panel.style.opacity = '0';
+        this.panel.style.pointerEvents = 'auto';
+
+        // Apply saved position before rendering (avoids flicker)
+        if (this.state && !wasVisible) {
+            if (this.state.x !== undefined && this.state.y !== undefined) {
+                this.panel.style.left = '0';
+                this.panel.style.top = '0';
+                this.panel.style.transform = `translate(${this.state.x}px, ${this.state.y}px)`;
+                this.panel.setAttribute('data-x', this.state.x);
+                this.panel.setAttribute('data-y', this.state.y);
+            }
         }
 
-        // Create the table
-        this.display();
-        return true;
+        // Branch based on analysis state
+        if (this.circuitAnalysis.table.length === 0) {
+            // No table data - show computing or invalid state (sync)
+            if (this.circuitAnalysis.reason === 'Computing truth table...') {
+                this._renderComputingState();
+            } else {
+                this._renderInvalidState();
+            }
+        } else {
+            // Has table data - build Tabulator (async, wait for tableBuilt)
+            await this._renderTabulator(content, wasVisible);
+        }
+
+        // Common post-render setup for ALL paths
+        this._positionPanelIfNeeded(wasVisible);
+        this._setupInteractions();
+        this.panel.style.opacity = '1';
+        eventBus.emit(EVENT_TYPES.TRUTH_TABLE_SHOWN);
     }
 
     /**
@@ -1236,12 +1212,11 @@ export class TruthTablePanel {
 
     /**
      * Set state (for loading from localStorage)
-     * Also sets _isRestoring flag to skip saveState() during initial display
+     * @private
      */
-    setState(state) {
+    _setState(state) {
         if (!state) {
             this.state = null;
-            this._isRestoring = false;
             return;
         }
 
@@ -1261,14 +1236,30 @@ export class TruthTablePanel {
         delete sanitizedState.transform;
 
         this.state = sanitizedState;
-        this._isRestoring = true;  // Skip saveState() in tableBuilt when restoring
         if (sanitizedState.columnOrder) {
             this.columnOrder = sanitizedState.columnOrder;
         }
     }
 
     /**
-     * Clean up resources and event listeners
+     * Clean up all resources and event listeners.
+     *
+     * ## Two-Level Lifecycle Architecture
+     *
+     * This method implements "Full Destroy" - the coarse-grained lifecycle level:
+     * - Unsubscribes all EventBus listeners
+     * - Destroys Tabulator instance
+     * - Unsets Interact.js bindings
+     * - Clears all DOM references
+     *
+     * Called by circuit-simulator.js when:
+     * - BOARD_CLEARED event fires (new board)
+     * - BOARD_LOADED event fires (switching boards)
+     *
+     * This is distinct from the partial cleanup in _renderTable() which only
+     * destroys Tabulator/Interact.js when rebuilding the table for structure changes.
+     *
+     * @see _renderTable() for the fine-grained "Table Rebuild" lifecycle
      */
     destroy() {
         // Unsubscribe from events
@@ -1278,9 +1269,9 @@ export class TruthTablePanel {
         eventBus.off(EVENT_TYPES.CIRCUIT_ANALYSIS_COMPUTED, this._boundHandleComputed);
 
         // Destroy Tabulator instance
-        if (this.table) {
-            this.table.destroy();
-            this.table = null;
+        if (this.tabulatorInstance) {
+            this.tabulatorInstance.destroy();
+            this.tabulatorInstance = null;
         }
 
         // Unset Interact.js
@@ -1294,5 +1285,9 @@ export class TruthTablePanel {
             cancelAnimationFrame(this.resizeRAF);
             this.resizeRAF = null;
         }
+
+        // Clear DOM references and initialization flag (reverse of init)
+        this.panel = null;
+        this._initialized = false;
     }
 }

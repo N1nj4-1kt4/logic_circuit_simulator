@@ -291,12 +291,54 @@ Non-canvas UI components using modern libraries.
 
 | File | Purpose | Library |
 |------|---------|---------|
-| `TruthTablePanel.js` | Truth table display | Tabulator |
+| `TruthTablePanel.js` | Truth table display (see TruthTablePanel section below) | Tabulator |
 | `Toolbar.js` | Toolbar state and buttons | - |
 | `DialogManager.js` | All dialog boxes | - |
 | `DialogFactory.js` | Programmatic dialog creation | - |
 | `ThemeManager.js` | Dark mode toggle | - |
 | `messages.js` | Centralized UI strings | - |
+
+#### TruthTablePanel Architecture
+
+The TruthTablePanel is organized into clearly delineated sections:
+
+| Section | Purpose |
+|---------|---------|
+| Constructor & Initialization | Property init, `init()` method for explicit lifecycle setup |
+| Event Handling | Subscribes to `SIMULATION_STEP_COMPLETED`, `CIRCUIT_VALIDITY_CHANGED`, etc. |
+| Progress UI | Shows progress bar during async computation |
+| Visibility & Lifecycle | `show()`, `hide()`, `destroy()` methods |
+| Data Management | `_setCircuitAnalysisLocalCopy()` loads data from CircuitState cache |
+| Table Rendering | `_renderTabulator()` (async), `_renderInvalidState()`, `_renderComputingState()` |
+| Row Highlighting | `_updateHighlight()`, `_highlightRowByIndex()` |
+| Layout & Sizing | `_applyTableWidth()`, `_applyTableHeight()`, `_reapplyRowHeights()` |
+| Drag & Resize | Interact.js integration for draggable/resizable panel |
+| State Persistence | `_saveState()`, `setState()`, `getState()` |
+
+**Public API (external callers):**
+- `init(savedState)`, `show()`, `hide()`, `destroy()`, `refresh()`, `getState()`, `setState(state)`, `onStateChange`
+
+**Private Methods (internal implementation, prefixed with `_`):**
+- `_setCircuitAnalysisLocalCopy()`, `_renderTabulator()`, `_saveState()`, `_restoreState()`, `_setupInteractions()`, `_updateHighlight()`, etc.
+- **Helper methods (DRY refactoring):** `_positionPanelIfNeeded()`, `_deepCopyAnalysis()`, `_applyRowStyles()`
+
+**Lifecycle Pattern:**
+```
+Constructor → init(savedState) → show() → _renderTabulator() → hide() → destroy()
+```
+
+**async/await pattern:** `show()`, `_handleComputed()`, and `refresh()` are async methods.
+`_renderTabulator()` returns a `Promise<void>` that resolves when Tabulator's `tableBuilt` event fires.
+
+**Extracted Pure Functions:**
+The following utilities were extracted to `src/utils/truthTableUtils.js` for testability:
+
+| Section | Functions |
+|---------|-----------|
+| Column Definitions | `buildTruthTableColumns()` |
+| Table Layout | `calculateRowLayout()`, `calculateTableLayout()`, `MIN_ROW_HEIGHT`, `MAX_ROW_HEIGHT`, `CONTENT_HEIGHT` |
+| Panel Bounds | `clampPanelPosition()`, `clampDimension()`, `sanitizePosition()` |
+| Row Search | `inputValuesToIndex()`, `indexToInputValues()` |
 
 ### Storage (`src/storage/`)
 
@@ -332,6 +374,7 @@ Pure utility functions with no side effects.
 | `positioning.js` | Smart panel positioning |
 | `serialization.js` | JSON export/import, validation |
 | `svgIcons.js` | SVG icon strings |
+| `truthTableUtils.js` | Truth table panel utilities (columns, layout, bounds, search) |
 
 ## Event Bus
 
@@ -453,7 +496,7 @@ _applyInputsForIndex(cycleIndex)
 _simulateAndEmit()
     ↓
 eventBus.emit(CANVAS_REDRAW)  ──▶ CanvasRenderer.redraw()
-eventBus.emit(SIMULATION_STEP_COMPLETED)  ──▶ TruthTablePanel.highlightRowByIndex()
+eventBus.emit(SIMULATION_STEP_COMPLETED)  ──▶ TruthTablePanel._highlightRowByIndex()
                                               Toolbar.setSimulationProgress()
 ```
 
@@ -473,7 +516,7 @@ Calculate cycleIndex from current input values
 _simulateAndEmit()
     ↓
 eventBus.emit(CANVAS_REDRAW)  ──▶ CanvasRenderer.redraw()
-eventBus.emit(SIMULATION_STEP_COMPLETED)  ──▶ TruthTablePanel.highlightRowByIndex()
+eventBus.emit(SIMULATION_STEP_COMPLETED)  ──▶ TruthTablePanel._highlightRowByIndex()
                                               Toolbar.setSimulationProgress()
 ```
 

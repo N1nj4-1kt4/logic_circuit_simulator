@@ -39,10 +39,26 @@ This document visualizes the event-driven architecture implemented for live circ
 │  ┌─────────────────────────────────────────────────────────────────────────┐    │
 │  │                         TruthTablePanel                                  │    │
 │  │                                                                          │    │
+│  │  Lifecycle: Constructor → init() → show() → _renderTabulator() → hide() │    │
+│  │             → destroy()                                                  │    │
+│  │                                                                          │    │
 │  │  Subscribes to:                                                          │    │
-│  │  • SIMULATION_STEP_COMPLETED ──▶ highlightRowByIndex(cycleIndex)        │    │
-│  │  • CIRCUIT_VALIDITY_CHANGED ───▶ show invalid message if !canSimulate   │    │
-│  │  • TRUTH_TABLE_COMPUTED ───────▶ refresh() (via coordinator)            │    │
+│  │  • SIMULATION_STEP_COMPLETED ──▶ _highlightRowByIndex(cycleIndex)       │    │
+│  │  • CIRCUIT_VALIDITY_CHANGED ───▶ _renderInvalidState() if !canSimulate  │    │
+│  │  • CIRCUIT_ANALYSIS_COMPUTING ─▶ _renderComputingState() (progress bar) │    │
+│  │  • CIRCUIT_ANALYSIS_COMPUTED ──▶ refresh() with new data                │    │
+│  │                                                                          │    │
+│  │  Uses extracted pure functions (truthTableUtils.js):                    │    │
+│  │  • buildTruthTableColumns()                                              │    │
+│  │  • calculateRowLayout()                                                  │    │
+│  │  • clampPanelPosition()                                                  │    │
+│  │  • inputValuesToIndex()                                                  │    │
+│  │                                                                          │    │
+│  │  Internal helper methods (DRY refactoring):                             │    │
+│  │  • _positionPanelIfNeeded() - consolidated positioning logic            │    │
+│  │  • _deepCopyAnalysis() - consolidated deep copy logic                   │    │
+│  │  • _applyRowStyles() - consolidated row styling logic                   │    │
+│  │  • _setupInteractions() - now idempotent (guard inside)                 │    │
 │  └─────────────────────────────────────────────────────────────────────────┘    │
 │                                                                                  │
 │  ┌─────────────────────────────────────────────────────────────────────────┐    │
@@ -161,7 +177,7 @@ This document visualizes the event-driven architecture implemented for live circ
            │         │
            │         ├──▶ Emit CANVAS_REDRAW ────────────────▶ CanvasRenderer.redraw()
            │         │
-           │         └──▶ Emit SIMULATION_STEP_COMPLETED ───▶ TruthTablePanel.highlightRowByIndex()
+           │         └──▶ Emit SIMULATION_STEP_COMPLETED ───▶ TruthTablePanel._highlightRowByIndex()
            │                   { cycleIndex: 3,               Toolbar.setSimulationProgress(3, 8)
            │                     totalCombinations: 8,
            │                     inputValues: [0, 1, 1] }
@@ -204,7 +220,7 @@ This document visualizes the event-driven architecture implemented for live circ
                                │
                                ├──▶ Emit CANVAS_REDRAW ────────────────▶ CanvasRenderer.redraw()
                                │
-                               └──▶ Emit SIMULATION_STEP_COMPLETED ───▶ TruthTablePanel.highlightRowByIndex()
+                               └──▶ Emit SIMULATION_STEP_COMPLETED ───▶ TruthTablePanel._highlightRowByIndex()
                                { cycleIndex: 5,               Toolbar.setSimulationProgress(5, 8)
                                  totalCombinations: 8,
                                  inputValues: [1, 0, 1] }
@@ -240,7 +256,7 @@ This document visualizes the event-driven architecture implemented for live circ
                      │
                      ├──▶ Emit CANVAS_REDRAW ────────────────▶ CanvasRenderer.redraw()
                      │
-                     └──▶ Emit SIMULATION_STEP_COMPLETED ───▶ TruthTablePanel.highlightRowByIndex()
+                     └──▶ Emit SIMULATION_STEP_COMPLETED ───▶ TruthTablePanel._highlightRowByIndex()
                                { cycleIndex: 2,               Toolbar.setSimulationProgress(2, 8)
                                  totalCombinations: 8,
                                  inputValues: [0, 1, 0] }
@@ -326,6 +342,10 @@ Events describe what happened, not what listeners should do:
 | `CircuitValidityManager`  | `src/core/CircuitValidityManager.js`        |
 | `CircuitTransaction`      | `src/core/CircuitTransaction.js`            |
 | `TruthTablePanel`         | `src/ui/TruthTablePanel.js`                 |
+| `tableColumns`            | `src/utils/tableColumns.js`                 |
+| `tableLayout`             | `src/utils/tableLayout.js`                  |
+| `panelBounds`             | `src/utils/panelBounds.js`                  |
+| `truthTableSearch`        | `src/utils/truthTableSearch.js`             |
 | Event Types               | `src/utils/eventBus.js`                     |
 
 ## Revert to Saved Flow

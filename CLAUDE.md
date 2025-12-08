@@ -368,6 +368,51 @@ export function evaluateGate(gateType, inputs) {
 - **Functions**: camelCase (`function calculateDistance()`)
 - **Constants**: SCREAMING_SNAKE_CASE (`const GRID_SIZE = 50`)
 - **Event types**: `namespace:action` (`component:added`)
+- **Private methods**: Prefix with underscore (`_saveState()`, `_renderTable()`)
+
+### Minimal Public API
+
+**Keep class public APIs small.** Only expose methods that external callers need. Mark internal methods as private with `_` prefix.
+
+**Benefits:**
+- Easier refactoring (internal implementation can change freely)
+- Clearer contracts (callers know which methods are stable)
+- Better encapsulation (implementation details stay hidden)
+- Simpler testing (fewer public methods to test exhaustively)
+
+**Pattern:**
+```javascript
+class TruthTablePanel {
+    // PUBLIC API - called by external modules (circuit-simulator.js)
+    init(savedState) { }
+    show() { }
+    hide() { }
+    destroy() { }
+    refresh() { }
+    getState() { }
+    setState(state) { }
+
+    // PRIVATE - internal implementation (prefix with _)
+    _generate() { }
+    _renderTable() { }
+    _saveState() { }
+    _restoreState(state) { }
+    _setupInteractions() { }
+    _updateHighlight() { }
+}
+```
+
+**When to make a method private:**
+- Only called from within the same class
+- Implementation detail that could change
+- Helper methods for public methods
+- Event handlers bound internally
+
+**When to keep a method public:**
+- Called by external modules (coordinator, other classes)
+- Part of the class's documented contract
+- Lifecycle methods (`init`, `destroy`, `show`, `hide`)
+- State accessors (`getState`, `setState`)
 
 ## Common Patterns
 
@@ -541,6 +586,7 @@ For any `hasUnsavedChanges()` or similar feature, write test cases covering:
 - **Don't** use plain JavaScript `alert()`, `confirm()`, or `prompt()` - use DialogFactory
 - **Don't** use `console.log()` - use the logger utility
 - **Don't** duplicate code - extract shared logic to helper methods or use parameters
+- **Don't** expose internal methods as public - prefix with `_` for private methods
 
 ## Dialog Usage
 
