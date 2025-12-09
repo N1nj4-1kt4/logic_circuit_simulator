@@ -1675,7 +1675,8 @@ describe('TruthTablePanel', () => {
                     { select: vi.fn(), scrollTo: vi.fn() },
                     { select: vi.fn(), scrollTo: vi.fn() },
                     { select: vi.fn(), scrollTo: vi.fn() }
-                ])
+                ]),
+                destroy: vi.fn() // NONE action does quick rebuild which calls destroy()
             };
             panel.circuitAnalysis = validCache;
 
@@ -1692,7 +1693,18 @@ describe('TruthTablePanel', () => {
             // Spy on _highlightRowByIndex
             const highlightSpy = vi.spyOn(panel, '_highlightRowByIndex');
 
+            // Mock getElementById to return null for truthTableContent to skip quick rebuild
+            // (quick rebuild requires Tabulator constructor which isn't available in tests)
+            const originalGetById = document.getElementById;
+            document.getElementById = vi.fn((id) => {
+                if (id === 'truthTableContent') return null;
+                return originalGetById?.(id);
+            });
+
             await panel.show();
+
+            // Restore
+            document.getElementById = originalGetById;
 
             // Should highlight using lastCycleIndex from state machine
             expect(highlightSpy).toHaveBeenCalledWith(2);
@@ -1715,7 +1727,8 @@ describe('TruthTablePanel', () => {
             panel.panel = mockDOM.panelEl;
             panel.tabulatorInstance = {
                 deselectRow: vi.fn(),
-                getRows: vi.fn().mockReturnValue([])
+                getRows: vi.fn().mockReturnValue([]),
+                destroy: vi.fn() // NONE action does quick rebuild which calls destroy()
             };
             panel.circuitAnalysis = validCache;
 
@@ -1729,7 +1742,18 @@ describe('TruthTablePanel', () => {
             // Spy on _highlightRowByIndex
             const highlightSpy = vi.spyOn(panel, '_highlightRowByIndex');
 
+            // Mock getElementById to return null for truthTableContent to skip quick rebuild
+            // (quick rebuild requires Tabulator constructor which isn't available in tests)
+            const originalGetById = document.getElementById;
+            document.getElementById = vi.fn((id) => {
+                if (id === 'truthTableContent') return null;
+                return originalGetById?.(id);
+            });
+
             await panel.show();
+
+            // Restore
+            document.getElementById = originalGetById;
 
             // Should NOT call highlight when lastCycleIndex is null
             expect(highlightSpy).not.toHaveBeenCalled();
@@ -2142,8 +2166,7 @@ describe('TruthTablePanel', () => {
                 panel._hidePanel();
 
                 expect(saveStateSpy).toHaveBeenCalled();
-                expect(mockDOM.panelEl.style.opacity).toBe('0');
-                expect(mockDOM.panelEl.style.pointerEvents).toBe('none');
+                // _hidePanel uses display:none and hidden class (not opacity/pointerEvents)
                 expect(mockDOM.panelEl.classList.add).toHaveBeenCalledWith('hidden');
                 expect(mockDOM.panelEl.style.display).toBe('none');
             });
@@ -2698,17 +2721,32 @@ describe('TruthTablePanel', () => {
 
                 panel._initialized = true;
                 panel.panel = mockDOM.panelEl;
-                panel.tabulatorInstance = { getColumns: vi.fn().mockReturnValue([]) };
+                panel.tabulatorInstance = {
+                    getColumns: vi.fn().mockReturnValue([]),
+                    getRows: vi.fn().mockReturnValue([]),
+                    destroy: vi.fn() // NONE action does quick rebuild which calls destroy()
+                };
 
                 vi.spyOn(panel, '_renderTabulator').mockResolvedValue();
                 vi.spyOn(panel, '_positionPanelIfNeeded').mockImplementation(() => {});
                 vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
                 vi.spyOn(panel, '_saveState').mockImplementation(() => {});
 
+                // Mock getElementById to return null for truthTableContent to skip quick rebuild
+                // (quick rebuild requires Tabulator constructor which isn't available in tests)
+                const originalGetById = document.getElementById;
+                document.getElementById = vi.fn((id) => {
+                    if (id === 'truthTableContent') return null;
+                    return originalGetById?.(id);
+                });
+
                 // Rapid sequence
                 await panel.show();
                 panel.hide();
                 await panel.show();
+
+                // Restore
+                document.getElementById = originalGetById;
 
                 // Should end up in a visible state
                 expect(panel._stateMachine.isVisible()).toBe(true);

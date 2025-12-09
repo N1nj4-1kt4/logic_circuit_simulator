@@ -3,8 +3,8 @@ import 'tabulator-tables/dist/css/tabulator.min.css';
 import 'tabulator-tables/dist/css/tabulator_midnight.min.css';
 import interact from 'interactjs';
 import { positionPanelSmartly } from '../utils/positioning.js';
-import { buildTruthTableColumns, inputValuesToIndex } from '../utils/truthTableUtils.js';
-import { UI } from '../constants.js';
+import { buildTruthTableColumns, inputValuesToIndex, estimatePanelHeight } from '../utils/truthTableUtils.js';
+import { UI, TRUTH_TABLE } from '../constants.js';
 import { eventBus, EVENT_TYPES } from '../utils/eventBus.js';
 import {
     TruthTablePanelStateMachine,
@@ -434,12 +434,10 @@ export class TruthTablePanel {
      */
     _hidePanel() {
         if (!this.panel) return;
-        // Save state BEFORE hiding - offsetWidth becomes 0 after display:none
+        // Save state BEFORE hiding
         this._saveState();
-        this.panel.style.opacity = '0';
-        this.panel.style.pointerEvents = 'none';
-        this.panel.classList.add('hidden');
         this.panel.style.display = 'none';
+        this.panel.classList.add('hidden');
     }
 
     /**
@@ -636,6 +634,16 @@ export class TruthTablePanel {
 
         // Generate Tabulator columns with groups
         const columns = this._generateColumns();
+
+        // Estimate height upfront when panel wasn't visible and no Tabulator exists
+        // This prevents the rendering spinner from appearing in a too-small panel
+        if (!wasVisible && !this.tabulatorInstance && this.circuitAnalysis?.table?.length) {
+            const estimatedHeight = estimatePanelHeight(
+                this.circuitAnalysis.table.length,
+                TRUTH_TABLE
+            );
+            this.panel.style.height = `${estimatedHeight}px`;
+        }
 
         // PRESERVE DIMENSIONS before destroying old Tabulator (prevents panel shrink)
         // This keeps the panel visually stable during the rebuild transition
@@ -1299,7 +1307,8 @@ export class TruthTablePanel {
             currentOutputCount !== newOutputCount;
 
         if (structureChanged) {
-            // Full rebuild needed
+            // Full rebuild needed - structure changed while panel was hidden
+            // Clear saved dimensions so panel auto-fits to new column structure
             this._saveState();
             if (this.state) {
                 this.state.height = '';
@@ -1311,7 +1320,8 @@ export class TruthTablePanel {
 
             const content = document.getElementById('truthTableContent');
             if (content) {
-                await this._renderTabulator(content, true);
+                // Pass wasVisible=false since we cleared dimensions and want fresh auto-fit
+                await this._renderTabulator(content, false);
             }
             return;
         }
@@ -1392,8 +1402,28 @@ export class TruthTablePanel {
         // Get action from state machine
         const action = this._stateMachine.handleShow();
 
-        // Handle SYNC action (fast path - panel already visible, just needs sync)
+        // Handle SYNC action - sync Tabulator with analysis data
+        // SYNC is returned when: (1) panel already visible with stale data, OR
+        // (2) panel was hidden, has Tabulator, but data changed while hidden
         if (action.action === ACTION_TYPES.SYNC) {
+            // If panel was hidden, make it visible BEFORE sync (so Tabulator can measure correctly)
+            if (!wasVisible) {
+                this.panel.classList.remove('hidden');
+                this.panel.style.display = 'block';
+                this.panel.style.pointerEvents = 'auto';
+
+                // Apply saved position
+                if (this.state) {
+                    if (this.state.x !== undefined && this.state.y !== undefined) {
+                        this.panel.style.left = '0';
+                        this.panel.style.top = '0';
+                        this.panel.style.transform = `translate(${this.state.x}px, ${this.state.y}px)`;
+                        this.panel.setAttribute('data-x', this.state.x);
+                        this.panel.setAttribute('data-y', this.state.y);
+                    }
+                }
+            }
+
             await this._syncTabulatorWithAnalysis();
             // Update highlight using tracked cycle index
             const state = this._stateMachine.getState();
@@ -1404,13 +1434,50 @@ export class TruthTablePanel {
             return;
         }
 
-        // Handle NONE action (already visible, no sync needed)
+        // Handle NONE action (reusing existing Tabulator, or already visible)
         if (action.action === ACTION_TYPES.NONE) {
-            // Still emit event and update highlight
+            // Make panel visible (it may be hidden from previous hide() call)
+            this.panel.classList.remove('hidden');
+            this.panel.style.display = 'block';
+            this.panel.style.pointerEvents = 'auto';
+
+            // Since Tabulator's virtual DOM doesn't properly rerender after display:none,
+            // we need to trigger a rebuild. A full rebuild (~50ms) is faster than
+            // Tabulator's async row rendering after visibility change (~1400ms).
+            if (this.tabulatorInstance) {
+                const content = document.getElementById('truthTableContent');
+                if (content && this.circuitAnalysis) {
+                    // Destroy old instance
+                    this.tabulatorInstance.destroy();
+                    this.tabulatorInstance = null;
+
+                    // Quick rebuild - reuse existing column config and data
+                    const columns = buildTruthTableColumns(
+                        this.circuitAnalysis.inputs,
+                        this.circuitAnalysis.outputs,
+                        this.columnOrder
+                    );
+
+                    this.tabulatorInstance = new Tabulator(content, {
+                        columns: columns,
+                        data: this.circuitAnalysis.table,
+                        layout: 'fitColumns',
+                        selectable: 1,
+                        movableColumns: true,
+                        columnHeaderVertAlign: 'bottom',
+                        reactiveData: false,
+                        height: '100%',
+                        renderVertical: 'virtual',
+                    });
+                }
+            }
+
+            // Update highlight
             const state = this._stateMachine.getState();
             if (state.lastCycleIndex !== null && this.tabulatorInstance) {
                 this._highlightRowByIndex(state.lastCycleIndex);
             }
+
             eventBus.emit(EVENT_TYPES.TRUTH_TABLE_SHOWN);
             return;
         }

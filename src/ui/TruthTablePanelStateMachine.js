@@ -219,7 +219,20 @@ export class TruthTablePanelStateMachine {
             return { action: ACTION_TYPES.SHOW_INVALID, reason: analysis.reason };
         }
 
-        // Valid analysis - render table
+        // Valid analysis - check if we can reuse existing Tabulator
+        if (this._panel.tabulatorInstance) {
+            if (this._state.data === DATA_STATES.FRESH) {
+                // Tabulator exists and data is fresh - just show panel, no rebuild needed
+                this._state.panel = PANEL_STATES.VISIBLE_TABLE;
+                return { action: ACTION_TYPES.NONE };
+            }
+            // Tabulator exists but data changed while hidden - sync it
+            this._state.panel = PANEL_STATES.VISIBLE_TABLE;
+            this._state.data = DATA_STATES.FRESH;
+            return { action: ACTION_TYPES.SYNC };
+        }
+
+        // No existing Tabulator - need full render
         this._state.panel = PANEL_STATES.SHOWING_TABLE;
         this._state.data = DATA_STATES.FRESH;
         return { action: ACTION_TYPES.RENDER_TABLE };

@@ -128,7 +128,11 @@ export const TRUTH_TABLE = {
     MIN_HEIGHT: 150,
     DEFAULT_POSITION: { left: '50%', top: '50%', transform: 'translate(-50%, -50%)' },
     PANEL_PADDING: 20,
-    MARGIN_FROM_EDGE: 20
+    MARGIN_FROM_EDGE: 20,
+    // Height estimation constants (for estimatePanelHeight utility)
+    HEADER_HEIGHT: 60,        // Column group header + column header
+    PANEL_HEADER_HEIGHT: 30,  // .panel-header (title bar)
+    MAX_VISIBLE_ROWS: 10      // Cap to prevent huge panels
 };
 
 // ==================== TIMING ====================

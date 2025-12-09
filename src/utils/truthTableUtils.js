@@ -162,6 +162,33 @@ export function calculateTableLayout(rowCount, headerHeight, availableHeight, { 
 }
 
 // ============================================================================
+// SECTION: Panel Height Estimation
+// ============================================================================
+
+/**
+ * Estimate panel height before Tabulator renders.
+ * Used to set panel height upfront, preventing rendering spinner from
+ * appearing in a too-small panel when structure changes while hidden.
+ *
+ * @param {number} rowCount - Number of rows in truth table
+ * @param {Object} config - Config object with HEADER_HEIGHT, PANEL_HEADER_HEIGHT, PANEL_PADDING, MAX_VISIBLE_ROWS
+ * @returns {number} Estimated panel height in pixels
+ */
+export function estimatePanelHeight(rowCount, config) {
+    const {
+        HEADER_HEIGHT,
+        PANEL_HEADER_HEIGHT,
+        PANEL_PADDING,
+        MAX_VISIBLE_ROWS
+    } = config;
+
+    const visibleRows = Math.min(rowCount, MAX_VISIBLE_ROWS);
+    const contentHeight = HEADER_HEIGHT + (visibleRows * MAX_ROW_HEIGHT);
+
+    return PANEL_HEADER_HEIGHT + contentHeight + PANEL_PADDING;
+}
+
+// ============================================================================
 // SECTION: Panel Bounds
 // ============================================================================
 
