@@ -87,18 +87,23 @@
 │                                                                          │
 │  ┌─────────────────────────────────────────────────────────────────┐    │
 │  │  if (this.tabulatorInstance && this.panel) {                    │    │
-│  │      // FAST PATH: Tabulator already exists, just reveal it     │    │
+│  │      // FAST PATH: Tabulator exists                             │    │
+│  │      if (_tabulatorNeedsSync) {  ◄── Dirty flag check           │    │
+│  │          await _syncTabulatorWithAnalysis()                     │    │
+│  │          _tabulatorNeedsSync = false                            │    │
+│  │      }                                                          │    │
 │  │      panel.classList.remove('hidden')                           │    │
 │  │      panel.style.display = 'block'                              │    │
 │  │      panel.style.opacity = '1'                                  │    │
 │  │      _updateHighlight()                                         │    │
 │  │      emit(TRUTH_TABLE_SHOWN)                                    │    │
-│  │      return  ◄──────────────────── INSTANT! No rebuild          │    │
+│  │      return  ◄──────────── Fast (syncs only if dirty)           │    │
 │  │  }                                                              │    │
 │  │                                                                 │    │
 │  │  // SLOW PATH: No Tabulator exists, need to build               │    │
 │  │  _setCircuitAnalysisLocalCopy()  // Sets this.circuitAnalysis   │    │
 │  │  await _renderTabulator()                                       │    │
+│  │  _tabulatorNeedsSync = false  // Fresh table is in sync         │    │
 │  └─────────────────────────────────────────────────────────────────┘    │
 └──────────────────┬──────────────────────────────┬───────────────────────┘
                    │                              │
@@ -109,9 +114,9 @@
                    │                             │
                    ▼                             ▼
         ┌─────────────────────┐      ┌─────────────────────────────────┐
-        │  Panel revealed     │      │  _setCircuitAnalysisLocalCopy() │
-        │  instantly!         │      │  - Load cache data              │
-        │  (~0ms)             │      │  Sets this.circuitAnalysis:     │
+        │  If _tabulatorNeeds │      │  _setCircuitAnalysisLocalCopy() │
+        │  Sync: sync first,  │      │  - Load cache data              │
+        │  then reveal panel  │      │  Sets this.circuitAnalysis:     │
         └─────────────────────┘      │  - Cache exists → deep copy it  │
                                      │  - No cache → placeholder with  │
                                      │    reason: 'Computing...'       │
@@ -209,47 +214,51 @@
 │                   └────────────────┬───────────────┘                    │
 │                                    ▼                                    │
 │                    _handleComputationResult(result)                     │
-│                    1. state.setCircuitAnalysis(result)                  │
-│                    2. emit(CIRCUIT_ANALYSIS_COMPUTED, result)           │
+│                    1. state.setCircuitAnalysis(result)  ◄── ALWAYS      │
+│                    2. if (result.isValid):                              │
+│                       emit(CIRCUIT_ANALYSIS_COMPUTED, result)           │
+│                       ◄── Only fires for VALID circuits                 │
 └────────────────────────────────────┬────────────────────────────────────┘
                                      │
-        ┌────────────────────────────┼────────────────────────────┐
-        │                            │                            │
-        ▼                            ▼                            ▼
-┌───────────────────┐  ┌─────────────────────────┐  ┌─────────────────────┐
-│ If panel HIDDEN:  │  │ If panel VISIBLE:       │  │ circuit-simulator   │
-│ Cache stored,     │  │ _handleComputed()       │  │ also listens for    │
-│ ready for next    │  │ triggers refresh logic  │  │ backward compat     │
-│ show()            │  │ (see Section 4)         │  │                     │
-└───────────────────┘  └─────────────────────────┘  └─────────────────────┘
+        ┌──────────────────────────────────────────────────────────┐
+        │                                                          │
+        ▼                                                          ▼
+┌─────────────────────────────────────────┐  ┌─────────────────────────────────┐
+│ _handleComputed() ALWAYS runs:          │  │ If panel VISIBLE:               │
+│                                         │  │                                 │
+│ 1. Syncs circuitAnalysis (deep copy)   │  │ - Also updates Tabulator        │
+│ 2. If panel hidden: returns early       │  │ - Smart update detection        │
+│ 3. show() fast path has current data   │  │ - (see Section 4)               │
+└─────────────────────────────────────────┘  └─────────────────────────────────┘
 ```
 
 ---
 
-## 4. PANEL REFRESH - WHEN DATA CHANGES WHILE VISIBLE
+## 4. PANEL UPDATE - WHEN DATA CHANGES (VIA _handleComputed)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  TRUTH_TABLE_COMPUTED event received by TruthTablePanel                 │
+│  CIRCUIT_ANALYSIS_COMPUTED event received by TruthTablePanel            │
 └────────────────────────────────┬────────────────────────────────────────┘
                                  │
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  _handleComputed() (async)                                              │
+│  _handleComputed() (async) - ALL update logic consolidated here         │
+│                                                                          │
+│  KEY CHANGE: Always syncs circuitAnalysis, even when panel is hidden.   │
+│  This ensures show() fast path always has current data.                 │
 │                                                                          │
 │  1. _hideProgress() - remove progress bar if showing                    │
-│  2. If panel visible:                                                    │
-│     - Get analysis from circuitState                                    │
-│     - Deep copy via _deepCopyAnalysis()                                 │
-│     - If tabulatorInstance exists: setData(newData)  ◄── FAST UPDATE   │
-│     - Else if table.length > 0: await _renderTabulator(content, true)  │
+│  2. Get analysis from circuitState                                       │
+│  3. If !analysis: return                                                 │
+│  4. ALWAYS: this.circuitAnalysis = _deepCopyAnalysis(analysis) ◄── KEY │
+│  5. If !_isVisible(): return  (data synced, but no UI update needed)   │
+│  6. Smart update detection (comparing old vs new analysis):             │
 └────────────────────────────────┬────────────────────────────────────────┘
                                  │
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  refresh() - Smart update detection (lines 1021-1108)                   │
-│                                                                          │
-│  Compare old circuitAnalysis with new cache:                             │
+│  Smart update detection within _handleComputed():                        │
 │                                                                          │
 │  ┌──────────────────────────────────────────────────────────────────┐   │
 │  │  STRUCTURE CHANGED? (input/output count different)               │   │
@@ -264,16 +273,16 @@
 │  │  LABELS CHANGED? (same structure, different labels)              │   │
 │  │  ─────────────────────────────────────────────────────────────── │   │
 │  │  YES → Update column headers only                                │   │
-│  │        - _updateColumnHeaders()                                  │   │
-│  │        - table.setData(newData)                                  │   │
+│  │        - _updateColumnHeaders() (uses setColumns())              │   │
+│  │        - _reapplyRowHeights()  ◄── setColumns() resets styles   │   │
+│  │        - _updateHighlight()    ◄── setColumns() clears selection│   │
 │  └──────────────────────────────────────────────────────────────────┘   │
 │                                                                          │
 │  ┌──────────────────────────────────────────────────────────────────┐   │
 │  │  DATA ONLY CHANGED? (same structure, same labels)                │   │
 │  │  ─────────────────────────────────────────────────────────────── │   │
 │  │  YES → Fast data update                                          │   │
-│  │        - table.setData(newData)  ◄── Tabulator optimizes this   │   │
-│  │        - _updateHighlight()                                      │   │
+│  │        - tabulatorInstance.setData(newData) ◄── Tabulator fast  │   │
 │  └──────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -355,12 +364,13 @@ CIRCUIT_ANALYSIS_COMPUTING
 ├── Payload: { percent, current, total }
 └── Listened by: TruthTablePanel._handleComputing() → shows progress bar
 
-CIRCUIT_ANALYSIS_COMPUTED
-├── Emitted by: CircuitAnalysisManager._handleComputationResult()
-├── Payload: { inputs, outputs, table, isValid, reason }
-└── Listened by:
-    ├── TruthTablePanel._handleComputed() → updates table
-    └── circuit-simulator.js → backward compat
+CIRCUIT_ANALYSIS_COMPUTED  ◄── Only fires for VALID circuits
+├── Emitted by: CircuitAnalysisManager._handleComputationResult() (when isValid)
+├── Payload: { inputs, outputs, table, isValid, reason } (isValid always true)
+└── Listened by: TruthTablePanel._handleComputed()
+    - Always syncs circuitAnalysis (even when panel hidden)
+    - Updates Tabulator when panel is visible
+    - Can assume isValid === true (invalid handled by CIRCUIT_VALIDITY_CHANGED)
 
 TRUTH_TABLE_SHOWN
 ├── Emitted by: TruthTablePanel.show() (inlined at end of all paths):
@@ -396,7 +406,10 @@ SIMULATION_STEP_COMPLETED
 
 CIRCUIT_VALIDITY_CHANGED
 ├── Emitted by: CircuitValidityManager
-└── Listened by: TruthTablePanel._handleValidityChanged() → show invalid msg
+└── Listened by: TruthTablePanel._handleValidityChanged()
+    - PRIMARY handler for invalid states
+    - Shows invalid message IMMEDIATELY (no debounce)
+    - CIRCUIT_ANALYSIS_COMPUTED will NOT fire for invalid circuits
 ```
 
 ---
@@ -515,7 +528,13 @@ Test file: `tests/unit/utils/truthTableUtils.test.js` (85 tests total)
 - `show()` is now `async show()` and uses `await _renderTabulator()`
 - `_renderTabulator()` returns `Promise<void>` that resolves when `tableBuilt` fires
 - Common post-render setup is inlined in `show()` for ALL paths (not duplicated in render methods)
-- `_handleComputed()` and `refresh()` are also async
+- `_handleComputed()` is also async
+
+**refresh() method removed:**
+- All update logic consolidated into `_handleComputed()`
+- `_handleComputed()` ALWAYS syncs `circuitAnalysis` (even when panel is hidden)
+- This ensures `show()` fast path always has current data
+- External event listener in `circuit-simulator.js` was also removed (no longer needed)
 
 **Key architectural pattern:**
 Render methods (`_renderTabulator`, `_renderInvalidState`, `_renderComputingState`) now ONLY handle content.

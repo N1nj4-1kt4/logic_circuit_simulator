@@ -44,9 +44,9 @@ This document visualizes the event-driven architecture implemented for live circ
 │  │                                                                          │    │
 │  │  Subscribes to:                                                          │    │
 │  │  • SIMULATION_STEP_COMPLETED ──▶ _highlightRowByIndex(cycleIndex)       │    │
-│  │  • CIRCUIT_VALIDITY_CHANGED ───▶ _renderInvalidState() if !canSimulate  │    │
+│  │  • CIRCUIT_VALIDITY_CHANGED ───▶ PRIMARY invalid handler (immediate)    │    │
 │  │  • CIRCUIT_ANALYSIS_COMPUTING ─▶ _renderComputingState() (progress bar) │    │
-│  │  • CIRCUIT_ANALYSIS_COMPUTED ──▶ refresh() with new data                │    │
+│  │  • CIRCUIT_ANALYSIS_COMPUTED ──▶ valid circuits only; updates table     │    │
 │  │                                                                          │    │
 │  │  Uses extracted pure functions (truthTableUtils.js):                    │    │
 │  │  • buildTruthTableColumns()                                              │    │

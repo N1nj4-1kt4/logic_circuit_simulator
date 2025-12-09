@@ -170,9 +170,10 @@ describe('TruthTablePanel', () => {
         vi.clearAllMocks();
     });
 
-    describe('refresh()', () => {
-        it('should not refresh if panel does not exist', () => {
-            const circuitState = createMockCircuitState(createValidCache());
+    describe('_handleComputed()', () => {
+        it('should always sync circuitAnalysis even when panel does not exist', async () => {
+            const validCache = createValidCache();
+            const circuitState = createMockCircuitState(validCache);
             const panel = new TruthTablePanel(
                 mockDOM.canvasEl,
                 [],
@@ -181,13 +182,15 @@ describe('TruthTablePanel', () => {
             );
 
             // Don't call display(), so panel is null
-            panel.refresh();
+            await panel._handleComputed();
 
-            // Should not attempt to read cache since panel doesn't exist
-            expect(circuitState.getCircuitAnalysis).not.toHaveBeenCalled();
+            // Should always read cache to keep data in sync
+            expect(circuitState.getCircuitAnalysis).toHaveBeenCalled();
+            // circuitAnalysis should be updated
+            expect(panel.circuitAnalysis).not.toBeNull();
         });
 
-        it('should attempt rebuild when table is not initialized but panel is visible', () => {
+        it('should attempt rebuild when table is not initialized but panel is visible', async () => {
             const validCache = createValidCache();
             const circuitState = createMockCircuitState(validCache);
             const panel = new TruthTablePanel(
@@ -201,21 +204,27 @@ describe('TruthTablePanel', () => {
             panel.panel = mockDOM.panelEl;
             panel.tabulatorInstance = null;
             panel.circuitAnalysis = null; // No previous data
+            mockDOM.panelEl.style.display = 'block';
+            mockDOM.panelEl.classList.classes.delete('hidden');
 
-            // Mock _renderTabulator to prevent actual table creation
-            const displaySpy = vi.spyOn(panel, '_renderTabulator').mockResolvedValue();
+            // Set state machine to visible_table (panel visible, expecting table)
+            panel._stateMachine.setPanelState('visible_table');
+
+            // Mock render queue to track if rebuild was triggered
+            const enqueueSpy = vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
             vi.spyOn(panel, '_saveState').mockImplementation(() => {});
 
-            panel.refresh();
+            await panel._handleComputed();
 
             // Should read cache and attempt to rebuild
             expect(circuitState.getCircuitAnalysis).toHaveBeenCalled();
-            // Since circuitAnalysis was null, it should trigger rebuild
-            expect(displaySpy).toHaveBeenCalled();
+            // Since tabulatorInstance is null and we have table data, it should trigger rebuild via render queue
+            expect(enqueueSpy).toHaveBeenCalled();
         });
 
-        it('should not refresh if panel is hidden', () => {
-            const circuitState = createMockCircuitState(createValidCache());
+        it('should sync data but not update Tabulator when panel is hidden', async () => {
+            const validCache = createValidCache();
+            const circuitState = createMockCircuitState(validCache);
             const panel = new TruthTablePanel(
                 mockDOM.canvasEl,
                 [],
@@ -225,21 +234,29 @@ describe('TruthTablePanel', () => {
 
             // Setup panel and tabulatorInstance
             panel.panel = mockDOM.panelEl;
-            panel.tabulatorInstance = { replaceData: vi.fn() };
+            const mockTabulator = { setData: vi.fn(), setColumns: vi.fn() };
+            panel.tabulatorInstance = mockTabulator;
+            panel.circuitAnalysis = null; // No previous data
 
             // Mark panel as hidden
             mockDOM.panelEl.classList.classes.add('hidden');
 
-            panel.refresh();
+            await panel._handleComputed();
 
-            // Should check hidden state and return early
-            expect(mockDOM.panelEl.classList.contains).toHaveBeenCalledWith('hidden');
-            expect(circuitState.getCircuitAnalysis).not.toHaveBeenCalled();
+            // Should still sync data even when hidden
+            expect(circuitState.getCircuitAnalysis).toHaveBeenCalled();
+            expect(panel.circuitAnalysis).not.toBeNull();
+            // But should NOT update Tabulator
+            expect(mockTabulator.setData).not.toHaveBeenCalled();
+            expect(mockTabulator.setColumns).not.toHaveBeenCalled();
         });
 
-        it('should show invalid message when cache becomes invalid (not hide)', () => {
-            const invalidCache = createInvalidCache('No outputs');
-            const circuitState = createMockCircuitState(invalidCache);
+        // NOTE: CIRCUIT_ANALYSIS_COMPUTED only fires for valid circuits.
+        // Invalid state is handled by CIRCUIT_VALIDITY_CHANGED event.
+        // This test verifies _handleComputed always receives valid analysis.
+        it('should always receive valid analysis (event only fires for valid circuits)', async () => {
+            const validCache = createValidCache();
+            const circuitState = createMockCircuitState(validCache);
             const panel = new TruthTablePanel(
                 mockDOM.canvasEl,
                 [],
@@ -247,29 +264,29 @@ describe('TruthTablePanel', () => {
                 circuitState
             );
 
-            // Setup panel and tabulatorInstance with all required methods
+            // Setup panel but NO tabulatorInstance (simulating fresh open)
             panel.panel = mockDOM.panelEl;
-            panel.tabulatorInstance = {
-                replaceData: vi.fn(),
-                getColumns: vi.fn().mockReturnValue([]),
-                destroy: vi.fn()
-            };
-            panel.circuitAnalysis = createValidCache();
+            panel.tabulatorInstance = null;
+            panel.circuitAnalysis = null;
+            mockDOM.panelEl.style.display = 'block';
+            mockDOM.panelEl.classList.classes.delete('hidden');
 
-            // Spy on _renderInvalidState method
-            const displayInvalidMessageSpy = vi.spyOn(panel, '_renderInvalidState').mockImplementation(() => {});
+            // Set state machine to visible_table (panel visible, expecting table)
+            panel._stateMachine.setPanelState('visible_table');
 
-            panel.refresh();
+            // Mock render queue to track if rebuild was triggered
+            const enqueueSpy = vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
 
-            // Should call _renderInvalidState with no args (method fetches content internally, reason comes from circuitAnalysis)
-            expect(displayInvalidMessageSpy).toHaveBeenCalled();
-            expect(displayInvalidMessageSpy).toHaveBeenCalledWith();
-            // Verify circuitAnalysis was updated with invalid state
-            expect(panel.circuitAnalysis.isValid).toBe(false);
-            expect(panel.circuitAnalysis.reason).toBe('No outputs');
+            await panel._handleComputed();
+
+            // Should render table via render queue (not invalid state) since event only fires for valid circuits
+            expect(enqueueSpy).toHaveBeenCalled();
+            // Verify circuitAnalysis was updated with valid state
+            expect(panel.circuitAnalysis.isValid).toBe(true);
+            expect(panel.circuitAnalysis.table.length).toBeGreaterThan(0);
         });
 
-        it('should hide panel when cache is null', () => {
+        it('should not update anything when cache is null', async () => {
             const circuitState = createMockCircuitState(null);
             const panel = new TruthTablePanel(
                 mockDOM.canvasEl,
@@ -278,28 +295,21 @@ describe('TruthTablePanel', () => {
                 circuitState
             );
 
+            const existingAnalysis = createValidCache();
             panel.panel = mockDOM.panelEl;
             panel.tabulatorInstance = {
-                replaceData: vi.fn(),
-                getColumns: vi.fn().mockReturnValue([])
+                setData: vi.fn(),
+                setColumns: vi.fn()
             };
-            panel.circuitAnalysis = createValidCache();
+            panel.circuitAnalysis = existingAnalysis;
 
-            const hideSpy = vi.spyOn(panel, 'hide');
+            await panel._handleComputed();
 
-            panel.refresh();
-
-            expect(hideSpy).toHaveBeenCalled();
+            // circuitAnalysis should remain unchanged when cache is null
+            expect(panel.circuitAnalysis).toBe(existingAnalysis);
         });
 
-        // Note: Previous "fast path" test removed - the scenario where refresh() is called
-        // with same structure but different data never occurs in practice.
-        // refresh() is only triggered by CIRCUIT_ANALYSIS_COMPUTED which fires on:
-        // - BOARD_CHANGED (structure change) → countChanged = true
-        // - COMPONENT_LABEL_CHANGED → labelsChanged = true
-        // Input value changes use SIMULATION_STEP_COMPLETED → _highlightRowByIndex() instead.
-
-        it('should rebuild table when input count changes', () => {
+        it('should rebuild table when input count changes', async () => {
             const initialCache = createValidCache(2, 1); // 2 inputs
             const updatedCache = createValidCache(3, 1); // 3 inputs - structure changed
 
@@ -325,18 +335,23 @@ describe('TruthTablePanel', () => {
             panel.tabulatorInstance = mockTabulatorInstance;
             panel.circuitAnalysis = initialCache;
             panel.state = { x: 100, y: 100, width: '400px', height: '300px' };
+            mockDOM.panelEl.style.display = 'block';
+            mockDOM.panelEl.classList.classes.delete('hidden');
 
-            // Spy on _renderTabulator method
-            const displaySpy = vi.spyOn(panel, '_renderTabulator').mockResolvedValue();
+            // Set state machine to visible_table to enable rebuild detection
+            panel._stateMachine.setPanelState('visible_table');
+
+            // Mock render queue to track if REBUILD_TABLE action was triggered
+            const enqueueSpy = vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
             const saveStateSpy = vi.spyOn(panel, '_saveState').mockImplementation(() => {});
 
-            panel.refresh();
+            await panel._handleComputed();
 
             // Should NOT call replaceData (structure changed)
             expect(mockTabulatorInstance.replaceData).not.toHaveBeenCalled();
-            // Should save state and call display for rebuild
+            // Should save state and trigger rebuild via render queue
             expect(saveStateSpy).toHaveBeenCalled();
-            expect(displaySpy).toHaveBeenCalled();
+            expect(enqueueSpy).toHaveBeenCalled();
             // Should reset column order
             expect(panel.columnOrder).toBeNull();
             // Should clear height/width to allow auto-fit, but keep position
@@ -346,7 +361,7 @@ describe('TruthTablePanel', () => {
             expect(panel.state.width).toBe('');
         });
 
-        it('should rebuild table when output count changes', () => {
+        it('should rebuild table when output count changes', async () => {
             const initialCache = createValidCache(2, 1); // 1 output
             const updatedCache = createValidCache(2, 2); // 2 outputs - structure changed
 
@@ -371,20 +386,23 @@ describe('TruthTablePanel', () => {
             panel.panel = mockDOM.panelEl;
             panel.tabulatorInstance = mockTabulatorInstance;
             panel.circuitAnalysis = initialCache;
+            mockDOM.panelEl.style.display = 'block';
+            mockDOM.panelEl.classList.classes.delete('hidden');
 
-            const displaySpy = vi.spyOn(panel, '_renderTabulator').mockResolvedValue();
+            // Set state machine to visible_table to enable rebuild detection
+            panel._stateMachine.setPanelState('visible_table');
+
+            // Mock render queue to track if REBUILD_TABLE action was triggered
+            const enqueueSpy = vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
             vi.spyOn(panel, '_saveState').mockImplementation(() => {});
 
-            panel.refresh();
+            await panel._handleComputed();
 
             expect(mockTabulatorInstance.replaceData).not.toHaveBeenCalled();
-            expect(displaySpy).toHaveBeenCalled();
+            expect(enqueueSpy).toHaveBeenCalled();
         });
 
-        // Note: "should update highlight after replaceData" test removed - it tested
-        // the fast path which is now dead code (see note at line ~295).
-
-        it('should handle missing circuitAnalysis gracefully', () => {
+        it('should handle missing circuitAnalysis gracefully', async () => {
             const cache = createValidCache(2, 1);
             const circuitState = createMockCircuitState(cache);
             const panel = new TruthTablePanel(
@@ -407,15 +425,568 @@ describe('TruthTablePanel', () => {
             panel.panel = mockDOM.panelEl;
             panel.tabulatorInstance = mockTabulatorInstance;
             panel.circuitAnalysis = null; // No existing data
+            mockDOM.panelEl.style.display = 'block';
+            mockDOM.panelEl.classList.classes.delete('hidden');
 
-            const displaySpy = vi.spyOn(panel, '_renderTabulator').mockResolvedValue();
+            // Set state machine to visible_table to enable rebuild detection
+            panel._stateMachine.setPanelState('visible_table');
+
+            // Mock render queue to track if rebuild was triggered
+            const enqueueSpy = vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
             vi.spyOn(panel, '_saveState').mockImplementation(() => {});
 
             // Should not throw
-            expect(() => panel.refresh()).not.toThrow();
+            await expect(panel._handleComputed()).resolves.not.toThrow();
 
-            // Should treat as structure change and rebuild
-            expect(displaySpy).toHaveBeenCalled();
+            // Should treat as structure change and trigger rebuild via render queue
+            expect(enqueueSpy).toHaveBeenCalled();
+        });
+
+        it('should mark state machine data as STALE when panel is hidden', async () => {
+            const validCache = createValidCache();
+            const circuitState = createMockCircuitState(validCache);
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            // Setup panel and tabulatorInstance
+            panel.panel = mockDOM.panelEl;
+            const mockTabulator = { setData: vi.fn(), setColumns: vi.fn() };
+            panel.tabulatorInstance = mockTabulator;
+            panel.circuitAnalysis = null;
+
+            // Mark panel as hidden
+            mockDOM.panelEl.classList.classes.add('hidden');
+
+            await panel._handleComputed();
+
+            // State machine should mark data as STALE
+            const smState = panel._stateMachine.getState();
+            expect(smState.data).toBe('stale');
+            // Data should still be synced
+            expect(panel.circuitAnalysis).not.toBeNull();
+        });
+    });
+
+    describe('State Machine Data Tracking', () => {
+        it('should start with FRESH data state', () => {
+            const circuitState = createMockCircuitState(createValidCache());
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            const smState = panel._stateMachine.getState();
+            expect(smState.data).toBe('fresh');
+        });
+
+        it('should reset state machine on destroy()', () => {
+            const circuitState = createMockCircuitState(createValidCache());
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            // Modify state machine state
+            panel._stateMachine.handleStepCompleted({ cycleIndex: 5 });
+            panel._stateMachine.setDataState('stale');
+
+            panel.destroy();
+
+            const smState = panel._stateMachine.getState();
+            expect(smState.data).toBe('fresh');
+            expect(smState.lastCycleIndex).toBeNull();
+            expect(smState.panel).toBe('hidden');
+        });
+
+        it('should mark data STALE when circuit goes invalid while hidden', () => {
+            const circuitState = createMockCircuitState(createValidCache());
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            // Setup: panel exists with valid table, but is hidden
+            panel.panel = mockDOM.panelEl;
+            panel.tabulatorInstance = { destroy: vi.fn() };
+            panel.circuitAnalysis = createValidCache();
+
+            // Mark panel as hidden
+            mockDOM.panelEl.classList.classes.add('hidden');
+
+            // Emit validity changed event indicating circuit became invalid
+            panel._handleValidityChanged({
+                from: 'valid',
+                to: 'incomplete',
+                canSimulate: false,
+                reason: 'Missing connection'
+            });
+
+            // State machine should mark data as STALE so show() will sync
+            const smState = panel._stateMachine.getState();
+            expect(smState.data).toBe('stale');
+        });
+
+        it('should mark data STALE when circuit goes valid while hidden', () => {
+            const circuitState = createMockCircuitState(createValidCache());
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            // Setup: panel exists with invalid table, but is hidden
+            panel.panel = mockDOM.panelEl;
+            panel.tabulatorInstance = null;
+            panel.circuitAnalysis = createInvalidCache();
+
+            // Mark panel as hidden
+            mockDOM.panelEl.classList.classes.add('hidden');
+
+            // Emit validity changed event indicating circuit became valid
+            panel._handleValidityChanged({
+                from: 'incomplete',
+                to: 'valid',
+                canSimulate: true
+            });
+
+            // State machine should mark data as STALE so show() will sync
+            const smState = panel._stateMachine.getState();
+            expect(smState.data).toBe('stale');
+        });
+    });
+
+    describe('lastCycleIndex tracking via State Machine', () => {
+        it('should have null lastCycleIndex initially', () => {
+            const circuitState = createMockCircuitState(createValidCache());
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            const smState = panel._stateMachine.getState();
+            expect(smState.lastCycleIndex).toBeNull();
+        });
+
+        it('should clear lastCycleIndex on destroy()', () => {
+            const circuitState = createMockCircuitState(createValidCache());
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            // Set a cycle index via state machine
+            panel._stateMachine.handleStepCompleted({ cycleIndex: 5 });
+            expect(panel._stateMachine.getState().lastCycleIndex).toBe(5);
+
+            panel.destroy();
+
+            const smState = panel._stateMachine.getState();
+            expect(smState.lastCycleIndex).toBeNull();
+        });
+
+        it('should track cycleIndex via state machine when simulation step fires while hidden', () => {
+            const circuitState = createMockCircuitState(createValidCache());
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            // Setup: panel exists but is hidden
+            panel.panel = mockDOM.panelEl;
+            panel.tabulatorInstance = {
+                deselectRow: vi.fn(),
+                getRows: vi.fn().mockReturnValue([])
+            };
+
+            // Mark panel as hidden
+            mockDOM.panelEl.classList.classes.add('hidden');
+
+            // Spy to verify _highlightRowByIndex is NOT called when hidden
+            const highlightSpy = vi.spyOn(panel, '_highlightRowByIndex');
+
+            // Trigger simulation step
+            panel._handleStepCompleted({ cycleIndex: 3 });
+
+            // State machine should track the cycle index even when hidden
+            const smState = panel._stateMachine.getState();
+            expect(smState.lastCycleIndex).toBe(3);
+            // Should NOT highlight when hidden
+            expect(highlightSpy).not.toHaveBeenCalled();
+        });
+
+        it('should track cycleIndex AND highlight when visible', () => {
+            const circuitState = createMockCircuitState(createValidCache());
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            // Setup: panel is visible with VISIBLE_TABLE state
+            panel.panel = mockDOM.panelEl;
+            panel.tabulatorInstance = {
+                deselectRow: vi.fn(),
+                getRows: vi.fn().mockReturnValue([
+                    { select: vi.fn(), scrollTo: vi.fn() },
+                    { select: vi.fn(), scrollTo: vi.fn() },
+                    { select: vi.fn(), scrollTo: vi.fn() }
+                ])
+            };
+            mockDOM.panelEl.style.display = 'block';
+            mockDOM.panelEl.classList.classes.delete('hidden');
+
+            // Set state machine to VISIBLE_TABLE state
+            panel._stateMachine.setPanelState('visible_table');
+
+            // Spy on _highlightRowByIndex
+            const highlightSpy = vi.spyOn(panel, '_highlightRowByIndex');
+
+            // Trigger simulation step
+            panel._handleStepCompleted({ cycleIndex: 2 });
+
+            // State machine should track the cycle index
+            const smState = panel._stateMachine.getState();
+            expect(smState.lastCycleIndex).toBe(2);
+            // Should also highlight when visible
+            expect(highlightSpy).toHaveBeenCalledWith(2);
+        });
+    });
+
+    describe('_syncTabulatorWithAnalysis()', () => {
+        it('should return early if tabulatorInstance is null', async () => {
+            const circuitState = createMockCircuitState(createValidCache());
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            panel.tabulatorInstance = null;
+            panel.circuitAnalysis = createValidCache();
+
+            // Should not throw
+            await expect(panel._syncTabulatorWithAnalysis()).resolves.not.toThrow();
+        });
+
+        it('should render invalid state when circuitState returns null', async () => {
+            // Now _syncTabulatorWithAnalysis fetches fresh data from circuitState
+            const circuitState = createMockCircuitState(null);
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            panel.panel = mockDOM.panelEl;
+            panel.tabulatorInstance = { destroy: vi.fn() };
+            panel.circuitAnalysis = createValidCache();
+            panel.interactionsSetup = true;
+            mockDOM.contentEl.innerHTML = '';
+
+            const renderInvalidSpy = vi.spyOn(panel, '_renderInvalidState').mockImplementation(() => {});
+
+            await panel._syncTabulatorWithAnalysis();
+
+            // Should render invalid state when circuitState returns null
+            expect(renderInvalidSpy).toHaveBeenCalled();
+        });
+
+        it('should rebuild table when structure changes', async () => {
+            const circuitState = createMockCircuitState(createValidCache(3, 1));
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            panel.panel = mockDOM.panelEl;
+            panel.circuitAnalysis = createValidCache(3, 1); // 3 inputs now
+            panel.tabulatorInstance = {
+                getColumns: vi.fn().mockReturnValue([
+                    { getField: () => 'input0' },
+                    { getField: () => 'input1' },
+                    { getField: () => 'output0' }
+                ]) // Only 2 inputs in Tabulator
+            };
+
+            const renderSpy = vi.spyOn(panel, '_renderTabulator').mockResolvedValue();
+            vi.spyOn(panel, '_saveState').mockImplementation(() => {});
+
+            await panel._syncTabulatorWithAnalysis();
+
+            // Should trigger full rebuild
+            expect(renderSpy).toHaveBeenCalled();
+        });
+
+        it('should update headers when labels change', async () => {
+            // Create analysis with new labels (what circuitState will return)
+            const freshAnalysis = {
+                inputs: [{ label: 'NewLabel', value: 0 }],
+                outputs: [{ label: 'Q', value: 0 }],
+                table: [{ input0: 0, output0: 0 }, { input0: 1, output0: 1 }],
+                isValid: true
+            };
+            const circuitState = createMockCircuitState(freshAnalysis);
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            panel.panel = mockDOM.panelEl;
+            // Local copy has old labels
+            panel.circuitAnalysis = {
+                inputs: [{ label: 'OldLabel', value: 0 }],
+                outputs: [{ label: 'Q', value: 0 }],
+                table: [{ input0: 0, output0: 0 }, { input0: 1, output0: 1 }],
+                isValid: true
+            };
+            panel.tabulatorInstance = {
+                getColumns: vi.fn().mockReturnValue([
+                    { getField: () => 'input0', getDefinition: () => ({ title: 'OldLabel' }) },
+                    { getField: () => 'output0', getDefinition: () => ({ title: 'Q' }) }
+                ]),
+                setColumns: vi.fn(),
+                setData: vi.fn()
+            };
+
+            const updateHeadersSpy = vi.spyOn(panel, '_updateColumnHeaders').mockImplementation(() => {});
+            vi.spyOn(panel, '_reapplyRowHeights').mockImplementation(() => {});
+            vi.spyOn(panel, '_updateHighlight').mockImplementation(() => {});
+
+            await panel._syncTabulatorWithAnalysis();
+
+            // Should update headers
+            expect(updateHeadersSpy).toHaveBeenCalled();
+        });
+
+        it('should use setData for data-only changes', async () => {
+            // Create analysis with same structure but different output values
+            const freshAnalysis = {
+                inputs: [{ label: 'A', value: 0 }],
+                outputs: [{ label: 'Q', value: 0 }],
+                table: [{ input0: 0, output0: 1 }, { input0: 1, output0: 0 }], // Updated data
+                isValid: true
+            };
+            const circuitState = createMockCircuitState(freshAnalysis);
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            panel.panel = mockDOM.panelEl;
+            // Local copy has old data
+            panel.circuitAnalysis = {
+                inputs: [{ label: 'A', value: 0 }],
+                outputs: [{ label: 'Q', value: 0 }],
+                table: [{ input0: 0, output0: 0 }, { input0: 1, output0: 1 }], // Old data
+                isValid: true
+            };
+            const mockTabulator = {
+                getColumns: vi.fn().mockReturnValue([
+                    { getField: () => 'input0', getDefinition: () => ({ title: 'A' }) },
+                    { getField: () => 'output0', getDefinition: () => ({ title: 'Q' }) }
+                ]),
+                setData: vi.fn()
+            };
+            panel.tabulatorInstance = mockTabulator;
+
+            await panel._syncTabulatorWithAnalysis();
+
+            // Should use setData for data-only change
+            expect(mockTabulator.setData).toHaveBeenCalled();
+        });
+
+        it('should render invalid state when fresh analysis from circuitState is invalid (Bug #1 fix)', async () => {
+            // This tests the scenario where:
+            // 1. Panel was showing valid table
+            // 2. User hid panel
+            // 3. Circuit became invalid while hidden
+            // 4. User shows panel → _syncTabulatorWithAnalysis is called
+            // 5. Should render invalid state
+            const invalidCache = createInvalidCache('Missing connection');
+            const circuitState = createMockCircuitState(invalidCache);
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            panel.panel = mockDOM.panelEl;
+            panel.tabulatorInstance = { destroy: vi.fn() };
+            // Old local copy was valid
+            panel.circuitAnalysis = createValidCache();
+            panel.interactionsSetup = true;
+
+            // Mock innerHTML on content element
+            mockDOM.contentEl.innerHTML = '';
+
+            const renderInvalidSpy = vi.spyOn(panel, '_renderInvalidState').mockImplementation(() => {});
+
+            await panel._syncTabulatorWithAnalysis();
+
+            // Should render invalid state
+            expect(renderInvalidSpy).toHaveBeenCalled();
+            // Should update local copy to reflect invalid state
+            expect(panel.circuitAnalysis.isValid).toBe(false);
+        });
+
+        it('should render invalid state when fresh analysis is null (computation in progress)', async () => {
+            const circuitState = createMockCircuitState(null);
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            panel.panel = mockDOM.panelEl;
+            panel.tabulatorInstance = { destroy: vi.fn() };
+            panel.circuitAnalysis = createValidCache();
+            panel.interactionsSetup = true;
+
+            mockDOM.contentEl.innerHTML = '';
+
+            const renderInvalidSpy = vi.spyOn(panel, '_renderInvalidState').mockImplementation(() => {});
+
+            await panel._syncTabulatorWithAnalysis();
+
+            // Should render invalid state (null means computation in progress)
+            expect(renderInvalidSpy).toHaveBeenCalled();
+            // Local copy should be null
+            expect(panel.circuitAnalysis).toBeNull();
+        });
+    });
+
+    describe('_detectLabelChanges()', () => {
+        it('should return false if tabulatorInstance is null', () => {
+            const circuitState = createMockCircuitState(createValidCache());
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            panel.tabulatorInstance = null;
+            panel.circuitAnalysis = createValidCache();
+
+            expect(panel._detectLabelChanges()).toBe(false);
+        });
+
+        it('should return false if circuitAnalysis is null', () => {
+            const circuitState = createMockCircuitState(createValidCache());
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            panel.tabulatorInstance = { getColumns: vi.fn() };
+            panel.circuitAnalysis = null;
+
+            expect(panel._detectLabelChanges()).toBe(false);
+        });
+
+        it('should return true when input label differs', () => {
+            const circuitState = createMockCircuitState(createValidCache());
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            panel.circuitAnalysis = {
+                inputs: [{ label: 'NewLabel', value: 0 }],
+                outputs: [{ label: 'Q', value: 0 }],
+                table: [],
+                isValid: true
+            };
+            panel.tabulatorInstance = {
+                getColumns: vi.fn().mockReturnValue([
+                    { getField: () => 'input0', getDefinition: () => ({ title: 'OldLabel' }) },
+                    { getField: () => 'output0', getDefinition: () => ({ title: 'Q' }) }
+                ])
+            };
+
+            expect(panel._detectLabelChanges()).toBe(true);
+        });
+
+        it('should return true when output label differs', () => {
+            const circuitState = createMockCircuitState(createValidCache());
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            panel.circuitAnalysis = {
+                inputs: [{ label: 'A', value: 0 }],
+                outputs: [{ label: 'NewQ', value: 0 }],
+                table: [],
+                isValid: true
+            };
+            panel.tabulatorInstance = {
+                getColumns: vi.fn().mockReturnValue([
+                    { getField: () => 'input0', getDefinition: () => ({ title: 'A' }) },
+                    { getField: () => 'output0', getDefinition: () => ({ title: 'OldQ' }) }
+                ])
+            };
+
+            expect(panel._detectLabelChanges()).toBe(true);
+        });
+
+        it('should return false when all labels match', () => {
+            const circuitState = createMockCircuitState(createValidCache());
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            panel.circuitAnalysis = {
+                inputs: [{ label: 'A', value: 0 }],
+                outputs: [{ label: 'Q', value: 0 }],
+                table: [],
+                isValid: true
+            };
+            panel.tabulatorInstance = {
+                getColumns: vi.fn().mockReturnValue([
+                    { getField: () => 'input0', getDefinition: () => ({ title: 'A' }) },
+                    { getField: () => 'output0', getDefinition: () => ({ title: 'Q' }) }
+                ])
+            };
+
+            expect(panel._detectLabelChanges()).toBe(false);
         });
     });
 
@@ -645,7 +1216,7 @@ describe('TruthTablePanel', () => {
             expect(mockTabulatorInstance.getRows).not.toHaveBeenCalled();
         });
 
-        it('refresh() should transition from empty table to having data correctly', () => {
+        it('_handleComputed() should transition from empty table to having data correctly', async () => {
             const validCache = createValidCache(2, 1);
             const circuitState = createMockCircuitState(validCache);
             const panel = new TruthTablePanel(
@@ -675,14 +1246,20 @@ describe('TruthTablePanel', () => {
                 isValid: false,
                 reason: 'No gates'
             };
+            mockDOM.panelEl.style.display = 'block';
+            mockDOM.panelEl.classList.classes.delete('hidden');
 
-            const displaySpy = vi.spyOn(panel, '_renderTabulator').mockResolvedValue();
+            // Set state machine to visible_table to enable rebuild detection
+            panel._stateMachine.setPanelState('visible_table');
+
+            // Mock render queue to track if rebuild was triggered
+            const enqueueSpy = vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
             vi.spyOn(panel, '_saveState').mockImplementation(() => {});
 
-            panel.refresh();
+            await panel._handleComputed();
 
-            // Should trigger full rebuild (hadNoTable is true)
-            expect(displaySpy).toHaveBeenCalled();
+            // Should trigger full rebuild (structure changed - oldAnalysis had 0 inputs/outputs)
+            expect(enqueueSpy).toHaveBeenCalled();
             // circuitAnalysis should be updated with new table data
             expect(panel.circuitAnalysis.table.length).toBeGreaterThan(0);
         });
@@ -747,6 +1324,11 @@ describe('TruthTablePanel', () => {
                     { select: vi.fn(), scrollTo: vi.fn() }
                 ])
             };
+            mockDOM.panelEl.style.display = 'block';
+            mockDOM.panelEl.classList.classes.delete('hidden');
+
+            // Set state machine to VISIBLE_TABLE state (required for HIGHLIGHT_ROW action)
+            panel._stateMachine.setPanelState('visible_table');
 
             // Spy on _highlightRowByIndex
             const highlightSpy = vi.spyOn(panel, '_highlightRowByIndex');
@@ -808,6 +1390,11 @@ describe('TruthTablePanel', () => {
                 table: [],
                 isValid: true
             };
+            mockDOM.panelEl.style.display = 'block';
+            mockDOM.panelEl.classList.classes.delete('hidden');
+
+            // Set state machine to VISIBLE_TABLE state (required for SHOW_INVALID action)
+            panel._stateMachine.setPanelState('visible_table');
 
             // Spy on _renderInvalidState
             const displayInvalidSpy = vi.spyOn(panel, '_renderInvalidState').mockImplementation(() => {});
@@ -822,10 +1409,11 @@ describe('TruthTablePanel', () => {
                 outputs: []
             });
 
-            // Should NOT mutate circuitAnalysis (mutation anti-pattern was fixed)
-            // Instead, reason is passed as parameter to _renderInvalidState
-            expect(panel.circuitAnalysis.isValid).toBe(true); // unchanged
-            // Should show invalid message with reason passed as parameter (method fetches content internally)
+            // _handleValidityChanged is now the PRIMARY handler for invalid states
+            // It DOES update local circuitAnalysis to reflect invalidity
+            expect(panel.circuitAnalysis.isValid).toBe(false);
+            expect(panel.circuitAnalysis.reason).toBe('Missing connection');
+            // Should show invalid message with reason passed as parameter
             expect(displayInvalidSpy).toHaveBeenCalled();
             expect(displayInvalidSpy).toHaveBeenCalledWith('Missing connection');
         });
@@ -960,7 +1548,7 @@ describe('TruthTablePanel', () => {
     });
 
     describe('Label Changes', () => {
-        it('should update column headers when labels change without full rebuild', () => {
+        it('should update column headers when labels change without full rebuild', async () => {
             // Create initial cache with original labels
             const initialCache = {
                 inputs: [
@@ -1005,6 +1593,11 @@ describe('TruthTablePanel', () => {
                 table: initialCache.table,
                 isValid: initialCache.isValid
             };
+            mockDOM.panelEl.style.display = 'block';
+            mockDOM.panelEl.classList.classes.delete('hidden');
+
+            // Set state machine to VISIBLE_TABLE state (required for UPDATE_HEADERS action)
+            panel._stateMachine.setPanelState('visible_table');
 
             // Create updated cache with changed labels (but same structure)
             const updatedCache = {
@@ -1024,8 +1617,11 @@ describe('TruthTablePanel', () => {
 
             // Spy on _renderTabulator to ensure full rebuild is NOT called
             const displaySpy = vi.spyOn(panel, '_renderTabulator');
+            // Mock _reapplyRowHeights and _updateHighlight (called after setColumns)
+            vi.spyOn(panel, '_reapplyRowHeights').mockImplementation(() => {});
+            vi.spyOn(panel, '_updateHighlight').mockImplementation(() => {});
 
-            panel.refresh();
+            await panel._handleComputed();
 
             // Should NOT trigger full rebuild
             expect(displaySpy).not.toHaveBeenCalled();
@@ -1033,16 +1629,1176 @@ describe('TruthTablePanel', () => {
             // Should update column headers via setColumns (for grouped columns)
             expect(mockTable.setColumns).toHaveBeenCalled();
 
+            // Should reapply row heights and update highlight after setColumns
+            expect(panel._reapplyRowHeights).toHaveBeenCalled();
+            expect(panel._updateHighlight).toHaveBeenCalled();
+
             // Should NOT update data - labels are display-only, table data is identical
             expect(mockTable.replaceData).not.toHaveBeenCalled();
         });
+    });
 
-        // Note: "should not update columns when labels have not changed" test removed.
-        // This tested the "fast path" scenario where refresh() is called with same
-        // structure and same labels - a scenario that never occurs in practice.
-        // refresh() is only triggered by CIRCUIT_ANALYSIS_COMPUTED which fires on:
-        // - BOARD_CHANGED (structure change) → countChanged = true → rebuild path
-        // - COMPONENT_LABEL_CHANGED → labelsChanged = true → label update path
-        // The "same labels" fast path is unreachable dead code.
+    describe('show() fast path (Bug #2 fix)', () => {
+        it('should use lastCycleIndex for highlighting when panel is shown', async () => {
+            const validCache = createValidCache();
+            const circuitState = createMockCircuitState(validCache);
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            // Mark as initialized (Phase 3 requirement)
+            panel._initialized = true;
+
+            // Setup: panel exists with tabulatorInstance (fast path condition)
+            panel.panel = mockDOM.panelEl;
+            panel.tabulatorInstance = {
+                deselectRow: vi.fn(),
+                getRows: vi.fn().mockReturnValue([
+                    { select: vi.fn(), scrollTo: vi.fn() },
+                    { select: vi.fn(), scrollTo: vi.fn() },
+                    { select: vi.fn(), scrollTo: vi.fn() },
+                    { select: vi.fn(), scrollTo: vi.fn() }
+                ])
+            };
+            panel.circuitAnalysis = validCache;
+
+            // Set lastCycleIndex via state machine (Phase 3 - using state machine)
+            panel._stateMachine.handleStepCompleted({ cycleIndex: 2 });
+
+            // Make state machine return NONE (already visible)
+            vi.spyOn(panel._stateMachine, 'handleShow').mockReturnValue({ action: 'NONE' });
+            vi.spyOn(panel._stateMachine, 'getState').mockReturnValue({
+                panel: 'visible_table',
+                lastCycleIndex: 2
+            });
+
+            // Spy on _highlightRowByIndex
+            const highlightSpy = vi.spyOn(panel, '_highlightRowByIndex');
+
+            await panel.show();
+
+            // Should highlight using lastCycleIndex from state machine
+            expect(highlightSpy).toHaveBeenCalledWith(2);
+        });
+
+        it('should not highlight if lastCycleIndex is null', async () => {
+            const validCache = createValidCache();
+            const circuitState = createMockCircuitState(validCache);
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            // Mark as initialized (Phase 3 requirement)
+            panel._initialized = true;
+
+            // Setup: panel exists with tabulatorInstance (fast path condition)
+            panel.panel = mockDOM.panelEl;
+            panel.tabulatorInstance = {
+                deselectRow: vi.fn(),
+                getRows: vi.fn().mockReturnValue([])
+            };
+            panel.circuitAnalysis = validCache;
+
+            // Make state machine return NONE (already visible)
+            vi.spyOn(panel._stateMachine, 'handleShow').mockReturnValue({ action: 'NONE' });
+            vi.spyOn(panel._stateMachine, 'getState').mockReturnValue({
+                panel: 'visible_table',
+                lastCycleIndex: null // No previous cycle index
+            });
+
+            // Spy on _highlightRowByIndex
+            const highlightSpy = vi.spyOn(panel, '_highlightRowByIndex');
+
+            await panel.show();
+
+            // Should NOT call highlight when lastCycleIndex is null
+            expect(highlightSpy).not.toHaveBeenCalled();
+        });
+
+        it('should sync and then highlight when state machine returns SYNC', async () => {
+            const validCache = createValidCache();
+            const circuitState = createMockCircuitState(validCache);
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            // Mark as initialized (Phase 3 requirement)
+            panel._initialized = true;
+
+            // Setup: panel exists with tabulatorInstance (fast path condition)
+            panel.panel = mockDOM.panelEl;
+            panel.tabulatorInstance = {
+                deselectRow: vi.fn(),
+                getRows: vi.fn().mockReturnValue([
+                    { select: vi.fn(), scrollTo: vi.fn() },
+                    { select: vi.fn(), scrollTo: vi.fn() }
+                ]),
+                getColumns: vi.fn().mockReturnValue([]),
+                setData: vi.fn()
+            };
+            panel.circuitAnalysis = validCache;
+
+            // Make state machine return SYNC (data is stale)
+            vi.spyOn(panel._stateMachine, 'handleShow').mockReturnValue({ action: 'SYNC' });
+            vi.spyOn(panel._stateMachine, 'getState').mockReturnValue({
+                panel: 'visible_table',
+                lastCycleIndex: 1
+            });
+
+            // Spy on methods
+            const syncSpy = vi.spyOn(panel, '_syncTabulatorWithAnalysis').mockResolvedValue();
+            const highlightSpy = vi.spyOn(panel, '_highlightRowByIndex');
+
+            await panel.show();
+
+            // Should sync first
+            expect(syncSpy).toHaveBeenCalled();
+            // Should highlight after sync
+            expect(highlightSpy).toHaveBeenCalledWith(1);
+        });
+    });
+
+    // ============================================================================
+    // Phase 2: State Machine Integration Tests
+    // ============================================================================
+
+    describe('State Machine Integration (Phase 2)', () => {
+        describe('State machine instantiation', () => {
+            it('should create state machine instance on construction', () => {
+                const circuitState = createMockCircuitState(createValidCache());
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                expect(panel._stateMachine).toBeDefined();
+                expect(panel._stateMachine.getState).toBeDefined();
+            });
+
+            it('should create render queue instance on construction', () => {
+                const circuitState = createMockCircuitState(createValidCache());
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                expect(panel._renderQueue).toBeDefined();
+                expect(panel._renderQueue.enqueue).toBeDefined();
+            });
+
+            it('should reset state machine on destroy()', () => {
+                const circuitState = createMockCircuitState(createValidCache());
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                // Spy on state machine reset
+                const resetSpy = vi.spyOn(panel._stateMachine, 'reset');
+
+                panel.destroy();
+
+                expect(resetSpy).toHaveBeenCalled();
+            });
+        });
+
+        describe('Event handlers call state machine', () => {
+            it('_handleStepCompleted should call state machine', () => {
+                const circuitState = createMockCircuitState(createValidCache());
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                const handleStepSpy = vi.spyOn(panel._stateMachine, 'handleStepCompleted');
+
+                panel._handleStepCompleted({ cycleIndex: 3 });
+
+                expect(handleStepSpy).toHaveBeenCalledWith({ cycleIndex: 3 });
+            });
+
+            it('_handleValidityChanged should call state machine', () => {
+                const circuitState = createMockCircuitState(createValidCache());
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel.panel = mockDOM.panelEl;
+                mockDOM.panelEl.classList.classes.add('hidden');
+
+                const handleValiditySpy = vi.spyOn(panel._stateMachine, 'handleValidityChanged');
+
+                panel._handleValidityChanged({ canSimulate: false, reason: 'Test' });
+
+                expect(handleValiditySpy).toHaveBeenCalledWith({ canSimulate: false, reason: 'Test' });
+            });
+
+            it('_handleComputing should call state machine', () => {
+                const circuitState = createMockCircuitState(createValidCache());
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel.panel = mockDOM.panelEl;
+                mockDOM.panelEl.classList.classes.add('hidden');
+
+                const handleComputingSpy = vi.spyOn(panel._stateMachine, 'handleComputing');
+
+                panel._handleComputing({ percent: 50, current: 50, total: 100 });
+
+                expect(handleComputingSpy).toHaveBeenCalledWith({ percent: 50, current: 50, total: 100 });
+            });
+
+            it('_handleComputed should call state machine with analysis data', async () => {
+                const validCache = createValidCache();
+                const circuitState = createMockCircuitState(validCache);
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel.panel = mockDOM.panelEl;
+                mockDOM.panelEl.classList.classes.add('hidden');
+
+                const handleComputedSpy = vi.spyOn(panel._stateMachine, 'handleComputed');
+
+                await panel._handleComputed();
+
+                // Should be called with new analysis and old analysis (null initially)
+                expect(handleComputedSpy).toHaveBeenCalled();
+                const [newAnalysis, oldAnalysis] = handleComputedSpy.mock.calls[0];
+                expect(newAnalysis).toBeDefined();
+                expect(oldAnalysis).toBeNull();
+            });
+        });
+
+        describe('_executeAction dispatcher', () => {
+            it('should handle NONE action by doing nothing', async () => {
+                const circuitState = createMockCircuitState(createValidCache());
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                // Should not throw
+                await expect(panel._executeAction({ action: 'NONE' })).resolves.not.toThrow();
+                await expect(panel._executeAction(null)).resolves.not.toThrow();
+            });
+
+            it('should handle SHOW_COMPUTING action', async () => {
+                const circuitState = createMockCircuitState(createValidCache());
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel.panel = mockDOM.panelEl;
+
+                const revealSpy = vi.spyOn(panel, '_revealPanel');
+                const renderComputingSpy = vi.spyOn(panel, '_renderComputingState').mockImplementation(() => {});
+
+                await panel._executeAction({ action: 'SHOW_COMPUTING' });
+
+                expect(revealSpy).toHaveBeenCalled();
+                expect(renderComputingSpy).toHaveBeenCalled();
+            });
+
+            it('should handle SHOW_INVALID action', async () => {
+                const circuitState = createMockCircuitState(createValidCache());
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel.panel = mockDOM.panelEl;
+
+                const revealSpy = vi.spyOn(panel, '_revealPanel');
+                const renderInvalidSpy = vi.spyOn(panel, '_renderInvalidState').mockImplementation(() => {});
+
+                await panel._executeAction({ action: 'SHOW_INVALID', reason: 'Test reason' });
+
+                expect(revealSpy).toHaveBeenCalled();
+                expect(renderInvalidSpy).toHaveBeenCalledWith('Test reason');
+            });
+
+            it('should handle HIGHLIGHT_ROW action', async () => {
+                const circuitState = createMockCircuitState(createValidCache());
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                const highlightSpy = vi.spyOn(panel, '_highlightRowByIndex').mockImplementation(() => {});
+
+                await panel._executeAction({ action: 'HIGHLIGHT_ROW', index: 5 });
+
+                expect(highlightSpy).toHaveBeenCalledWith(5);
+            });
+
+            it('should handle HIDE action', async () => {
+                const circuitState = createMockCircuitState(createValidCache());
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel.panel = mockDOM.panelEl;
+                panel.tabulatorInstance = { getColumns: vi.fn().mockReturnValue([]) };
+
+                const hideSpy = vi.spyOn(panel, '_hidePanel');
+
+                await panel._executeAction({ action: 'HIDE' });
+
+                expect(hideSpy).toHaveBeenCalled();
+            });
+
+            it('should handle UPDATE_DATA action', async () => {
+                const validCache = createValidCache();
+                const circuitState = createMockCircuitState(validCache);
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                const mockTabulator = { setData: vi.fn() };
+                panel.tabulatorInstance = mockTabulator;
+                panel.circuitAnalysis = validCache;
+
+                await panel._executeAction({ action: 'UPDATE_DATA' });
+
+                expect(mockTabulator.setData).toHaveBeenCalledWith(validCache.table);
+            });
+
+            it('should handle SHOW_PROGRESS action', async () => {
+                const circuitState = createMockCircuitState(createValidCache());
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                const showProgressSpy = vi.spyOn(panel, '_showProgress').mockImplementation(() => {});
+
+                await panel._executeAction({ action: 'SHOW_PROGRESS', percent: 50, current: 100, total: 200 });
+
+                expect(showProgressSpy).toHaveBeenCalledWith(50, 100, 200);
+            });
+
+            it('should handle SYNC action', async () => {
+                const circuitState = createMockCircuitState(createValidCache());
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                const syncSpy = vi.spyOn(panel, '_syncTabulatorWithAnalysis').mockResolvedValue();
+
+                await panel._executeAction({ action: 'SYNC' });
+
+                expect(syncSpy).toHaveBeenCalled();
+            });
+
+            it('should handle RENDER_TABLE action through render queue', async () => {
+                const circuitState = createMockCircuitState(createValidCache());
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                const enqueueSpy = vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
+
+                await panel._executeAction({ action: 'RENDER_TABLE' });
+
+                expect(enqueueSpy).toHaveBeenCalled();
+            });
+
+            it('should handle UPDATE_HEADERS action', async () => {
+                const circuitState = createMockCircuitState(createValidCache());
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                const updateHeadersSpy = vi.spyOn(panel, '_updateColumnHeaders').mockImplementation(() => {});
+                const reapplyRowHeightsSpy = vi.spyOn(panel, '_reapplyRowHeights').mockImplementation(() => {});
+                const updateHighlightSpy = vi.spyOn(panel, '_updateHighlight').mockImplementation(() => {});
+
+                await panel._executeAction({ action: 'UPDATE_HEADERS' });
+
+                expect(updateHeadersSpy).toHaveBeenCalled();
+                expect(reapplyRowHeightsSpy).toHaveBeenCalled();
+                expect(updateHighlightSpy).toHaveBeenCalled();
+            });
+        });
+
+        describe('Helper methods', () => {
+            it('_revealPanel should make panel visible', () => {
+                const circuitState = createMockCircuitState(createValidCache());
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel.panel = mockDOM.panelEl;
+                mockDOM.panelEl.classList.classes.add('hidden');
+                mockDOM.panelEl.style.display = 'none';
+
+                panel._revealPanel();
+
+                expect(mockDOM.panelEl.classList.remove).toHaveBeenCalledWith('hidden');
+                expect(mockDOM.panelEl.style.display).toBe('block');
+                expect(mockDOM.panelEl.style.pointerEvents).toBe('auto');
+            });
+
+            it('_revealPanel should return early if panel is null', () => {
+                const circuitState = createMockCircuitState(createValidCache());
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel.panel = null;
+
+                // Should not throw
+                expect(() => panel._revealPanel()).not.toThrow();
+            });
+
+            it('_hidePanel should hide panel and save state', () => {
+                const circuitState = createMockCircuitState(createValidCache());
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel.panel = mockDOM.panelEl;
+                panel.tabulatorInstance = { getColumns: vi.fn().mockReturnValue([]) };
+
+                const saveStateSpy = vi.spyOn(panel, '_saveState').mockImplementation(() => {});
+
+                panel._hidePanel();
+
+                expect(saveStateSpy).toHaveBeenCalled();
+                expect(mockDOM.panelEl.style.opacity).toBe('0');
+                expect(mockDOM.panelEl.style.pointerEvents).toBe('none');
+                expect(mockDOM.panelEl.classList.add).toHaveBeenCalledWith('hidden');
+                expect(mockDOM.panelEl.style.display).toBe('none');
+            });
+
+            it('_hidePanel should return early if panel is null', () => {
+                const circuitState = createMockCircuitState(createValidCache());
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel.panel = null;
+
+                // Should not throw
+                expect(() => panel._hidePanel()).not.toThrow();
+            });
+
+            it('_safeRenderTable should call state machine render lifecycle methods', async () => {
+                const validCache = createValidCache();
+                const circuitState = createMockCircuitState(validCache);
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel.panel = mockDOM.panelEl;
+                panel.circuitAnalysis = validCache;
+
+                const renderStartedSpy = vi.spyOn(panel._stateMachine, 'renderStarted');
+                const renderCompletedSpy = vi.spyOn(panel._stateMachine, 'renderCompleted');
+                vi.spyOn(panel, '_renderTabulator').mockResolvedValue();
+
+                await panel._safeRenderTable();
+
+                expect(renderStartedSpy).toHaveBeenCalled();
+                expect(renderCompletedSpy).toHaveBeenCalled();
+            });
+
+            it('_safeRenderTable should call renderCompleted even if render throws', async () => {
+                const validCache = createValidCache();
+                const circuitState = createMockCircuitState(validCache);
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel.panel = mockDOM.panelEl;
+                panel.circuitAnalysis = validCache;
+
+                const renderCompletedSpy = vi.spyOn(panel._stateMachine, 'renderCompleted');
+                vi.spyOn(panel, '_renderTabulator').mockRejectedValue(new Error('Render error'));
+
+                await expect(panel._safeRenderTable()).rejects.toThrow('Render error');
+
+                // renderCompleted should still be called via finally block
+                expect(renderCompletedSpy).toHaveBeenCalled();
+            });
+
+            it('_safeRenderTable should return early if no content element', async () => {
+                const circuitState = createMockCircuitState(createValidCache());
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                // Make getElementById return null for truthTableContent
+                mockDOM.mockDocument.getElementById = vi.fn((id) => {
+                    if (id === 'truthTableContent') return null;
+                    return mockDOM.panelEl;
+                });
+
+                const renderStartedSpy = vi.spyOn(panel._stateMachine, 'renderStarted');
+
+                await panel._safeRenderTable();
+
+                // Should not have called renderStarted since we returned early
+                expect(renderStartedSpy).not.toHaveBeenCalled();
+            });
+        });
+
+        describe('State machine only tracking', () => {
+            it('validity changed should track via state machine only', () => {
+                const circuitState = createMockCircuitState(createValidCache());
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel.panel = mockDOM.panelEl;
+                mockDOM.panelEl.classList.classes.add('hidden');
+
+                // Trigger validity changed
+                panel._handleValidityChanged({ canSimulate: false, reason: 'Test' });
+
+                // State machine should track this (data becomes STALE)
+                const smState = panel._stateMachine.getState();
+                expect(smState.data).toBe('stale');
+            });
+
+            it('step completed should track via state machine only', () => {
+                const circuitState = createMockCircuitState(createValidCache());
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel.panel = mockDOM.panelEl;
+                mockDOM.panelEl.classList.classes.add('hidden');
+
+                // Trigger step completed
+                panel._handleStepCompleted({ cycleIndex: 7 });
+
+                // State machine should track this
+                const smState = panel._stateMachine.getState();
+                expect(smState.lastCycleIndex).toBe(7);
+            });
+        });
+    });
+
+    // ============================================================================
+    // Phase 3: Refactored show/hide Tests
+    // ============================================================================
+
+    describe('Refactored show/hide (Phase 3)', () => {
+        describe('hide()', () => {
+            it('should call state machine handleHide', () => {
+                const circuitState = createMockCircuitState(createValidCache());
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel.panel = mockDOM.panelEl;
+                panel.tabulatorInstance = { getColumns: vi.fn().mockReturnValue([]) };
+
+                const handleHideSpy = vi.spyOn(panel._stateMachine, 'handleHide');
+
+                panel.hide();
+
+                expect(handleHideSpy).toHaveBeenCalled();
+            });
+
+            it('should emit TRUTH_TABLE_HIDDEN event', () => {
+                const circuitState = createMockCircuitState(createValidCache());
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel.panel = mockDOM.panelEl;
+                panel.tabulatorInstance = { getColumns: vi.fn().mockReturnValue([]) };
+
+                const eventHandler = vi.fn();
+                eventBus.on(EVENT_TYPES.TRUTH_TABLE_HIDDEN, eventHandler);
+
+                panel.hide();
+
+                expect(eventHandler).toHaveBeenCalled();
+
+                eventBus.off(EVENT_TYPES.TRUTH_TABLE_HIDDEN, eventHandler);
+            });
+
+            it('should transition state machine to HIDDEN', () => {
+                const circuitState = createMockCircuitState(createValidCache());
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel.panel = mockDOM.panelEl;
+                panel.tabulatorInstance = { getColumns: vi.fn().mockReturnValue([]) };
+
+                // Set panel visible first
+                panel._stateMachine.setPanelState('visible_table');
+
+                panel.hide();
+
+                expect(panel._stateMachine.getState().panel).toBe('hidden');
+            });
+        });
+
+        describe('show()', () => {
+            it('should throw error if not initialized', async () => {
+                const circuitState = createMockCircuitState(createValidCache());
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                // Not calling init()
+
+                await expect(panel.show()).rejects.toThrow('TruthTablePanel not initialized');
+            });
+
+            it('should call state machine handleShow', async () => {
+                const validCache = createValidCache();
+                const circuitState = createMockCircuitState(validCache);
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel._initialized = true;
+                panel.panel = mockDOM.panelEl;
+
+                const handleShowSpy = vi.spyOn(panel._stateMachine, 'handleShow').mockReturnValue({ action: 'NONE' });
+
+                await panel.show();
+
+                expect(handleShowSpy).toHaveBeenCalled();
+            });
+
+            it('should emit TRUTH_TABLE_SHOWN event', async () => {
+                const validCache = createValidCache();
+                const circuitState = createMockCircuitState(validCache);
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel._initialized = true;
+                panel.panel = mockDOM.panelEl;
+                vi.spyOn(panel._stateMachine, 'handleShow').mockReturnValue({ action: 'NONE' });
+
+                const eventHandler = vi.fn();
+                eventBus.on(EVENT_TYPES.TRUTH_TABLE_SHOWN, eventHandler);
+
+                await panel.show();
+
+                expect(eventHandler).toHaveBeenCalled();
+
+                eventBus.off(EVENT_TYPES.TRUTH_TABLE_SHOWN, eventHandler);
+            });
+
+            it('should call _syncTabulatorWithAnalysis when action is SYNC', async () => {
+                const validCache = createValidCache();
+                const circuitState = createMockCircuitState(validCache);
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel._initialized = true;
+                panel.panel = mockDOM.panelEl;
+
+                vi.spyOn(panel._stateMachine, 'handleShow').mockReturnValue({ action: 'SYNC' });
+                const syncSpy = vi.spyOn(panel, '_syncTabulatorWithAnalysis').mockResolvedValue();
+
+                await panel.show();
+
+                expect(syncSpy).toHaveBeenCalled();
+            });
+
+            it('should render computing state when action is SHOW_COMPUTING', async () => {
+                const circuitState = createMockCircuitState(null); // No analysis
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel._initialized = true;
+                panel.panel = mockDOM.panelEl;
+
+                vi.spyOn(panel._stateMachine, 'handleShow').mockReturnValue({ action: 'SHOW_COMPUTING' });
+                const renderComputingSpy = vi.spyOn(panel, '_renderComputingState').mockImplementation(() => {});
+                vi.spyOn(panel, '_positionPanelIfNeeded').mockImplementation(() => {});
+                vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
+
+                await panel.show();
+
+                expect(renderComputingSpy).toHaveBeenCalled();
+            });
+
+            it('should render invalid state when action is SHOW_INVALID', async () => {
+                const invalidCache = createInvalidCache('Test reason');
+                const circuitState = createMockCircuitState(invalidCache);
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel._initialized = true;
+                panel.panel = mockDOM.panelEl;
+
+                vi.spyOn(panel._stateMachine, 'handleShow').mockReturnValue({ action: 'SHOW_INVALID', reason: 'Test reason' });
+                const renderInvalidSpy = vi.spyOn(panel, '_renderInvalidState').mockImplementation(() => {});
+                vi.spyOn(panel, '_positionPanelIfNeeded').mockImplementation(() => {});
+                vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
+
+                await panel.show();
+
+                expect(renderInvalidSpy).toHaveBeenCalledWith('Test reason');
+            });
+
+            it('should render table and signal render lifecycle when action is RENDER_TABLE', async () => {
+                const validCache = createValidCache();
+                const circuitState = createMockCircuitState(validCache);
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel._initialized = true;
+                panel.panel = mockDOM.panelEl;
+                panel.circuitAnalysis = validCache;
+
+                vi.spyOn(panel._stateMachine, 'handleShow').mockReturnValue({ action: 'RENDER_TABLE' });
+                const renderStartedSpy = vi.spyOn(panel._stateMachine, 'renderStarted');
+                const renderCompletedSpy = vi.spyOn(panel._stateMachine, 'renderCompleted');
+                vi.spyOn(panel, '_renderTabulator').mockResolvedValue();
+                vi.spyOn(panel, '_positionPanelIfNeeded').mockImplementation(() => {});
+                vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
+
+                await panel.show();
+
+                expect(renderStartedSpy).toHaveBeenCalled();
+                expect(renderCompletedSpy).toHaveBeenCalled();
+            });
+
+            it('should highlight row using state machine lastCycleIndex after RENDER_TABLE', async () => {
+                const validCache = createValidCache();
+                const circuitState = createMockCircuitState(validCache);
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel._initialized = true;
+                panel.panel = mockDOM.panelEl;
+                panel.circuitAnalysis = validCache;
+                panel.tabulatorInstance = {
+                    deselectRow: vi.fn(),
+                    getRows: vi.fn().mockReturnValue([
+                        { select: vi.fn(), scrollTo: vi.fn() },
+                        { select: vi.fn(), scrollTo: vi.fn() },
+                        { select: vi.fn(), scrollTo: vi.fn() }
+                    ])
+                };
+
+                // Set lastCycleIndex in state machine
+                panel._stateMachine.handleStepCompleted({ cycleIndex: 2 });
+
+                vi.spyOn(panel._stateMachine, 'handleShow').mockReturnValue({ action: 'RENDER_TABLE' });
+                vi.spyOn(panel._stateMachine, 'getState').mockReturnValue({
+                    panel: 'visible_table',
+                    lastCycleIndex: 2
+                });
+                vi.spyOn(panel, '_renderTabulator').mockResolvedValue();
+                vi.spyOn(panel, '_positionPanelIfNeeded').mockImplementation(() => {});
+                vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
+
+                const highlightSpy = vi.spyOn(panel, '_highlightRowByIndex');
+
+                await panel.show();
+
+                expect(highlightSpy).toHaveBeenCalledWith(2);
+            });
+
+            it('should highlight row on SYNC action when lastCycleIndex is set', async () => {
+                const validCache = createValidCache();
+                const circuitState = createMockCircuitState(validCache);
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel._initialized = true;
+                panel.panel = mockDOM.panelEl;
+                panel.tabulatorInstance = {
+                    deselectRow: vi.fn(),
+                    getRows: vi.fn().mockReturnValue([
+                        { select: vi.fn(), scrollTo: vi.fn() },
+                        { select: vi.fn(), scrollTo: vi.fn() }
+                    ])
+                };
+
+                vi.spyOn(panel._stateMachine, 'handleShow').mockReturnValue({ action: 'SYNC' });
+                vi.spyOn(panel._stateMachine, 'getState').mockReturnValue({
+                    panel: 'visible_table',
+                    lastCycleIndex: 1
+                });
+                vi.spyOn(panel, '_syncTabulatorWithAnalysis').mockResolvedValue();
+
+                const highlightSpy = vi.spyOn(panel, '_highlightRowByIndex');
+
+                await panel.show();
+
+                expect(highlightSpy).toHaveBeenCalledWith(1);
+            });
+        });
+    });
+
+    // ============================================================================
+    // Phase 5: Edge Case Integration Tests
+    // ============================================================================
+
+    describe('Edge Case Integration Tests', () => {
+        describe('Panel opened during async computation', () => {
+            it('should show computing state when opened during computation', async () => {
+                const circuitState = createMockCircuitState(null); // null = computation in progress
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel._initialized = true;
+                panel.panel = mockDOM.panelEl;
+
+                const renderComputingSpy = vi.spyOn(panel, '_renderComputingState').mockImplementation(() => {});
+                vi.spyOn(panel, '_positionPanelIfNeeded').mockImplementation(() => {});
+                vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
+
+                await panel.show();
+
+                expect(renderComputingSpy).toHaveBeenCalled();
+                expect(panel._stateMachine.getState().panel).toBe('showing_computing');
+            });
+
+            it('should transition to showing table when computation completes while showing computing', async () => {
+                const circuitState = createMockCircuitState(null);
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel._initialized = true;
+                panel.panel = mockDOM.panelEl;
+                mockDOM.panelEl.style.display = 'block';
+                mockDOM.panelEl.classList.classes.delete('hidden');
+
+                // Start in SHOWING_COMPUTING state
+                panel._stateMachine.setPanelState('showing_computing');
+
+                // Now computation completes
+                const validCache = createValidCache();
+                circuitState.getCircuitAnalysis.mockReturnValue(validCache);
+
+                vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
+
+                await panel._handleComputed();
+
+                // Should have triggered RENDER_TABLE action
+                expect(panel._renderQueue.enqueue).toHaveBeenCalled();
+            });
+        });
+
+        describe('Circuit invalidated while panel hidden, then shown', () => {
+            it('should show invalid state when shown after circuit became invalid while hidden', async () => {
+                const invalidCache = createInvalidCache('Missing connection');
+                const circuitState = createMockCircuitState(invalidCache);
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel._initialized = true;
+                panel.panel = mockDOM.panelEl;
+
+                const renderInvalidSpy = vi.spyOn(panel, '_renderInvalidState').mockImplementation(() => {});
+                vi.spyOn(panel, '_positionPanelIfNeeded').mockImplementation(() => {});
+                vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
+
+                await panel.show();
+
+                expect(renderInvalidSpy).toHaveBeenCalledWith('Missing connection');
+            });
+
+            it('should sync after being stale when shown', async () => {
+                const validCache = createValidCache();
+                const circuitState = createMockCircuitState(validCache);
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel._initialized = true;
+                panel.panel = mockDOM.panelEl;
+                panel.tabulatorInstance = {
+                    deselectRow: vi.fn(),
+                    getRows: vi.fn().mockReturnValue([]),
+                    getColumns: vi.fn().mockReturnValue([]),
+                    setData: vi.fn()
+                };
+                panel.circuitAnalysis = validCache;
+
+                // Set panel as visible with stale data in state machine
+                panel._stateMachine.setPanelState('visible_table');
+                panel._stateMachine.setDataState('stale');
+
+                const syncSpy = vi.spyOn(panel, '_syncTabulatorWithAnalysis').mockResolvedValue();
+
+                await panel.show();
+
+                expect(syncSpy).toHaveBeenCalled();
+            });
+        });
+
+        describe('Rapid show/hide/show sequence', () => {
+            it('should handle rapid show/hide/show without errors', async () => {
+                const validCache = createValidCache();
+                const circuitState = createMockCircuitState(validCache);
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel._initialized = true;
+                panel.panel = mockDOM.panelEl;
+                panel.tabulatorInstance = { getColumns: vi.fn().mockReturnValue([]) };
+
+                vi.spyOn(panel, '_renderTabulator').mockResolvedValue();
+                vi.spyOn(panel, '_positionPanelIfNeeded').mockImplementation(() => {});
+                vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
+                vi.spyOn(panel, '_saveState').mockImplementation(() => {});
+
+                // Rapid sequence
+                await panel.show();
+                panel.hide();
+                await panel.show();
+
+                // Should end up in a visible state
+                expect(panel._stateMachine.isVisible()).toBe(true);
+            });
+        });
+
+        describe('Structure change clears lastCycleIndex', () => {
+            it('should clear lastCycleIndex when structure changes via handleComputed', async () => {
+                const oldCache = createValidCache(2, 1); // 2 inputs, 1 output
+                const newCache = createValidCache(3, 1); // 3 inputs, 1 output - structure changed
+
+                const circuitState = createMockCircuitState(newCache);
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel.panel = mockDOM.panelEl;
+                panel.tabulatorInstance = {
+                    destroy: vi.fn(),
+                    getColumns: vi.fn().mockReturnValue([])
+                };
+                panel.circuitAnalysis = oldCache;
+                mockDOM.panelEl.style.display = 'block';
+                mockDOM.panelEl.classList.classes.delete('hidden');
+
+                // Set visible state and lastCycleIndex
+                panel._stateMachine.setPanelState('visible_table');
+                panel._stateMachine.handleStepCompleted({ cycleIndex: 2 });
+                expect(panel._stateMachine.getState().lastCycleIndex).toBe(2);
+
+                vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
+                vi.spyOn(panel, '_saveState').mockImplementation(() => {});
+
+                // Handle computed with structure change
+                await panel._handleComputed();
+
+                // lastCycleIndex should be cleared due to structure change
+                expect(panel._stateMachine.getState().lastCycleIndex).toBeNull();
+            });
+        });
+
+        describe('Render queue serialization', () => {
+            it('should serialize concurrent render requests', async () => {
+                const validCache = createValidCache();
+                const circuitState = createMockCircuitState(validCache);
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel.panel = mockDOM.panelEl;
+                panel.circuitAnalysis = validCache;
+
+                const executionOrder = [];
+                vi.spyOn(panel, '_renderTabulator').mockImplementation(async () => {
+                    executionOrder.push('start');
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                    executionOrder.push('end');
+                });
+
+                // Queue multiple renders
+                const promise1 = panel._renderQueue.enqueue(() => panel._safeRenderTable());
+                const promise2 = panel._renderQueue.enqueue(() => panel._safeRenderTable());
+
+                await Promise.all([promise1, promise2]);
+
+                // Should execute sequentially, not concurrently
+                expect(executionOrder).toEqual(['start', 'end', 'start', 'end']);
+            });
+
+            it('should collapse multiple pending renders into one', async () => {
+                const validCache = createValidCache();
+                const circuitState = createMockCircuitState(validCache);
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel.panel = mockDOM.panelEl;
+                panel.circuitAnalysis = validCache;
+
+                let renderCount = 0;
+                vi.spyOn(panel, '_renderTabulator').mockImplementation(async () => {
+                    renderCount++;
+                    await new Promise(resolve => setTimeout(resolve, 20));
+                });
+
+                // Queue three renders while first is running
+                const promise1 = panel._renderQueue.enqueue(() => panel._safeRenderTable());
+                const promise2 = panel._renderQueue.enqueue(() => panel._safeRenderTable());
+                const promise3 = panel._renderQueue.enqueue(() => panel._safeRenderTable());
+
+                await Promise.all([promise1, promise2, promise3]);
+
+                // Should only render twice (first + last collapsed)
+                expect(renderCount).toBe(2);
+            });
+        });
     });
 });

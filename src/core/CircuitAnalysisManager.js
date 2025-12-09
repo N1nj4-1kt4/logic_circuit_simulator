@@ -79,7 +79,12 @@ export class CircuitAnalysisManager {
         if (item) item.label = newLabel;
 
         this.state.setCircuitAnalysis(analysis);
-        eventBus.emit(EVENT_TYPES.CIRCUIT_ANALYSIS_COMPUTED, analysis);
+
+        // Only emit CIRCUIT_ANALYSIS_COMPUTED for valid circuits
+        // Invalid circuits are handled by CIRCUIT_VALIDITY_CHANGED
+        if (analysis.isValid) {
+            eventBus.emit(EVENT_TYPES.CIRCUIT_ANALYSIS_COMPUTED, analysis);
+        }
     }
 
     /**
@@ -182,12 +187,24 @@ export class CircuitAnalysisManager {
 
     /**
      * Handle computation result (shared by sync and async paths)
+     *
+     * NOTE: CIRCUIT_ANALYSIS_COMPUTED is only emitted for valid circuits.
+     * Invalid circuits are handled by CIRCUIT_VALIDITY_CHANGED, which fires
+     * immediately on topology changes. This avoids redundant invalid-state
+     * handling in subscribers like TruthTablePanel.
+     *
      * @private
      */
     _handleComputationResult(result) {
+        // Always store the analysis in state (valid or invalid)
+        // This allows show() to read from state when panel opens
         this.state.setCircuitAnalysis(result);
 
-        eventBus.emit(EVENT_TYPES.CIRCUIT_ANALYSIS_COMPUTED, result);
+        // Only emit CIRCUIT_ANALYSIS_COMPUTED for valid circuits
+        // Invalid circuits are handled by CIRCUIT_VALIDITY_CHANGED
+        if (result.isValid) {
+            eventBus.emit(EVENT_TYPES.CIRCUIT_ANALYSIS_COMPUTED, result);
+        }
     }
 
     /**

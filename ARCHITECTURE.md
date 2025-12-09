@@ -143,6 +143,9 @@ contextManager.loadCircuitContext(circuitData, { type: 'board', name: 'MyBoard' 
 
 Manages circuit analysis computation with debouncing. Subscribes to BOARD_CHANGED events.
 
+**Event semantics:** Emits `CIRCUIT_ANALYSIS_COMPUTED` only for **valid** circuits (`isValid === true`).
+Invalid circuits are handled by `CIRCUIT_VALIDITY_CHANGED` (emitted by CircuitValidityManager).
+
 ```javascript
 const circuitAnalysisManager = new CircuitAnalysisManager({ state });
 

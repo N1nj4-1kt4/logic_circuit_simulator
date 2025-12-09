@@ -11,21 +11,21 @@ This document provides a detailed visualization of how methods call each other w
 │                        TruthTablePanel Methods                               │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│  PUBLIC API (7 methods)           PRIVATE METHODS (23 methods)              │
+│  PUBLIC API (5 methods)           PRIVATE METHODS (24 methods)              │
 │  ─────────────────────            ────────────────────────────              │
 │  • constructor()                  • _setupCloseButton()                     │
 │  • init(savedState)               • _setupEventListeners()                  │
 │  • show()                         • _handleStepCompleted()                  │
 │  • hide()                         • _handleValidityChanged()                │
-│  • refresh()                      • _handleComputing()                      │
-│  • getState()                     • _handleComputed()                       │
-│  • destroy()                      • _showProgress()                         │
+│  • destroy()                      • _handleComputing()                      │
+│                                   • _handleComputed()                       │
+│                                   • _showProgress()                         │
 │                                   • _hideProgress()                         │
 │                                   • _isVisible()                            │
 │                                   • _setState()                             │
 │  CALLBACK                         • _highlightRowByIndex()                  │
-│  ─────────                        • _positionPanelIfNeeded()  ◄── NEW       │
-│  • onStateChange                  • _deepCopyAnalysis()       ◄── NEW       │
+│  ─────────                        • _positionPanelIfNeeded()                │
+│  • onStateChange                  • _deepCopyAnalysis()                     │
 │                                   • _setCircuitAnalysisLocalCopy()          │
 │                                   • _renderTabulator()                       │
 │                                   • _renderInvalidState()                   │
@@ -33,16 +33,18 @@ This document provides a detailed visualization of how methods call each other w
 │                                   • _generateColumns()                      │
 │                                   • _updateHighlight()                      │
 │                                   • _findMatchingRow()                      │
-│                                   • _applyRowStyles()         ◄── NEW       │
+│                                   • _applyRowStyles()                       │
 │                                   • _applyTableHeight()                     │
 │                                   • _applyTableWidth()                      │
-│                                   • _setupInteractions()  (now idempotent)  │
+│                                   • _setupInteractions()  (idempotent)      │
 │                                   • _dragMoveListener()                     │
 │                                   • _resizeMoveListener()                   │
 │                                   • _saveState()                            │
 │                                   • _restoreState()                         │
 │                                   • _updateColumnHeaders()                  │
 │                                   • _reapplyRowHeights()                    │
+│                                   • _syncTabulatorWithAnalysis()  ◄── NEW   │
+│                                   • _detectLabelChanges()         ◄── NEW   │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -145,13 +147,17 @@ async show()
    │
    ├──▶ [FAST PATH] If tabulatorInstance && panel exist:
    │         │
+   │         ├──▶ If _tabulatorNeedsSync:  ◄── NEW: Dirty flag check
+   │         │    ├──▶ await _syncTabulatorWithAnalysis()
+   │         │    └──▶ _tabulatorNeedsSync = false
+   │         │
    │         ├──▶ panel.classList.remove('hidden')
    │         ├──▶ panel.style.display = 'block'
    │         ├──▶ panel.style.opacity = '1'
    │         ├──▶ panel.style.pointerEvents = 'auto'
    │         ├──▶ _updateHighlight()
    │         ├──▶ eventBus.emit(TRUTH_TABLE_SHOWN)
-   │         └──▶ return  ◄──────────── INSTANT! No rebuild needed
+   │         └──▶ return  ◄──────────── Fast (syncs only if dirty)
    │
    └──▶ [SLOW PATH] No Tabulator instance exists:
              │
@@ -177,7 +183,8 @@ async show()
              │    │         └──▶ _renderInvalidState(content)    [SYNC]
              │    │
              │    └──▶ Else (has table data):
-             │         └──▶ await _renderTabulator(content, wasVisible)  [ASYNC]
+             │         ├──▶ await _renderTabulator(content, wasVisible)  [ASYNC]
+             │         └──▶ _tabulatorNeedsSync = false  ◄── Fresh table is in sync
              │
              └──▶ Common post-render (INLINED, runs for ALL paths):
                        │
@@ -396,13 +403,16 @@ CIRCUIT_VALIDITY_CHANGED { canSimulate, reason }
          │
          ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  _handleValidityChanged(data)                                               │
+│  _handleValidityChanged(data)  ◄── PRIMARY handler for invalid states      │
 │                                                                             │
-│  If _isVisible() && !data.canSimulate && circuitAnalysis:                   │
+│  If _isVisible() && !data.canSimulate:                                      │
 │  1. Update circuitAnalysis.isValid = false, reason = data.reason            │
-│  2. If tabulatorInstance has no data:                                       │
-│     └──▶ _renderInvalidState(content, data.reason)                          │
-│         (panel already visible, no need for positioning/interactions)       │
+│  2. Call _renderInvalidState(data.reason)                                   │
+│     (panel already visible, no need for positioning/interactions)           │
+│                                                                             │
+│  NOTE: This is the ONLY handler for invalid states. CIRCUIT_ANALYSIS_       │
+│  COMPUTED only fires for valid circuits, so _handleComputed() can assume    │
+│  analysis.isValid === true.                                                 │
 └─────────────────────────────────────────────────────────────────────────────┘
 
          ║
@@ -429,22 +439,29 @@ CIRCUIT_ANALYSIS_COMPUTING { percent, current, total }
 
          ║
          ▼
-CIRCUIT_ANALYSIS_COMPUTED { ... }
+CIRCUIT_ANALYSIS_COMPUTED { ... }  ◄── Only fires for VALID circuits
          │
          ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  _handleComputed()                                                          │
+│  _handleComputed()   ◄── ALWAYS syncs data, even when panel is hidden       │
 │                                                                             │
-│  1. _hideProgress() ────────────────────────────────────────────────────┐   │
-│  2. If _isVisible():                                                    │   │
-│     a. Get analysis from circuitState                                   │   │
-│     b. Deep copy to this.circuitAnalysis                                │   │
-│     c. If table exists: table.setData(...)                              │   │
-│     d. Else if table.length > 0: await _renderTabulator() ──────────────┼─┐ │
-└─────────────────────────────────────────────────────────────────────────│─│─┘
-                                                                          │ │
-     ┌────────────────────────────────────────────────────────────────────┘ │
-     ▼                                                                      │
+│  NOTE: This event only fires for valid circuits (isValid === true).         │
+│  Invalid circuits are handled by CIRCUIT_VALIDITY_CHANGED.                  │
+│                                                                             │
+│  1. _hideProgress()                                                         │
+│  2. Get analysis from circuitState                                          │
+│  3. If !analysis: return                                                    │
+│  4. ALWAYS: this.circuitAnalysis = _deepCopyAnalysis(analysis)  ◄── KEY    │
+│  5. If !_isVisible(): return  ◄── Exit early if hidden (data is synced)   │
+│  6. If !tabulatorInstance:                                                  │
+│     └──▶ await _renderTabulator()  (guaranteed to have table data)         │
+│  7. Detect change type (structure, labels, data-only):                      │
+│     ├──▶ [STRUCTURE CHANGED]: full rebuild via _renderTabulator()          │
+│     ├──▶ [LABELS CHANGED]: _updateColumnHeaders(), _reapplyRowHeights(),   │
+│     │                       _updateHighlight()                              │
+│     └──▶ [DATA ONLY]: tabulatorInstance.setData()                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  _hideProgress()                                                            │
 │                                                                             │
@@ -454,82 +471,68 @@ CIRCUIT_ANALYSIS_COMPUTED { ... }
 
 ---
 
-## 5. Refresh Flow
+## 5. Update Detection (in _handleComputed)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                            REFRESH FLOW                                     │
+│                   UPDATE DETECTION (within _handleComputed)                  │
+│                                                                              │
+│  NOTE: refresh() method was removed. All update logic is now consolidated   │
+│  inside _handleComputed(), which handles CIRCUIT_ANALYSIS_COMPUTED events.   │
+│  This ensures circuitAnalysis is ALWAYS synced, even when panel is hidden.  │
 └─────────────────────────────────────────────────────────────────────────────┘
 
-refresh()
-   │
-   ├──▶ If !panel: return
-   ├──▶ If panel.hidden: return
-   │
-   ├──▶ Get analysis from circuitState.getCircuitAnalysis()
-   │
-   ├──▶ If !analysis: hide() ──────────────────────────────────────────────────┐
-   │                                                                           │
-   ├──▶ If !table or table.length === 0:                                       │
-   │    └──▶ _renderInvalidState(true) ────────────────────────────────────────┤
-   │                                                                           │
-   ├──▶ Detect change type:                                                    │
-   │                                                                           │
-   │    ┌─────────────────────────────────────────────────────────────────┐    │
-   │    │  STRUCTURE CHANGED? (input/output count different)              │    │
-   │    │  ─────────────────────────────────────────────────────────────  │   │
-   │    │  countChanged = true                                            │   │
-   │    │                                                                 │   │
-   │    │  1. _saveState() ───────────────────────────────────────────────┼───┤
-   │    │  2. Clear state.height, state.width                             │   │
-   │    │  3. Clear panel inline styles                                   │   │
-   │    │  4. Update this.circuitAnalysis (deep copy)                     │   │
-   │    │  5. Reset this.columnOrder = null                               │   │
-   │    │  6. _renderTable() ─────────────────────────────────────────────┼───┤
-   │    └─────────────────────────────────────────────────────────────────┘   │
-   │                                                                          │
-   │    ┌─────────────────────────────────────────────────────────────────┐   │
-   │    │  LABELS CHANGED? (same structure, different labels)             │   │
-   │    │  ─────────────────────────────────────────────────────────────  │   │
-   │    │  labelsChanged = true                                           │   │
-   │    │                                                                 │   │
-   │    │  1. Update this.circuitAnalysis (deep copy)                     │   │
-   │    │  2. _updateColumnHeaders() ─────────────────────────────────────┼─┐ │
-   │    │  3. table.replaceData(table)                                    │ │ │
-   │    │  4. _reapplyRowHeights() ───────────────────────────────────────┼─┼┐│
-   │    │  5. _updateHighlight() ─────────────────────────────────────────┼─┼┼┤
-   │    └─────────────────────────────────────────────────────────────────┘ │││
-   │                                                                        │││
-   │    ┌─────────────────────────────────────────────────────────────────┐ │││
-   │    │  DATA ONLY CHANGED? (same structure, same labels)               │ │││
-   │    │  ─────────────────────────────────────────────────────────────  │ │││
-   │    │  else (fast path)                                               │ │││
-   │    │                                                                 │ │││
-   │    │  1. Update this.circuitAnalysis (deep copy)                     │ │││
-   │    │  2. table.replaceData(table)                                    │ │││
-   │    │  3. _reapplyRowHeights() ───────────────────────────────────────┼ ┼┼┤
-   │    │  4. _updateHighlight() ─────────────────────────────────────────┼ ┼┼┤
-   │    └─────────────────────────────────────────────────────────────────┘ │││
-   │                                                                        │││
-   └─────────────────────────────────────────────────────────────────────── ┘││
-                                                                           ││
-     ┌─────────────────────────────────────────────────────────────────────┘│
-     ▼                                                                      │
+_handleComputed() determines update strategy by comparing old vs new analysis:
+
+   ┌─────────────────────────────────────────────────────────────────┐
+   │  STRUCTURE CHANGED? (input/output count different)              │
+   │  ─────────────────────────────────────────────────────────────  │
+   │  structureChanged = true                                        │
+   │                                                                 │
+   │  1. _saveState()                                                │
+   │  2. Clear state.height, state.width                             │
+   │  3. Clear panel inline styles                                   │
+   │  4. Reset this.columnOrder = null                               │
+   │  5. await _renderTabulator(content, true)                       │
+   └─────────────────────────────────────────────────────────────────┘
+
+   ┌─────────────────────────────────────────────────────────────────┐
+   │  LABELS CHANGED? (same structure, different labels)             │
+   │  ─────────────────────────────────────────────────────────────  │
+   │  labelsChanged = true                                           │
+   │                                                                 │
+   │  1. _updateColumnHeaders() ─────────────────────────────────────┼─┐
+   │  2. _reapplyRowHeights()  ◄── setColumns() resets row styles   │ │
+   │  3. _updateHighlight()    ◄── setColumns() clears selection    │ │
+   └─────────────────────────────────────────────────────────────────┘ │
+                                                                       │
+   ┌─────────────────────────────────────────────────────────────────┐ │
+   │  DATA ONLY CHANGED? (same structure, same labels)               │ │
+   │  ─────────────────────────────────────────────────────────────  │ │
+   │  else (fast path)                                               │ │
+   │                                                                 │ │
+   │  1. tabulatorInstance.setData(table) ◄── Tabulator optimizes   │ │
+   └─────────────────────────────────────────────────────────────────┘ │
+                                                                       │
+     ┌─────────────────────────────────────────────────────────────────┘
+     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  _updateColumnHeaders()                                                      │
 │                                                                              │
 │  1. Generate new column definitions via _generateColumns()                  │
-│  2. table.setColumns(newColumns) - updates headers without full rebuild    │
+│  2. tabulatorInstance.setColumns(newColumns)                                │
+│                                                                              │
+│  NOTE: setColumns() resets Tabulator's internal row styles and selection.   │
+│  That's why _reapplyRowHeights() and _updateHighlight() must be called     │
+│  after it.                                                                   │
 └─────────────────────────────────────────────────────────────────────────────┘
-                                                                           │
-     ┌─────────────────────────────────────────────────────────────────────┘
-     ▼
+
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  _reapplyRowHeights()                                                        │
 │                                                                              │
 │  • Apply consistent row height (36px) to all .tabulator-row elements       │
 │  • Set cell padding for vertical centering                                  │
-│  • Called after replaceData() which resets Tabulator's internal styles     │
+│  • Called after setColumns() or replaceData() which reset internal styles  │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -643,42 +646,6 @@ async show()
 hide()
     └──▶ _saveState()
 
-async refresh()
-    │
-    ├──▶ Guard: if !panel or panel.hidden → return
-    │
-    ├──▶ Get analysis from circuitState
-    │
-    ├──▶ If !analysis:
-    │    └──▶ hide() and return
-    │
-    ├──▶ If table.length === 0:
-    │    ├──▶ _deepCopyAnalysis()
-    │    └──▶ _renderInvalidState(content) and return
-    │
-    └──▶ Detect change type and handle:
-         │
-         ├──▶ [STRUCTURE CHANGED] (countChanged):
-         │    ├──▶ _saveState()
-         │    ├──▶ Clear state.height/width
-         │    ├──▶ _deepCopyAnalysis()
-         │    ├──▶ Reset columnOrder
-         │    └──▶ await _renderTabulator(content, true)
-         │
-         ├──▶ [LABELS CHANGED]:
-         │    ├──▶ _deepCopyAnalysis()
-         │    ├──▶ _updateColumnHeaders()
-         │    │        └──▶ _generateColumns()
-         │    ├──▶ tabulatorInstance.replaceData()
-         │    ├──▶ _reapplyRowHeights()
-         │    └──▶ _updateHighlight()
-         │
-         └──▶ [DATA ONLY CHANGED] (fast path):
-              ├──▶ _deepCopyAnalysis()
-              ├──▶ tabulatorInstance.replaceData()
-              ├──▶ _reapplyRowHeights()
-              └──▶ _updateHighlight()
-
 _handleStepCompleted()
     └──▶ _isVisible()
          └──▶ _highlightRowByIndex()
@@ -691,24 +658,39 @@ _handleComputing()
     ├──▶ _isVisible()
     └──▶ _showProgress()
 
-async _handleComputed()
+async _handleComputed()   ◄── ALWAYS syncs data (key change from old refresh())
     │
     ├──▶ _hideProgress()
     │
-    └──▶ If _isVisible():
+    ├──▶ Get analysis from circuitState
+    │
+    ├──▶ If !analysis: return
+    │
+    ├──▶ ALWAYS: this.circuitAnalysis = _deepCopyAnalysis(analysis)  ◄── KEY
+    │
+    ├──▶ If !_isVisible(): return  (data synced, but no UI update needed)
+    │
+    ├──▶ If !tabulatorInstance:
+    │    ├──▶ If table.length > 0: await _renderTabulator()
+    │    └──▶ Else: _renderInvalidState()
+    │    └──▶ return
+    │
+    └──▶ Detect change type and handle (Tabulator exists):
          │
-         ├──▶ Get analysis from circuitState
+         ├──▶ [STRUCTURE CHANGED]:
+         │    ├──▶ _saveState()
+         │    ├──▶ Clear state.height/width
+         │    ├──▶ Reset columnOrder
+         │    └──▶ await _renderTabulator(content, true)
          │
-         └──▶ If analysis:
-              │
-              ├──▶ _deepCopyAnalysis()
-              │
-              ├──▶ If tabulatorInstance exists:
-              │    └──▶ tabulatorInstance.setData()
-              │
-              └──▶ Else if table.length > 0:
-                   └──▶ await _renderTabulator(content, true)
-                        (panel already visible)
+         ├──▶ [LABELS CHANGED]:
+         │    ├──▶ _updateColumnHeaders()
+         │    │        └──▶ _generateColumns()
+         │    ├──▶ _reapplyRowHeights()  ◄── setColumns() resets styles
+         │    └──▶ _updateHighlight()    ◄── setColumns() clears selection
+         │
+         └──▶ [DATA ONLY] (fast path):
+              └──▶ tabulatorInstance.setData()
 
 destroy()
     (no internal method calls - just cleanup)
@@ -766,11 +748,11 @@ _saveState() ──▶ onStateChange(state)  [callback to external]
                              │
         ┌────────────────────┼────────────────────┐
         │                    │                    │
-        │ hide()             │ refresh()          │ close button
+        │ hide()             │ _handleComputed()  │ close button
         ▼                    ▼                    ▼
- ┌─────────────┐      (updates in place)   ┌─────────────┐
+ ┌─────────────┐      (updates in place    ┌─────────────┐
  │   HIDDEN    │      or rebuilds table    │   HIDDEN    │
- │  (table     │◀─────────────────────────▶│  (table     │
+ │  (table     │◀───via event listener)───▶│  (table     │
  │  preserved) │         show()            │  preserved) │
  └──────┬──────┘                           └─────────────┘
         │
@@ -810,10 +792,9 @@ The following helper methods were extracted to reduce code duplication:
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  _deepCopyAnalysis(analysis)                                                │
 │                                                                             │
-│  Consolidated from 5+ locations:                                            │
+│  Consolidated from multiple locations:                                       │
 │  - _handleComputed()                                                        │
 │  - _setCircuitAnalysisLocalCopy()                                           │
-│  - refresh() (countChanged, labelsChanged, dataOnly paths)                  │
 │                                                                             │
 │  Returns deep copy: {                                                       │
 │      inputs: (inputs || []).map(inp => ({ ...inp })),                       │
@@ -888,4 +869,340 @@ The following helper methods were extracted to reduce code duplication:
 │  - Easier to maintain                                                       │
 │  - Render methods have single responsibility (content only)                │
 └─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 11. Dirty Flag Pattern: _tabulatorNeedsSync
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    TABULATOR SYNC DIRTY FLAG PATTERN                         │
+│                                                                              │
+│  Problem: When panel is hidden and circuitAnalysis changes, the Tabulator   │
+│  instance is NOT updated (efficient). But when show() is called, the fast   │
+│  path would reveal stale data.                                               │
+│                                                                              │
+│  Solution: _tabulatorNeedsSync flag tracks when Tabulator is out of sync.   │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  _handleComputed() when panel hidden:                                        │
+│  1. circuitAnalysis = _deepCopyAnalysis(analysis)  ◄── Data always synced   │
+│  2. _tabulatorNeedsSync = true  ◄── Mark Tabulator as stale                 │
+│  3. return (don't touch Tabulator)                                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  show() fast path:                                                           │
+│  1. If _tabulatorNeedsSync:                                                  │
+│     ├──▶ await _syncTabulatorWithAnalysis()  ◄── Sync Tabulator             │
+│     └──▶ _tabulatorNeedsSync = false                                        │
+│  2. Reveal panel                                                            │
+│  3. _updateHighlight()                                                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  _syncTabulatorWithAnalysis()                                                │
+│                                                                              │
+│  Called when panel becomes visible after changes occurred while hidden.      │
+│                                                                              │
+│  1. Get current Tabulator column counts (input/output)                       │
+│  2. Compare with circuitAnalysis counts                                      │
+│  3. If structure changed: full rebuild via _renderTabulator()               │
+│  4. Else if labels changed (via _detectLabelChanges()):                     │
+│     ├──▶ _updateColumnHeaders()                                             │
+│     ├──▶ _reapplyRowHeights()                                               │
+│     └──▶ _updateHighlight()                                                 │
+│  5. Else: data-only change → tabulatorInstance.setData()                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  _detectLabelChanges()                                                       │
+│                                                                              │
+│  Compares Tabulator column headers with circuitAnalysis labels.             │
+│  Returns true if any label differs.                                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Flag lifecycle:                                                             │
+│  - Set to false in constructor                                               │
+│  - Set to true in _handleComputed() when panel hidden                       │
+│  - Set to false in show() after sync or after _renderTabulator()            │
+│  - Set to false in destroy()                                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 12. Event Subscriptions Reference
+
+This section documents all events that TruthTablePanel subscribes to, their sources, and handler behavior.
+
+### Summary Table
+
+| Event | Emitted From | Handler | What Handler Does |
+|-------|--------------|---------|-------------------|
+| `SIMULATION_STEP_COMPLETED` | `SimulationController._simulateAndEmit()` | `_handleStepCompleted()` | Highlights the current truth table row |
+| `CIRCUIT_VALIDITY_CHANGED` | `CircuitValidityManager.revalidate()` | `_handleValidityChanged()` | **PRIMARY** handler for invalid states - shows message immediately |
+| `CIRCUIT_ANALYSIS_COMPUTING` | `CircuitAnalysisManager.computeCircuitAnalysisAsync()` | `_handleComputing()` | Displays/updates progress bar during async computation |
+| `CIRCUIT_ANALYSIS_COMPUTED` | `CircuitAnalysisManager._handleComputationResult()`, `_handleLabelChanged()` | `_handleComputed()` | **Only fires for valid circuits**; syncs data, updates/rebuilds table |
+
+---
+
+### Detailed Event Documentation
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  EVENT: SIMULATION_STEP_COMPLETED                                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  PAYLOAD: { cycleIndex, totalCombinations, inputValues }                    │
+│                                                                             │
+│  EMITTED FROM:                                                              │
+│  ─────────────                                                              │
+│  • SimulationController._simulateAndEmit()                                  │
+│    File: src/core/SimulationController.js                                   │
+│    Triggers: After each simulation step (auto-cycle, manual step,           │
+│              or input toggle)                                               │
+│                                                                             │
+│  HANDLER: _handleStepCompleted(data)                                        │
+│  ─────────────────────────────────────                                      │
+│  File: src/ui/TruthTablePanel.js                                            │
+│                                                                             │
+│  WHAT IT DOES:                                                              │
+│  1. Checks if panel is visible via _isVisible()                            │
+│  2. If visible: calls _highlightRowByIndex(data.cycleIndex)                │
+│     • Deselects all rows                                                   │
+│     • Selects the row at cycleIndex                                        │
+│     • Scrolls the row into view                                            │
+│                                                                             │
+│  PURPOSE: Keeps truth table row highlight in sync with simulation state    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  EVENT: CIRCUIT_VALIDITY_CHANGED                                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  PAYLOAD: { from, to, canSimulate, reason, inputs, outputs, isValid }      │
+│                                                                             │
+│  EMITTED FROM:                                                              │
+│  ─────────────                                                              │
+│  • CircuitValidityManager.revalidate()                                      │
+│    File: src/core/CircuitValidityManager.js                                 │
+│    Triggers: When circuit topology changes and validity state transitions  │
+│              (e.g., valid → incomplete, incomplete → valid)                │
+│                                                                             │
+│  HANDLER: _handleValidityChanged(data)  ◄── PRIMARY handler for invalid    │
+│  ─────────────────────────────────────                                      │
+│  File: src/ui/TruthTablePanel.js                                            │
+│                                                                             │
+│  WHAT IT DOES:                                                              │
+│  1. Checks: _isVisible() && !data.canSimulate                              │
+│  2. If conditions met:                                                      │
+│     • Updates circuitAnalysis.isValid = false                              │
+│     • Updates circuitAnalysis.reason = data.reason                         │
+│     • Renders invalid state message via _renderInvalidState(reason)        │
+│                                                                             │
+│  PURPOSE: PRIMARY handler for invalid circuit states. Shows "Circuit       │
+│           incomplete" or similar message IMMEDIATELY when circuit becomes  │
+│           invalid (no waiting for debounced computation).                  │
+│                                                                             │
+│  KEY DESIGN: This is the ONLY handler for invalid states.                   │
+│  CIRCUIT_ANALYSIS_COMPUTED only fires for valid circuits, so               │
+│  _handleComputed() can safely assume analysis.isValid === true.            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  EVENT: CIRCUIT_ANALYSIS_COMPUTING                                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  PAYLOAD: { current, total, percent }                                       │
+│                                                                             │
+│  EMITTED FROM:                                                              │
+│  ─────────────                                                              │
+│  • CircuitAnalysisManager.computeCircuitAnalysisAsync()                     │
+│    File: src/core/CircuitAnalysisManager.js                                 │
+│    Triggers: Periodically during async truth table computation             │
+│              (every batch of rows computed)                                │
+│                                                                             │
+│  HANDLER: _handleComputing(data)                                            │
+│  ─────────────────────────────────                                          │
+│  File: src/ui/TruthTablePanel.js                                            │
+│                                                                             │
+│  WHAT IT DOES:                                                              │
+│  1. Checks if panel is visible via _isVisible()                            │
+│  2. If visible: calls _showProgress(data.percent, data.current, data.total)│
+│     • Creates or updates .truth-table-progress element                     │
+│     • Sets progress bar width to percent%                                  │
+│     • Updates detail text: "Computing row X of Y..."                       │
+│                                                                             │
+│  PURPOSE: Provides visual feedback during long computations                │
+│           (circuits with many inputs can have thousands of rows)           │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  EVENT: CIRCUIT_ANALYSIS_COMPUTED  ◄── Only fires for VALID circuits       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  PAYLOAD: analysis object with { inputs, outputs, table, isValid, reason } │
+│           (guaranteed: isValid === true, table.length > 0)                 │
+│                                                                             │
+│  EMITTED FROM:                                                              │
+│  ─────────────                                                              │
+│  • CircuitAnalysisManager._handleComputationResult()                        │
+│    File: src/core/CircuitAnalysisManager.js                                 │
+│    Triggers: When computation completes AND result.isValid === true        │
+│                                                                             │
+│  • CircuitAnalysisManager._handleLabelChanged()                             │
+│    File: src/core/CircuitAnalysisManager.js                                 │
+│    Triggers: After patching column headers (only if circuit is valid)      │
+│                                                                             │
+│  HANDLER: _handleComputed()                                                 │
+│  ─────────────────────────────                                              │
+│  File: src/ui/TruthTablePanel.js                                            │
+│                                                                             │
+│  WHAT IT DOES:                                                              │
+│  1. ALWAYS (even when hidden):                                              │
+│     • Calls _hideProgress() to remove progress bar                         │
+│     • Deep copies analysis to this.circuitAnalysis                         │
+│     • Sets _tabulatorNeedsSync = true if panel hidden                      │
+│                                                                             │
+│  2. If panel is HIDDEN: returns early (data synced, no UI update needed)   │
+│                                                                             │
+│  3. If panel is VISIBLE and no Tabulator exists:                           │
+│     • await _renderTabulator() (guaranteed to have table data)             │
+│                                                                             │
+│  4. If panel is VISIBLE and Tabulator exists, detects change type:         │
+│                                                                             │
+│     ┌─────────────────────────────────────────────────────────────────┐    │
+│     │ STRUCTURE CHANGED (input/output count differs)                   │    │
+│     │ • _saveState()                                                   │    │
+│     │ • Clear saved dimensions (state.height, state.width)             │    │
+│     │ • Reset columnOrder = null                                       │    │
+│     │ • await _renderTabulator() (full rebuild)                        │    │
+│     └─────────────────────────────────────────────────────────────────┘    │
+│                                                                             │
+│     ┌─────────────────────────────────────────────────────────────────┐    │
+│     │ LABELS CHANGED (same structure, different column names)          │    │
+│     │ • _updateColumnHeaders()                                         │    │
+│     │ • _reapplyRowHeights() (setColumns resets row styles)           │    │
+│     │ • _updateHighlight() (setColumns clears selection)              │    │
+│     └─────────────────────────────────────────────────────────────────┘    │
+│                                                                             │
+│     ┌─────────────────────────────────────────────────────────────────┐    │
+│     │ DATA ONLY (same structure and labels - fast path)                │    │
+│     │ • tabulatorInstance.setData(table)                               │    │
+│     └─────────────────────────────────────────────────────────────────┘    │
+│                                                                             │
+│  PURPOSE: Main handler for keeping truth table display in sync with       │
+│           circuit analysis. Handles all update scenarios efficiently.      │
+│                                                                             │
+│  KEY DESIGN:                                                                │
+│  - Always syncs circuitAnalysis data (even when hidden) so show() can     │
+│    use fast path with _tabulatorNeedsSync flag.                           │
+│  - Can safely assume isValid === true (invalid handled by                 │
+│    CIRCUIT_VALIDITY_CHANGED)                                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Event Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     EVENT SOURCES → TRUTHTABLEPANEL                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+                         ┌──────────────────────────────┐
+                         │    SimulationController      │
+                         │  (src/core/SimulationController.js)
+                         └──────────────┬───────────────┘
+                                        │
+           User toggles input           │   _simulateAndEmit()
+           or auto-cycle step           │
+                                        ▼
+                    SIMULATION_STEP_COMPLETED { cycleIndex, ... }
+                                        │
+                                        ▼
+                         ┌──────────────────────────────┐
+                         │  _handleStepCompleted()      │
+                         │  └─▶ _highlightRowByIndex()  │
+                         └──────────────────────────────┘
+
+
+                         ┌──────────────────────────────┐
+                         │   CircuitValidityManager     │
+                         │  (src/core/CircuitValidityManager.js)
+                         └──────────────┬───────────────┘
+                                        │
+           Component added/removed      │   revalidate()
+           or connection changed        │
+                                        ▼
+                    CIRCUIT_VALIDITY_CHANGED { canSimulate, reason, ... }
+                                        │
+                                        ▼
+                         ┌──────────────────────────────┐
+                         │  _handleValidityChanged()    │
+                         │  └─▶ _renderInvalidState()   │
+                         │      (if !canSimulate)       │
+                         └──────────────────────────────┘
+
+
+                         ┌──────────────────────────────┐
+                         │   CircuitAnalysisManager     │
+                         │  (src/core/CircuitAnalysisManager.js)
+                         └──────────────┬───────────────┘
+                                        │
+           Circuit changed or           │   computeCircuitAnalysisAsync()
+           label renamed                │
+                                        │
+                    ┌───────────────────┴───────────────────┐
+                    │                                       │
+                    ▼                                       ▼
+    CIRCUIT_ANALYSIS_COMPUTING              CIRCUIT_ANALYSIS_COMPUTED
+    { percent, current, total }             { inputs, outputs, table, ... }
+                    │                                       │
+                    ▼                                       ▼
+    ┌──────────────────────────────┐     ┌──────────────────────────────┐
+    │  _handleComputing()          │     │  _handleComputed()           │
+    │  └─▶ _showProgress()         │     │  └─▶ Sync data (always)      │
+    └──────────────────────────────┘     │  └─▶ Update table (if visible)│
+                                         └──────────────────────────────┘
+```
+
+---
+
+### Subscription Setup
+
+Event subscriptions are established in `_setupEventListeners()`, called from the constructor:
+
+```javascript
+// In constructor:
+this._setupEventListeners();
+
+// _setupEventListeners():
+_setupEventListeners() {
+    eventBus.on(EVENT_TYPES.SIMULATION_STEP_COMPLETED, this._handleStepCompleted);
+    eventBus.on(EVENT_TYPES.CIRCUIT_VALIDITY_CHANGED, this._handleValidityChanged);
+    eventBus.on(EVENT_TYPES.CIRCUIT_ANALYSIS_COMPUTING, this._handleComputing);
+    eventBus.on(EVENT_TYPES.CIRCUIT_ANALYSIS_COMPUTED, this._handleComputed);
+}
+```
+
+---
+
+### Subscription Cleanup
+
+Subscriptions are removed in `destroy()`, called when board is cleared or switched:
+
+```javascript
+destroy() {
+    eventBus.off(EVENT_TYPES.SIMULATION_STEP_COMPLETED, this._handleStepCompleted);
+    eventBus.off(EVENT_TYPES.CIRCUIT_VALIDITY_CHANGED, this._handleValidityChanged);
+    eventBus.off(EVENT_TYPES.CIRCUIT_ANALYSIS_COMPUTING, this._handleComputing);
+    eventBus.off(EVENT_TYPES.CIRCUIT_ANALYSIS_COMPUTED, this._handleComputed);
+    // ... rest of cleanup
+}
 ```

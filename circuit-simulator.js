@@ -15,7 +15,6 @@ import {
 } from './src/constants.js';
 
 import { eventBus, EVENT_TYPES } from './src/utils/eventBus.js';
-import { logger } from './src/utils/logger.js';
 
 import { findComponentAt, findPortAt, findConnectionAt, snapToGrid } from './src/utils/hitDetection.js';
 import { generateNextBoardName } from './src/utils/naming.js';
@@ -494,13 +493,8 @@ class CircuitSimulator {
             this.updateToolbarDisplays();
         });
 
-        // Circuit analysis computed event - refresh panel when analysis is updated
-        eventBus.on(EVENT_TYPES.CIRCUIT_ANALYSIS_COMPUTED, (data) => {
-            logger.debug('[circuit-simulator] Received CIRCUIT_ANALYSIS_COMPUTED, calling truthTablePanel.refresh()');
-            if (this.truthTablePanel) {
-                this.truthTablePanel.refresh();
-            }
-        });
+        // Note: CIRCUIT_ANALYSIS_COMPUTED is handled internally by TruthTablePanel._handleComputed()
+        // The panel keeps its circuitAnalysis in sync with events and updates Tabulator when visible
 
         // Auto-cycle state changes (play/stop button, enable/disable step buttons)
         eventBus.on(EVENT_TYPES.AUTOCYCLE_STATE_CHANGED, (data) => {

@@ -6,20 +6,48 @@ import { positionPanelSmartly } from '../utils/positioning.js';
 import { buildTruthTableColumns, inputValuesToIndex } from '../utils/truthTableUtils.js';
 import { UI } from '../constants.js';
 import { eventBus, EVENT_TYPES } from '../utils/eventBus.js';
+import {
+    TruthTablePanelStateMachine,
+    RenderQueue,
+    PANEL_STATES,
+    DATA_STATES,
+    ACTION_TYPES
+} from './TruthTablePanelStateMachine.js';
 
 /**
  * TruthTablePanel - Manages the truth table UI using Tabulator.js
  *
- * Responsibilities:
- * - Display pre-computed truth table from cache
+ * ## Architecture
+ *
+ * Uses an explicit state machine ({@link TruthTablePanelStateMachine}) for predictable
+ * state management. The state machine handles:
+ * - Panel visibility states (HIDDEN, SHOWING_*, VISIBLE_*)
+ * - Data synchronization states (FRESH, STALE, COMPUTING)
+ * - Simulation row tracking (lastCycleIndex)
+ *
+ * All event handlers delegate to the state machine, which returns action objects.
+ * The panel executes these actions via {@link _executeAction}.
+ *
+ * ## Render Serialization
+ *
+ * Table renders are serialized through {@link RenderQueue} to prevent concurrent
+ * Tabulator builds. Multiple rapid render requests collapse into: first + one pending.
+ *
+ * ## Responsibilities
+ * - Display pre-computed truth table from CircuitState cache
  * - Handle column reordering (inputs and outputs separately)
- * - Highlight rows matching current circuit state
+ * - Highlight rows matching current simulation step
  * - Provide drag/resize functionality via Interact.js
  * - Persist panel state (position, size, column order)
  *
- * Subscribes to declarative events:
- * - SIMULATION_STEP_COMPLETED: Highlights row by cycle index
+ * ## Event Subscriptions
+ * - SIMULATION_STEP_COMPLETED: Tracks cycle index, highlights row when visible
  * - CIRCUIT_VALIDITY_CHANGED: Shows invalid message when circuit becomes incomplete
+ * - CIRCUIT_ANALYSIS_COMPUTING: Shows progress bar during computation
+ * - CIRCUIT_ANALYSIS_COMPUTED: Updates table when computation completes
+ *
+ * @see TruthTablePanelStateMachine for state machine implementation
+ * @see RenderQueue for render serialization
  */
 export class TruthTablePanel {
     // ============================================================================
@@ -63,9 +91,6 @@ export class TruthTablePanel {
         // Callback for state changes (to trigger save)
         this.onStateChange = null;
 
-        // Flag to skip saveState() during restore (set by setState())
-        this._isRestoring = false;
-
         // Bound event handlers for cleanup
         this._boundHandleStepCompleted = this._handleStepCompleted.bind(this);
         this._boundHandleValidityChanged = this._handleValidityChanged.bind(this);
@@ -77,6 +102,22 @@ export class TruthTablePanel {
 
         // Initialization flag
         this._initialized = false;
+
+        /**
+         * State machine for managing panel visibility and data synchronization.
+         * Returns action objects that this panel executes via _executeAction().
+         * @type {TruthTablePanelStateMachine}
+         * @private
+         */
+        this._stateMachine = new TruthTablePanelStateMachine(this);
+
+        /**
+         * Render queue to serialize async table renders.
+         * Prevents concurrent Tabulator builds; collapses multiple pending into one.
+         * @type {RenderQueue}
+         * @private
+         */
+        this._renderQueue = new RenderQueue();
     }
 
     /**
@@ -96,7 +137,6 @@ export class TruthTablePanel {
         // 2. Restore saved state
         if (savedState) {
             this._setState(savedState);
-            this._isRestoring = true;  // Skip _saveState() during initial display
         }
 
         // 3. Setup close button (one-time)
@@ -142,68 +182,84 @@ export class TruthTablePanel {
     }
 
     /**
-     * Handle simulation step completed event
+     * Handle simulation step completed event.
+     * State machine tracks the cycle index and returns appropriate action.
      * @private
      */
     _handleStepCompleted(data) {
-        if (this._isVisible()) {
-            this._highlightRowByIndex(data.cycleIndex);
-        }
+        const action = this._stateMachine.handleStepCompleted(data);
+        this._executeAction(action);
     }
 
     /**
-     * Handle circuit validity changed event
+     * Handle circuit validity changed event.
+     * This is the PRIMARY handler for invalid circuit states.
+     * CIRCUIT_ANALYSIS_COMPUTED only fires for valid circuits, so this handler
+     * is responsible for ALL invalid state display.
      * @private
      */
     _handleValidityChanged(data) {
-        // Only act if panel is visible and circuit became invalid
-        if (this._isVisible() && !data.canSimulate) {
-            const analysis = this.circuitAnalysis;
-            // If we have no table data, show invalid message with the reason from the event
-            if (analysis && analysis.table.length === 0) {
-                this._renderInvalidState(data.reason);
-            }
+        const action = this._stateMachine.handleValidityChanged(data);
+
+        // Update local analysis state to reflect invalidity when visible and invalid
+        if (this._isVisible() && !data.canSimulate && this.circuitAnalysis) {
+            this.circuitAnalysis.isValid = false;
+            this.circuitAnalysis.reason = data.reason;
         }
+
+        this._executeAction(action);
     }
 
     /**
-     * Handle truth table computing progress event
+     * Handle truth table computing progress event.
+     * State machine tracks computing state and returns appropriate action.
      * @private
      */
     _handleComputing(data) {
-        if (this._isVisible()) {
-            this._showProgress(data.percent, data.current, data.total);
-        }
+        const action = this._stateMachine.handleComputing(data);
+        this._executeAction(action);
     }
 
     /**
-     * Handle circuit analysis computed event
+     * Handle circuit analysis computed event.
+     *
+     * NOTE: This event only fires for VALID circuits (isValid === true).
+     * Invalid circuits are handled by CIRCUIT_VALIDITY_CHANGED.
+     * Therefore, we can assume analysis.isValid === true and analysis.table.length > 0.
+     *
+     * Always keeps circuitAnalysis in sync with events (even when hidden).
+     * State machine determines appropriate action based on panel state and what changed.
      * @private
      */
     async _handleComputed() {
         // Hide progress indicator
         this._hideProgress();
 
-        // If panel is visible, refresh it with new data
-        if (this._isVisible()) {
-            // Refresh the table with new analysis data
-            const analysis = this.circuitState.getCircuitAnalysis();
-            if (analysis) {
-                this.circuitAnalysis = this._deepCopyAnalysis(analysis);
+        // Always keep local analysis in sync (even when panel is hidden)
+        const analysis = this.circuitState.getCircuitAnalysis();
+        if (!analysis) return;
 
-                if (this.tabulatorInstance) {
-                    // Table exists - just update data
-                    this.tabulatorInstance.setData(this.circuitAnalysis.table);
-                } else if (this.circuitAnalysis.table.length > 0) {
-                    // Table doesn't exist (was showing "computing" message) - need full render
-                    // Panel is already visible with interactions set up, so no finishShow needed
-                    const content = document.getElementById('truthTableContent');
-                    if (content) {
-                        await this._renderTabulator(content, true); // true = panel was already visible
-                    }
-                }
+        const oldAnalysis = this.circuitAnalysis;
+        this.circuitAnalysis = this._deepCopyAnalysis(analysis);
+
+        // State machine determines appropriate action based on what changed
+        const action = this._stateMachine.handleComputed(analysis, oldAnalysis);
+
+        // Handle structure change side effects before executing action
+        if (action.action === ACTION_TYPES.REBUILD_TABLE && this._isVisible()) {
+            this._saveState();
+            if (this.state) {
+                this.state.height = '';
+                this.state.width = '';
             }
+            if (this.panel) {
+                this.panel.style.width = '';
+                this.panel.style.height = '';
+            }
+            this.columnOrder = null;
         }
+
+        await this._executeAction(action);
     }
 
     // ============================================================================
@@ -249,6 +305,122 @@ export class TruthTablePanel {
         const progressEl = content.querySelector('.truth-table-progress');
         if (progressEl) {
             progressEl.remove();
+        }
+    }
+
+    // ============================================================================
+    // SECTION: State Machine Action Dispatcher
+    // ============================================================================
+
+    /**
+     * Execute an action returned by the state machine.
+     * This is the central dispatcher that translates state machine actions
+     * into actual UI operations.
+     *
+     * @param {Object} action - Action object with `action` type and optional parameters
+     * @returns {Promise<void>}
+     * @private
+     */
+    async _executeAction(action) {
+        if (!action || action.action === ACTION_TYPES.NONE) {
+            return;
+        }
+
+        switch (action.action) {
+            case ACTION_TYPES.SHOW_COMPUTING:
+                this._revealPanel();
+                this._renderComputingState();
+                break;
+
+            case ACTION_TYPES.SHOW_INVALID:
+                this._revealPanel();
+                this._renderInvalidState(action.reason);
+                break;
+
+            case ACTION_TYPES.RENDER_TABLE:
+            case ACTION_TYPES.REBUILD_TABLE:
+                await this._renderQueue.enqueue(() => this._safeRenderTable());
+                break;
+
+            case ACTION_TYPES.UPDATE_HEADERS:
+                this._updateColumnHeaders();
+                this._reapplyRowHeights();
+                this._updateHighlight();
+                break;
+
+            case ACTION_TYPES.UPDATE_DATA:
+                if (this.tabulatorInstance) {
+                    this.tabulatorInstance.setData(this.circuitAnalysis.table);
+                }
+                break;
+
+            case ACTION_TYPES.SHOW_PROGRESS:
+                this._showProgress(action.percent, action.current, action.total);
+                break;
+
+            case ACTION_TYPES.HIGHLIGHT_ROW:
+                this._highlightRowByIndex(action.index);
+                break;
+
+            case ACTION_TYPES.HIDE:
+                this._hidePanel();
+                break;
+
+            case ACTION_TYPES.SYNC:
+                await this._syncTabulatorWithAnalysis();
+                break;
+
+            default:
+                // Unknown action - ignore
+                break;
+        }
+    }
+
+    /**
+     * Reveal the panel (make visible but potentially with opacity 0).
+     * Used by state machine actions before rendering content.
+     * @private
+     */
+    _revealPanel() {
+        if (!this.panel) return;
+        this.panel.classList.remove('hidden');
+        this.panel.style.display = 'block';
+        this.panel.style.pointerEvents = 'auto';
+    }
+
+    /**
+     * Hide the panel completely.
+     * Used by state machine HIDE action.
+     * @private
+     */
+    _hidePanel() {
+        if (!this.panel) return;
+        // Save state BEFORE hiding - offsetWidth becomes 0 after display:none
+        this._saveState();
+        this.panel.style.opacity = '0';
+        this.panel.style.pointerEvents = 'none';
+        this.panel.classList.add('hidden');
+        this.panel.style.display = 'none';
+    }
+
+    /**
+     * Safe wrapper around _renderTabulator that integrates with state machine.
+     * Notifies state machine of render lifecycle.
+     * @returns {Promise<void>}
+     * @private
+     */
+    async _safeRenderTable() {
+        const content = document.getElementById('truthTableContent');
+        if (!content || !this.circuitAnalysis) return;
+
+        // Compute wasVisible for positioning logic
+        const wasVisible = this._isVisible() && this.tabulatorInstance !== null;
+
+        this._stateMachine.renderStarted();
+        try {
+            await this._renderTabulator(content, wasVisible);
+        } finally {
+            this._stateMachine.renderCompleted();
         }
     }
 
@@ -388,7 +560,6 @@ export class TruthTablePanel {
      * | Table Rebuild  | _renderTabulator() | Structure changes       | Position, size, subscriptions |
      * | Full Destroy   | destroy()          | Board switch/clear      | Nothing (fresh start)         |
      *
-     * Note: _isRestoring flag is set by setState() when restoring from saved state
      * @param {HTMLElement} content - The content container element
      * @param {boolean} wasVisible - Whether panel was already visible before this call
      * @returns {Promise<void>} Resolves when tableBuilt event fires
@@ -503,13 +674,8 @@ export class TruthTablePanel {
                     this._applyTableWidth();
                 }
 
-                // Save state after showing the panel, but NOT when restoring from saved state
-                // (restoring shouldn't trigger a change detection false positive)
-                if (!this._isRestoring) {
-                    this._saveState();
-                }
-                // Clear the restoring flag after initial display
-                this._isRestoring = false;
+                // Save state after showing the panel
+                this._saveState();
 
                 // Signal that table is ready for common post-render setup
                 resolve();
@@ -1009,88 +1175,6 @@ export class TruthTablePanel {
     }
 
     /**
-     * Refresh the truth table with updated analysis data
-     * Called when CIRCUIT_ANALYSIS_COMPUTED event fires
-     */
-    async refresh() {
-        // Don't refresh if panel doesn't exist
-        if (!this.panel) return;
-
-        // Don't refresh if panel is hidden
-        if (this.panel.classList.contains('hidden')) return;
-
-        const analysis = this.circuitState.getCircuitAnalysis();
-
-        // Hide panel only if no analysis at all
-        if (!analysis) {
-            this.hide();
-            return;
-        }
-
-        const { inputs, outputs, table, reason } = analysis;
-
-        // If no table data (no inputs or no outputs), show invalid message
-        if (!table || table.length === 0) {
-            this.circuitAnalysis = { inputs: [], outputs: [], table: [], isValid: false, reason };
-            this._renderInvalidState();
-            return;
-        }
-
-        // Check if we're transitioning from no-table state to having table
-        const hadNoTable = this.circuitAnalysis && this.circuitAnalysis.table.length === 0;
-
-        // Check if column structure changed (inputs/outputs added/removed)
-        const countChanged =
-            hadNoTable ||
-            !this.circuitAnalysis ||
-            inputs.length !== this.circuitAnalysis.inputs.length ||
-            outputs.length !== this.circuitAnalysis.outputs.length;
-
-        // Check if labels changed (need to update column headers)
-        const labelsChanged = !countChanged && this.circuitAnalysis && (
-            inputs.some((input, i) => input.label !== this.circuitAnalysis.inputs[i]?.label) ||
-            outputs.some((output, i) => output.label !== this.circuitAnalysis.outputs[i]?.label)
-        );
-
-        if (countChanged) {
-            // Full rebuild needed - column count has changed
-            // Save current position before rebuild
-            this._saveState();
-
-            // Clear saved height/width so panel auto-fits to new content
-            // Keep position (x, y) so panel stays in same location
-            if (this.state) {
-                this.state.height = '';
-                this.state.width = '';
-            }
-
-            // Clear inline styles so panel can auto-fit to new content
-            // The CSS will handle default sizing, then applyTableHeight will fit to content
-            this.panel.style.width = '';
-            this.panel.style.height = '';
-
-            // Update data and reset column order for new structure
-            this.circuitAnalysis = this._deepCopyAnalysis(analysis);
-            this.columnOrder = null;
-
-            // Rebuild table with new columns
-            // Panel is already visible with interactions set up, so no finishShow needed
-            const content = document.getElementById('truthTableContent');
-            if (content) {
-                await this._renderTabulator(content, true); // true = panel was already visible
-            }
-        } else if (labelsChanged) {
-            // Labels changed but column count is the same - update headers only
-            // No need to replaceData/reapplyRowHeights/updateHighlight since table data is identical
-            this.circuitAnalysis = this._deepCopyAnalysis(analysis);
-            this._updateColumnHeaders();
-        }
-        // Note: No "else" branch needed. refresh() is only called when CIRCUIT_ANALYSIS_COMPUTED
-        // fires, which only happens on structure changes (countChanged) or label changes (labelsChanged).
-        // Input value changes use a separate path: SIMULATION_STEP_COMPLETED → _highlightRowByIndex().
-    }
-
-    /**
      * Update column headers when labels change (without full table rebuild)
      * Uses setColumns() since updateDefinition() doesn't work on grouped columns
      * @private
@@ -1120,51 +1204,161 @@ export class TruthTablePanel {
     }
 
     /**
-     * Hide the truth table panel
+     * Sync Tabulator with current circuitAnalysis.
+     * Called when panel becomes visible after changes occurred while hidden.
+     * Gets fresh data from circuitState to ensure we have the latest state.
+     * @private
+     */
+    async _syncTabulatorWithAnalysis() {
+        // Get FRESH analysis from circuitState (not stale local copy)
+        const freshAnalysis = this.circuitState.getCircuitAnalysis();
+
+        // Handle invalid state first - circuit may have become invalid while hidden
+        if (!freshAnalysis || !freshAnalysis.isValid) {
+            this.circuitAnalysis = freshAnalysis ? this._deepCopyAnalysis(freshAnalysis) : null;
+            this._renderInvalidState(freshAnalysis?.reason);
+            return;
+        }
+
+        // Update local copy with fresh data
+        const oldAnalysis = this.circuitAnalysis;
+        this.circuitAnalysis = this._deepCopyAnalysis(freshAnalysis);
+
+        if (!this.tabulatorInstance) return;
+
+        // Get the state that Tabulator currently shows
+        const currentColumns = this.tabulatorInstance.getColumns();
+        const currentInputCount = currentColumns.filter(c => c.getField()?.startsWith('input')).length;
+        const currentOutputCount = currentColumns.filter(c => c.getField()?.startsWith('output')).length;
+
+        // Compare with fresh analysis
+        const newInputCount = this.circuitAnalysis.inputs.length;
+        const newOutputCount = this.circuitAnalysis.outputs.length;
+
+        const structureChanged =
+            currentInputCount !== newInputCount ||
+            currentOutputCount !== newOutputCount;
+
+        if (structureChanged) {
+            // Full rebuild needed
+            this._saveState();
+            if (this.state) {
+                this.state.height = '';
+                this.state.width = '';
+            }
+            this.panel.style.width = '';
+            this.panel.style.height = '';
+            this.columnOrder = null;
+
+            const content = document.getElementById('truthTableContent');
+            if (content) {
+                await this._renderTabulator(content, true);
+            }
+            return;
+        }
+
+        // Check for label changes by comparing current headers
+        const labelsChanged = this._detectLabelChanges();
+
+        if (labelsChanged) {
+            this._updateColumnHeaders();
+            this._reapplyRowHeights();
+            this._updateHighlight();
+            return;
+        }
+
+        // Data only change
+        this.tabulatorInstance.setData(this.circuitAnalysis.table);
+    }
+
+    /**
+     * Detect if labels changed by comparing Tabulator headers with circuitAnalysis.
+     * @returns {boolean}
+     * @private
+     */
+    _detectLabelChanges() {
+        if (!this.tabulatorInstance || !this.circuitAnalysis) return false;
+
+        const columns = this.tabulatorInstance.getColumns();
+        const { inputs, outputs } = this.circuitAnalysis;
+
+        // Check input labels
+        for (let i = 0; i < inputs.length; i++) {
+            const col = columns.find(c => c.getField() === `input${i}`);
+            if (col && col.getDefinition().title !== inputs[i].label) {
+                return true;
+            }
+        }
+
+        // Check output labels
+        for (let i = 0; i < outputs.length; i++) {
+            const col = columns.find(c => c.getField() === `output${i}`);
+            if (col && col.getDefinition().title !== outputs[i].label) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Hide the truth table panel.
+     * Uses state machine to determine action.
      */
     hide() {
-        if (this.panel) {
-            // Save state BEFORE hiding - offsetWidth becomes 0 after display:none
-            this._saveState();
-            this.panel.style.opacity = '0';
-            this.panel.style.pointerEvents = 'none';
-            this.panel.classList.add('hidden');
-            this.panel.style.display = 'none';
-        }
+        const action = this._stateMachine.handleHide();
+        this._executeAction(action);
+        eventBus.emit(EVENT_TYPES.TRUTH_TABLE_HIDDEN);
     }
 
     /**
      * Show the truth table panel.
+     * Uses state machine to determine appropriate rendering action.
      * Orchestrates visibility, positioning, interactions, and delegates to appropriate render method.
      */
     async show() {
-        // Fast path: If we already have a Tabulator instance, just reveal the panel
-        if (this.tabulatorInstance && this.panel) {
-            this.panel.classList.remove('hidden');
-            this.panel.style.display = 'block';
-            this.panel.style.opacity = '1';
-            this.panel.style.pointerEvents = 'auto';
+        if (!this._initialized) {
+            throw new Error('TruthTablePanel not initialized. Call init() first.');
+        }
 
-            // Update highlight to match current input state
-            this._updateHighlight();
+        // Ensure DOM references are set
+        if (!this.panel) {
+            this.panel = document.getElementById('truthTablePanel');
+            if (!this.panel) return;
+        }
 
+        // Track if panel was visible before (for positioning logic)
+        const wasVisible = this._isVisible();
+
+        // Get action from state machine
+        const action = this._stateMachine.handleShow();
+
+        // Handle SYNC action (fast path - panel already visible, just needs sync)
+        if (action.action === ACTION_TYPES.SYNC) {
+            await this._syncTabulatorWithAnalysis();
+            // Update highlight using tracked cycle index
+            const state = this._stateMachine.getState();
+            if (state.lastCycleIndex !== null) {
+                this._highlightRowByIndex(state.lastCycleIndex);
+            }
             eventBus.emit(EVENT_TYPES.TRUTH_TABLE_SHOWN);
             return;
         }
 
-        // Slow path: Need to build content
+        // Handle NONE action (already visible, no sync needed)
+        if (action.action === ACTION_TYPES.NONE) {
+            // Still emit event and update highlight
+            const state = this._stateMachine.getState();
+            if (state.lastCycleIndex !== null && this.tabulatorInstance) {
+                this._highlightRowByIndex(state.lastCycleIndex);
+            }
+            eventBus.emit(EVENT_TYPES.TRUTH_TABLE_SHOWN);
+            return;
+        }
 
-        // Get DOM elements
-        this.panel = document.getElementById('truthTablePanel');
-        const content = document.getElementById('truthTableContent');
-        if (!this.panel || !content) return;
-
-        // Compute wasVisible before showing
-        const wasVisible = !this.panel.classList.contains('hidden') && this.panel.style.display !== 'none';
-
-        // Ensure we have analysis data
+        // Slow path: Transitioning from hidden to visible
+        // Ensure we have analysis data for local copy
         this._setCircuitAnalysisLocalCopy();
-        if (!this.circuitAnalysis) return;
 
         // Show panel (display:block, but opacity:0 until content ready)
         this.panel.classList.remove('hidden');
@@ -1183,23 +1377,44 @@ export class TruthTablePanel {
             }
         }
 
-        // Branch based on analysis state
-        if (this.circuitAnalysis.table.length === 0) {
-            // No table data - show computing or invalid state (sync)
-            if (this.circuitAnalysis.reason === 'Computing truth table...') {
+        // Execute action based on state machine decision
+        switch (action.action) {
+            case ACTION_TYPES.SHOW_COMPUTING:
                 this._renderComputingState();
-            } else {
-                this._renderInvalidState();
+                break;
+
+            case ACTION_TYPES.SHOW_INVALID:
+                this._renderInvalidState(action.reason);
+                break;
+
+            case ACTION_TYPES.RENDER_TABLE: {
+                const content = document.getElementById('truthTableContent');
+                if (content && this.circuitAnalysis) {
+                    // Signal render lifecycle to state machine
+                    this._stateMachine.renderStarted();
+                    try {
+                        await this._renderTabulator(content, wasVisible);
+                    } finally {
+                        this._stateMachine.renderCompleted();
+                    }
+                }
+                break;
             }
-        } else {
-            // Has table data - build Tabulator (async, wait for tableBuilt)
-            await this._renderTabulator(content, wasVisible);
         }
 
         // Common post-render setup for ALL paths
         this._positionPanelIfNeeded(wasVisible);
         this._setupInteractions();
         this.panel.style.opacity = '1';
+
+        // Update highlight using tracked cycle index (if panel is showing table)
+        const state = this._stateMachine.getState();
+        if (state.lastCycleIndex !== null &&
+            state.panel === PANEL_STATES.VISIBLE_TABLE &&
+            this.tabulatorInstance) {
+            this._highlightRowByIndex(state.lastCycleIndex);
+        }
+
         eventBus.emit(EVENT_TYPES.TRUTH_TABLE_SHOWN);
     }
 
@@ -1289,5 +1504,8 @@ export class TruthTablePanel {
         // Clear DOM references and initialization flag (reverse of init)
         this.panel = null;
         this._initialized = false;
+
+        // Reset state machine to initial state
+        this._stateMachine.reset();
     }
 }
