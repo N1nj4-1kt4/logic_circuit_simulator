@@ -20,13 +20,18 @@ vi.mock('tabulator-tables', () => ({
 }));
 
 // Mock interactjs
-vi.mock('interactjs', () => ({
-    default: vi.fn().mockReturnValue({
+vi.mock('interactjs', () => {
+    const mockInteract = vi.fn().mockReturnValue({
         draggable: vi.fn().mockReturnThis(),
         resizable: vi.fn().mockReturnThis(),
         unset: vi.fn()
-    })
-}));
+    });
+    mockInteract.modifiers = {
+        restrictRect: vi.fn().mockReturnValue({}),
+        restrictSize: vi.fn().mockReturnValue({})
+    };
+    return { default: mockInteract };
+});
 
 // Mock positioning utility
 vi.mock('../../../src/utils/positioning.js', () => ({

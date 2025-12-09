@@ -1434,6 +1434,7 @@ export class TruthTablePanel {
             }
 
             await this._syncTabulatorWithAnalysis();
+            this._setupInteractions();
             // Update highlight using tracked cycle index
             const state = this._stateMachine.getState();
             if (state.lastCycleIndex !== null) {
@@ -1456,6 +1457,12 @@ export class TruthTablePanel {
             if (this.tabulatorInstance) {
                 const content = document.getElementById('truthTableContent');
                 if (content && this.circuitAnalysis) {
+                    // Unset Interact.js before destroying Tabulator
+                    if (this.interactionsSetup && this.panel) {
+                        interact(this.panel).unset();
+                        this.interactionsSetup = false;
+                    }
+
                     // Destroy old instance
                     this.tabulatorInstance.destroy();
                     this.tabulatorInstance = null;
@@ -1478,6 +1485,9 @@ export class TruthTablePanel {
                         height: '100%',
                         renderVertical: 'virtual',
                     });
+
+                    // Re-setup interactions after rebuild
+                    this._setupInteractions();
                 }
             }
 
