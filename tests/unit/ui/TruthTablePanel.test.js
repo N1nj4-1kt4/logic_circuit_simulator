@@ -15,7 +15,9 @@ vi.mock('tabulator-tables', () => ({
         getRows: vi.fn().mockReturnValue([]),
         getData: vi.fn().mockReturnValue([]),
         deselectRow: vi.fn(),
-        replaceData: vi.fn()
+        replaceData: vi.fn(),
+        setHeight: vi.fn(), // Required for virtual DOM height updates
+        setData: vi.fn()
     }))
 }));
 

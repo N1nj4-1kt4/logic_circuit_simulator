@@ -976,6 +976,11 @@ export class TruthTablePanel {
             tableEl.style.height = actualRowAreaHeight + 'px';
         }
 
+        // Notify Tabulator of the height change so virtual DOM recalculates
+        // This is critical for tables with many rows (7+ inputs = 128+ rows)
+        // Without this, virtual DOM may not render any rows
+        this.tabulatorInstance.setHeight(actualTotalHeight);
+
         // Resize the panel itself to fit the content
         if (fitPanel && this.panel) {
             const panelHeader = this.panel.querySelector('.panel-header');
@@ -1001,7 +1006,8 @@ export class TruthTablePanel {
 
             this.panel.style.height = newPanelHeight + 'px';
         }
-        // Don't call redraw() as it resets our styles
+        // Note: We use setHeight() above instead of redraw() because setHeight()
+        // properly updates virtual DOM without resetting column/row styles
     }
 
     /**
