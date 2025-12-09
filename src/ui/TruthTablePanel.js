@@ -368,6 +368,7 @@ export class TruthTablePanel {
 
             case ACTION_TYPES.RENDER_TABLE:
                 await this._renderQueue.enqueue(() => this._safeRenderTable());
+                this._setupInteractions();
                 break;
 
             case ACTION_TYPES.REBUILD_TABLE:
@@ -379,6 +380,7 @@ export class TruthTablePanel {
                 }
                 this.columnOrder = null;
                 await this._renderQueue.enqueue(() => this._safeRenderTable());
+                this._setupInteractions();
                 break;
 
             case ACTION_TYPES.UPDATE_HEADERS:

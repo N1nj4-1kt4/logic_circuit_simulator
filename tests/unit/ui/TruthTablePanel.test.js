@@ -227,6 +227,7 @@ describe('TruthTablePanel', () => {
             // Mock render queue to track if rebuild was triggered
             const enqueueSpy = vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
             vi.spyOn(panel, '_saveState').mockImplementation(() => {});
+            vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
 
             await panel._handleComputed();
 
@@ -290,6 +291,7 @@ describe('TruthTablePanel', () => {
 
             // Mock render queue to track if rebuild was triggered
             const enqueueSpy = vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
+            vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
 
             await panel._handleComputed();
 
@@ -358,6 +360,7 @@ describe('TruthTablePanel', () => {
             // Mock render queue to track if REBUILD_TABLE action was triggered
             const enqueueSpy = vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
             const saveStateSpy = vi.spyOn(panel, '_saveState').mockImplementation(() => {});
+            vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
 
             await panel._handleComputed();
 
@@ -409,6 +412,7 @@ describe('TruthTablePanel', () => {
             // Mock render queue to track if REBUILD_TABLE action was triggered
             const enqueueSpy = vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
             vi.spyOn(panel, '_saveState').mockImplementation(() => {});
+            vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
 
             await panel._handleComputed();
 
@@ -448,6 +452,7 @@ describe('TruthTablePanel', () => {
             // Mock render queue to track if rebuild was triggered
             const enqueueSpy = vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
             vi.spyOn(panel, '_saveState').mockImplementation(() => {});
+            vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
 
             // Should not throw
             await expect(panel._handleComputed()).resolves.not.toThrow();
@@ -1269,6 +1274,7 @@ describe('TruthTablePanel', () => {
             // Mock render queue to track if rebuild was triggered
             const enqueueSpy = vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
             vi.spyOn(panel, '_saveState').mockImplementation(() => {});
+            vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
 
             await panel._handleComputed();
 
@@ -2086,6 +2092,7 @@ describe('TruthTablePanel', () => {
                 );
 
                 const enqueueSpy = vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
+                vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
 
                 await panel._executeAction({ action: 'RENDER_TABLE' });
 
@@ -2645,6 +2652,7 @@ describe('TruthTablePanel', () => {
                 circuitState.getCircuitAnalysis.mockReturnValue(validCache);
 
                 vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
+                vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
 
                 await panel._handleComputed();
 
@@ -2782,6 +2790,7 @@ describe('TruthTablePanel', () => {
 
                 vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
                 vi.spyOn(panel, '_saveState').mockImplementation(() => {});
+                vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
 
                 // Handle computed with structure change
                 await panel._handleComputed();
