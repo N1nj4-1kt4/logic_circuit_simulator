@@ -237,27 +237,15 @@ export class TruthTablePanel {
 
         // Always keep local analysis in sync (even when panel is hidden)
         const analysis = this.circuitState.getCircuitAnalysis();
-        if (!analysis) return;
+        if (!analysis) {
+            return;
+        }
 
         const oldAnalysis = this.circuitAnalysis;
         this.circuitAnalysis = this._deepCopyAnalysis(analysis);
 
         // State machine determines appropriate action based on what changed
         const action = this._stateMachine.handleComputed(analysis, oldAnalysis);
-
-        // Handle structure change side effects before executing action
-        if (action.action === ACTION_TYPES.REBUILD_TABLE && this._isVisible()) {
-            this._saveState();
-            if (this.state) {
-                this.state.height = '';
-                this.state.width = '';
-            }
-            if (this.panel) {
-                this.panel.style.width = '';
-                this.panel.style.height = '';
-            }
-            this.columnOrder = null;
-        }
 
         await this._executeAction(action);
     }
@@ -267,14 +255,17 @@ export class TruthTablePanel {
     // ============================================================================
 
     /**
-     * Show progress indicator in the panel
+     * Show progress indicator in the panel.
+     * NOTE: Progress is inserted into the panel container (not #truthTableContent)
+     * because Tabulator clears the content element when it initializes.
      * @private
      */
     _showProgress(percent, current, total) {
-        const content = document.getElementById('truthTableContent');
-        if (!content) return;
+        if (!this.panel) {
+            return;
+        }
 
-        let progressEl = content.querySelector('.truth-table-progress');
+        let progressEl = this.panel.querySelector('.truth-table-progress');
         if (!progressEl) {
             progressEl = document.createElement('div');
             progressEl.className = 'truth-table-progress';
@@ -285,7 +276,7 @@ export class TruthTablePanel {
                 </div>
                 <div class="progress-detail"></div>
             `;
-            content.insertBefore(progressEl, content.firstChild);
+            this.panel.appendChild(progressEl);
         }
 
         const bar = progressEl.querySelector('.progress-bar');
@@ -299,12 +290,50 @@ export class TruthTablePanel {
      * @private
      */
     _hideProgress() {
-        const content = document.getElementById('truthTableContent');
-        if (!content) return;
+        if (!this.panel) return;
 
-        const progressEl = content.querySelector('.truth-table-progress');
+        const progressEl = this.panel.querySelector('.truth-table-progress');
         if (progressEl) {
             progressEl.remove();
+        }
+    }
+
+    /**
+     * Show rendering spinner during Tabulator build.
+     * NOTE: Spinner is inserted into the panel container (not #truthTableContent)
+     * because Tabulator clears the content element when it initializes.
+     * @private
+     */
+    _showRenderingSpinner() {
+        if (!this.panel) {
+            return;
+        }
+
+        // Remove computing progress if present
+        this._hideProgress();
+
+        let spinnerEl = this.panel.querySelector('.truth-table-rendering');
+        if (!spinnerEl) {
+            spinnerEl = document.createElement('div');
+            spinnerEl.className = 'truth-table-rendering';
+            spinnerEl.innerHTML = `
+                <div class="rendering-spinner"></div>
+                <div class="rendering-text">Rendering table...</div>
+            `;
+            this.panel.appendChild(spinnerEl);
+        }
+    }
+
+    /**
+     * Hide rendering spinner
+     * @private
+     */
+    _hideRenderingSpinner() {
+        if (!this.panel) return;
+
+        const spinnerEl = this.panel.querySelector('.truth-table-rendering');
+        if (spinnerEl) {
+            spinnerEl.remove();
         }
     }
 
@@ -338,7 +367,17 @@ export class TruthTablePanel {
                 break;
 
             case ACTION_TYPES.RENDER_TABLE:
+                await this._renderQueue.enqueue(() => this._safeRenderTable());
+                break;
+
             case ACTION_TYPES.REBUILD_TABLE:
+                // Structure changed - clear saved dimensions before rebuild
+                this._saveState();
+                if (this.state) {
+                    this.state.height = '';
+                    this.state.width = '';
+                }
+                this.columnOrder = null;
                 await this._renderQueue.enqueue(() => this._safeRenderTable());
                 break;
 
@@ -598,6 +637,21 @@ export class TruthTablePanel {
         // Generate Tabulator columns with groups
         const columns = this._generateColumns();
 
+        // PRESERVE DIMENSIONS before destroying old Tabulator (prevents panel shrink)
+        // This keeps the panel visually stable during the rebuild transition
+        let preservedDimensions = null;
+        if (this.tabulatorInstance && this.panel) {
+            preservedDimensions = {
+                width: this.panel.offsetWidth,
+                height: this.panel.offsetHeight
+            };
+            this.panel.style.width = `${preservedDimensions.width}px`;
+            this.panel.style.height = `${preservedDimensions.height}px`;
+
+            // Show rendering spinner before destroying old table
+            this._showRenderingSpinner();
+        }
+
         // Destroy existing Tabulator instance right before creating a new one
         // (kept close to recreation for clearer lifecycle management)
         if (this.tabulatorInstance) {
@@ -641,6 +695,15 @@ export class TruthTablePanel {
         // See: https://tabulator.info/docs/6.3/events
         return new Promise((resolve) => {
             this.tabulatorInstance.on('tableBuilt', () => {
+                // Hide rendering spinner now that table is ready
+                this._hideRenderingSpinner();
+
+                // Release preserved dimensions - let table auto-fit to new content
+                if (preservedDimensions) {
+                    this.panel.style.width = '';
+                    this.panel.style.height = '';
+                }
+
                 // Listen for column reorder (save state when user drags columns)
                 this.tabulatorInstance.on('columnMoved', () => {
                     this._saveState();
@@ -714,28 +777,24 @@ export class TruthTablePanel {
     /**
      * Render a computing message with progress bar.
      * Only handles content rendering - caller is responsible for positioning, interactions, and visibility.
+     * NOTE: Uses _showProgress which appends to the panel (not content) to avoid Tabulator clearing it.
      * @private
      */
     _renderComputingState() {
-        const content = document.getElementById('truthTableContent');
-        if (!content) return;
-
         // Destroy existing Tabulator instance if any
         if (this.tabulatorInstance) {
             this.tabulatorInstance.destroy();
             this.tabulatorInstance = null;
         }
 
-        // Clear content and show computing message with progress bar
-        content.innerHTML = `
-            <div class="truth-table-progress" style="position: relative;">
-                <div class="progress-text">Computing truth table...</div>
-                <div class="progress-bar-container">
-                    <div class="progress-bar" style="width: 0%"></div>
-                </div>
-                <div class="progress-detail">Starting computation...</div>
-            </div>
-        `;
+        // Clear the content area
+        const content = document.getElementById('truthTableContent');
+        if (content) {
+            content.innerHTML = '';
+        }
+
+        // Show progress overlay on the panel (not in content which Tabulator clears)
+        this._showProgress(0, 0, 1);
     }
 
     // ============================================================================

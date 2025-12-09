@@ -130,7 +130,7 @@ export class CircuitAnalysisManager {
 
         if (numCombinations > ASYNC_THRESHOLD) {
             // Use async computation for large analyses
-            this._recomputeAnalysisAsync(components, connections, numCombinations);
+            this._recomputeAnalysisAsync(components, connections);
         } else {
             // Use sync computation for small analyses
             this._recomputeAnalysisSync(components, connections);
@@ -150,7 +150,7 @@ export class CircuitAnalysisManager {
      * Asynchronous circuit analysis computation (for large circuits)
      * @private
      */
-    async _recomputeAnalysisAsync(components, connections, numCombinations) {
+    async _recomputeAnalysisAsync(components, connections) {
         // Increment computation ID to invalidate any in-progress computation
         this._computationId++;
         const currentComputationId = this._computationId;

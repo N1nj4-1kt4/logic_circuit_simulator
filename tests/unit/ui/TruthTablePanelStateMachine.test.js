@@ -478,7 +478,7 @@ describe('TruthTablePanelStateMachine', () => {
             expect(sm.getState().data).toBe(DATA_STATES.STALE);
         });
 
-        it('should return RENDER_TABLE when transitioning from SHOWING_COMPUTING', () => {
+        it('should return REBUILD_TABLE when transitioning from SHOWING_COMPUTING (no old analysis)', () => {
             const mockPanel = createMockPanel(null);
             const sm = new TruthTablePanelStateMachine(mockPanel);
 
@@ -489,13 +489,14 @@ describe('TruthTablePanelStateMachine', () => {
             // Now circuit analysis is ready - update mock
             mockPanel.circuitState.getCircuitAnalysis.mockReturnValue(createValidAnalysis());
 
+            // No old analysis = structure change (first computation)
             const action = sm.handleComputed(createValidAnalysis(), null);
 
-            expect(action.action).toBe(ACTION_TYPES.RENDER_TABLE);
+            expect(action.action).toBe(ACTION_TYPES.REBUILD_TABLE);
             expect(sm.getState().panel).toBe(PANEL_STATES.SHOWING_TABLE);
         });
 
-        it('should return RENDER_TABLE when transitioning from VISIBLE_INVALID', () => {
+        it('should return REBUILD_TABLE when transitioning from SHOWING_INVALID (structure change)', () => {
             const invalidAnalysis = createInvalidAnalysis();
             const mockPanel = createMockPanel(invalidAnalysis);
             const sm = new TruthTablePanelStateMachine(mockPanel);
@@ -503,11 +504,48 @@ describe('TruthTablePanelStateMachine', () => {
             sm.handleShow();
             expect(sm.getState().panel).toBe(PANEL_STATES.SHOWING_INVALID);
 
+            // Invalid has 0 inputs/outputs, valid has 2/1 = structure change
             const validAnalysis = createValidAnalysis();
             const action = sm.handleComputed(validAnalysis, invalidAnalysis);
 
+            expect(action.action).toBe(ACTION_TYPES.REBUILD_TABLE);
+            expect(sm.getState().panel).toBe(PANEL_STATES.SHOWING_TABLE);
+        });
+
+        it('should return RENDER_TABLE from VISIBLE_COMPUTING when no structure change', () => {
+            const validAnalysis = createValidAnalysis(2, 1);
+            const mockPanel = createMockPanel(validAnalysis);
+            const sm = new TruthTablePanelStateMachine(mockPanel);
+
+            sm.handleShow();
+            sm.renderCompleted();
+            sm.handleComputing({ percent: 50, current: 50, total: 100 });
+            expect(sm.getState().panel).toBe(PANEL_STATES.VISIBLE_COMPUTING);
+
+            // Same structure - no change
+            const action = sm.handleComputed(validAnalysis, validAnalysis);
+
             expect(action.action).toBe(ACTION_TYPES.RENDER_TABLE);
             expect(sm.getState().panel).toBe(PANEL_STATES.SHOWING_TABLE);
+        });
+
+        it('should return REBUILD_TABLE from VISIBLE_COMPUTING when structure changes', () => {
+            const oldAnalysis = createValidAnalysis(2, 1);
+            const mockPanel = createMockPanel(oldAnalysis);
+            const sm = new TruthTablePanelStateMachine(mockPanel);
+
+            sm.handleShow();
+            sm.renderCompleted();
+            sm.handleComputing({ percent: 50, current: 50, total: 100 });
+            expect(sm.getState().panel).toBe(PANEL_STATES.VISIBLE_COMPUTING);
+
+            // Structure changed - 3 inputs now instead of 2
+            const newAnalysis = createValidAnalysis(3, 1);
+            const action = sm.handleComputed(newAnalysis, oldAnalysis);
+
+            expect(action.action).toBe(ACTION_TYPES.REBUILD_TABLE);
+            expect(sm.getState().panel).toBe(PANEL_STATES.SHOWING_TABLE);
+            expect(sm.getState().lastCycleIndex).toBeNull();
         });
 
         it('should return REBUILD_TABLE when structure changes', () => {

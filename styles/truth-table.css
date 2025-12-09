@@ -235,12 +235,12 @@
 }
 
 /* ===== Progress Indicator ===== */
+/* NOTE: Progress is appended to .truth-table-panel (not #truthTableContent)
+   because Tabulator clears the content element when it initializes.
+   We use inset: 0 to cover the entire panel as an overlay. */
 .truth-table-progress {
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    inset: 0;
     background: var(--bg-white);
     display: flex;
     flex-direction: column;
@@ -249,6 +249,7 @@
     gap: 12px;
     z-index: 10;
     padding: 20px;
+    border-radius: var(--border-radius-lg);
 }
 
 .truth-table-progress .progress-text {
@@ -285,7 +286,7 @@
 }
 
 .dark-mode .truth-table-progress .progress-text {
-    color: var(--text-light);
+    color: #fbbf24; /* Amber-400 - stands out in dark mode */
 }
 
 .dark-mode .truth-table-progress .progress-bar-container {
@@ -293,5 +294,56 @@
 }
 
 .dark-mode .truth-table-progress .progress-detail {
-    color: var(--text-muted);
+    color: #fcd34d; /* Amber-300 - lighter shade for detail text */
+}
+
+/* ===== Rendering Spinner ===== */
+/* NOTE: Spinner is appended to .truth-table-panel (not #truthTableContent)
+   because Tabulator clears the content element when it initializes.
+   We use inset: 0 to cover the entire panel as an overlay. */
+.truth-table-rendering {
+    position: absolute;
+    inset: 0;
+    background: var(--bg-white);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    gap: 12px;
+    z-index: 10;
+    border-radius: var(--border-radius-lg);
+}
+
+.rendering-spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid var(--border-color);
+    border-top-color: var(--color-primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.rendering-text {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Dark mode adjustments for rendering spinner */
+.dark-mode .truth-table-rendering {
+    background: var(--bg-dark);
+}
+
+.dark-mode .rendering-spinner {
+    border-color: var(--bg-darker);
+    border-top-color: var(--color-primary);
+}
+
+.dark-mode .rendering-text {
+    color: #fbbf24; /* Amber-400 - stands out in dark mode */
 }

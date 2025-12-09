@@ -304,7 +304,20 @@ export class TruthTablePanelStateMachine {
             return { action: ACTION_TYPES.NONE };
         }
 
-        // Panel is visible - determine update strategy
+        // Check structure change FIRST - applies to ALL visible states
+        // This must happen before state-specific logic to ensure REBUILD_TABLE
+        // is returned when structure changes, regardless of current panel state
+        const structureChanged = !oldAnalysis ||
+            analysis.inputs.length !== oldAnalysis.inputs.length ||
+            analysis.outputs.length !== oldAnalysis.outputs.length;
+
+        if (structureChanged) {
+            this._state.panel = PANEL_STATES.SHOWING_TABLE;
+            this._state.lastCycleIndex = null;
+            return { action: ACTION_TYPES.REBUILD_TABLE };
+        }
+
+        // No structure change - determine state-specific action
         const panelState = this._state.panel;
 
         // If showing computing or invalid, transition to showing table
@@ -314,7 +327,6 @@ export class TruthTablePanelStateMachine {
             panelState === PANEL_STATES.VISIBLE_INVALID) {
 
             this._state.panel = PANEL_STATES.SHOWING_TABLE;
-            // Clear lastCycleIndex since table structure may have changed
             this._state.lastCycleIndex = null;
             return { action: ACTION_TYPES.RENDER_TABLE };
         }
@@ -322,18 +334,6 @@ export class TruthTablePanelStateMachine {
         // If showing table or visible table, determine update type
         if (panelState === PANEL_STATES.SHOWING_TABLE ||
             panelState === PANEL_STATES.VISIBLE_TABLE) {
-
-            // Check for structure change
-            const structureChanged = !oldAnalysis ||
-                analysis.inputs.length !== oldAnalysis.inputs.length ||
-                analysis.outputs.length !== oldAnalysis.outputs.length;
-
-            if (structureChanged) {
-                this._state.panel = PANEL_STATES.SHOWING_TABLE;
-                // Clear lastCycleIndex since structure changed
-                this._state.lastCycleIndex = null;
-                return { action: ACTION_TYPES.REBUILD_TABLE };
-            }
 
             // Check for label changes
             const labelsChanged = oldAnalysis && (

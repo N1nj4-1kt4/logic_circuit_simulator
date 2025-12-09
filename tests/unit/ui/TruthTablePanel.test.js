@@ -52,9 +52,23 @@ const createMockDOM = () => {
         style: {},
         getAttribute: vi.fn().mockReturnValue('0'),
         setAttribute: vi.fn(),
-        querySelector: vi.fn().mockReturnValue({
-            offsetHeight: 30,
-            classList: { add: vi.fn(), remove: vi.fn() }
+        appendChild: vi.fn(),
+        querySelector: vi.fn((selector) => {
+            // Progress and spinner overlays need remove() method
+            if (selector === '.truth-table-progress' || selector === '.truth-table-rendering') {
+                return null; // Return null by default (not present)
+            }
+            // Panel header mock
+            if (selector === '.panel-header') {
+                return {
+                    offsetHeight: 30,
+                    classList: { add: vi.fn(), remove: vi.fn() }
+                };
+            }
+            return {
+                offsetHeight: 30,
+                classList: { add: vi.fn(), remove: vi.fn() }
+            };
         }),
         offsetHeight: 300,
         offsetWidth: 400
