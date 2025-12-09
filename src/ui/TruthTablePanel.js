@@ -745,8 +745,12 @@ export class TruthTablePanel {
 
                 // Release preserved dimensions AFTER height/width applied
                 // This ensures Tabulator's virtual rendering has stable container dimensions
-                if (preservedDimensions) {
+                // Only clear dimensions if we restored saved values (not when auto-fitting)
+                // Otherwise the auto-fitted width/height gets lost
+                if (preservedDimensions && hasValidSavedWidth) {
                     this.panel.style.width = '';
+                }
+                if (preservedDimensions && hasValidSavedHeight) {
                     this.panel.style.height = '';
                 }
 
