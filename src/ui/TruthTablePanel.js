@@ -706,12 +706,6 @@ export class TruthTablePanel {
                 // Hide rendering spinner now that table is ready
                 this._hideRenderingSpinner();
 
-                // Release preserved dimensions - let table auto-fit to new content
-                if (preservedDimensions) {
-                    this.panel.style.width = '';
-                    this.panel.style.height = '';
-                }
-
                 // Listen for column reorder (save state when user drags columns)
                 this.tabulatorInstance.on('columnMoved', () => {
                     this._saveState();
@@ -722,6 +716,8 @@ export class TruthTablePanel {
 
                 // Apply height to Tabulator after table is built
                 // Calculate from panel dimensions for accuracy
+                // IMPORTANT: Do this BEFORE releasing preserved dimensions so Tabulator
+                // has stable container dimensions for virtual rendering calculations
                 const panelHeader = this.panel.querySelector('.panel-header');
                 const headerHeight = panelHeader ? panelHeader.offsetHeight : 0;
                 const panelStyles = getComputedStyle(this.panel);
@@ -743,6 +739,13 @@ export class TruthTablePanel {
                 // Fit width if no saved width
                 if (!hasValidSavedWidth) {
                     this._applyTableWidth();
+                }
+
+                // Release preserved dimensions AFTER height/width applied
+                // This ensures Tabulator's virtual rendering has stable container dimensions
+                if (preservedDimensions) {
+                    this.panel.style.width = '';
+                    this.panel.style.height = '';
                 }
 
                 // Save state after showing the panel
