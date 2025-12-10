@@ -1073,9 +1073,10 @@ export class TruthTablePanel {
      *
      * @param {Object} options - Options object
      * @param {boolean} options.fitPanel - If true, resize the panel to fit content
+     * @param {boolean} options.preserveRowHeight - If true (default), use saved rowHeight when available
      * @private
      */
-    _ensureTableHeight({ fitPanel = false } = {}) {
+    _ensureTableHeight({ fitPanel = false, preserveRowHeight = true } = {}) {
         if (!this.panel || !this.tabulatorInstance) return;
 
         const panelHeader = this.panel.querySelector('.panel-header');
@@ -1087,7 +1088,15 @@ export class TruthTablePanel {
         const availableHeight = panelHeight - headerHeight - paddingTop - paddingBottom;
 
         if (availableHeight > 0) {
-            this._applyTableHeight(availableHeight, { fitPanel });
+            const options = { fitPanel };
+
+            // Preserve saved row height when panel has saved dimensions
+            // This ensures user's row height preference persists across show/hide cycles
+            if (preserveRowHeight && this.state?.rowHeight && this.state?.height) {
+                options.targetRowHeight = this.state.rowHeight;
+            }
+
+            this._applyTableHeight(availableHeight, options);
         }
     }
 
@@ -1602,6 +1611,17 @@ export class TruthTablePanel {
         if (action.action === ACTION_TYPES.NONE) {
             // Pre-action: Make panel visible
             this._revealPanel();
+
+            // Restore saved geometry when transitioning from hidden to visible
+            if (!wasVisible && this.state) {
+                this._restoreSavedPosition();
+                if (this.state.width && this.state.width !== '') {
+                    this.panel.style.width = this.state.width;
+                }
+                if (this.state.height && this.state.height !== '') {
+                    this.panel.style.height = this.state.height;
+                }
+            }
 
             // Dispatch: Rebuild Tabulator for proper virtual DOM rendering
             // Tabulator's virtual DOM doesn't properly rerender after display:none,
