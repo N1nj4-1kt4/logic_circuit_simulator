@@ -51,6 +51,7 @@ export class AutoSaveManager {
         // Listen to all events that modify board state
         eventBus.on(EVENT_TYPES.BOARD_CHANGED, this.debouncedSave);
         eventBus.on(EVENT_TYPES.BOARD_LOADED, this.debouncedSave);
+        eventBus.on(EVENT_TYPES.COMPONENT_LABEL_CHANGED, this.debouncedSave);
         eventBus.on(EVENT_TYPES.TRUTH_TABLE_PANEL_STATE_CHANGED, this.debouncedSave);
         eventBus.on(EVENT_TYPES.THEME_CHANGED, this.debouncedSave);
 

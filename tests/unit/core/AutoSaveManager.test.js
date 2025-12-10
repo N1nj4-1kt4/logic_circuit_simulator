@@ -129,6 +129,21 @@ describe('AutoSaveManager', () => {
             );
         });
 
+        it('saves board state on COMPONENT_LABEL_CHANGED event after debounce', async () => {
+            eventBus.emit(EVENT_TYPES.COMPONENT_LABEL_CHANGED, {
+                component: { id: 1, type: 'INPUT', label: 'NewLabel' },
+                oldLabel: 'OldLabel',
+                newLabel: 'NewLabel'
+            });
+
+            vi.advanceTimersByTime(1500);
+
+            expect(mockStorage.setItem).toHaveBeenCalledWith(
+                'currentBoard',
+                expect.any(String)
+            );
+        });
+
         it('debounces rapid changes', async () => {
             // Emit multiple rapid changes
             eventBus.emit(EVENT_TYPES.BOARD_CHANGED);

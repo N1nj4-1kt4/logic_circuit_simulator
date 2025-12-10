@@ -343,6 +343,9 @@ User renames component via right-click menu
                     ├─► UndoRedoManager
                     │   captures state for undo
                     │
+                    ├─► AutoSaveManager (debounced)
+                    │   persists label change to localStorage
+                    │
                     └─► CircuitAnalysisManager._handleLabelChanged()
                             │
                             ├─► Does NOT trigger full recomputation
@@ -362,6 +365,7 @@ User renames component via right-click menu
 - NO `CIRCUIT_VALIDITY_CHANGED` (validity unchanged)
 - NO full analysis recomputation (label is metadata only)
 - Direct patch to existing analysis
+- AutoSaveManager listens to `COMPONENT_LABEL_CHANGED` directly for persistence
 
 ### 3.4 Undo/Redo Operations
 
@@ -864,7 +868,7 @@ _CHANGED           _COMPUTED           _COMPLETED
 | **TruthTablePanel** | `SIMULATION_STEP_COMPLETED`, `CIRCUIT_VALIDITY_CHANGED`, `CIRCUIT_ANALYSIS_COMPUTING`, `CIRCUIT_ANALYSIS_COMPUTED` |
 | **Toolbar** | `TOOLBAR_UPDATE_DISPLAYS`, `AUTOCYCLE_STATE_CHANGED`, `SIMULATION_STEP_COMPLETED`, `CONNECTION_START_CHANGED`, `UNDO_REDO_STATE_CHANGED` |
 | **UndoRedoManager** | `COMPONENT_ADDED`, `COMPONENT_REMOVED`, `COMPONENT_MOVED`, `COMPONENT_LABEL_CHANGED`, `CONNECTION_ADDED`, `CONNECTION_REMOVED`, `BOARD_WILL_CLEAR`, `DRAG_STARTED`, `DRAG_ENDED` |
-| **AutoSaveManager** | `BOARD_CHANGED`, `BOARD_LOADED`, `TRUTH_TABLE_PANEL_STATE_CHANGED`, `THEME_CHANGED`, `BOARD_CLEARED` |
+| **AutoSaveManager** | `BOARD_CHANGED`, `BOARD_LOADED`, `COMPONENT_LABEL_CHANGED`, `TRUTH_TABLE_PANEL_STATE_CHANGED`, `THEME_CHANGED`, `BOARD_CLEARED` |
 | **CanvasRenderer** | `CANVAS_REDRAW` |
 
 ### What Each Module Emits

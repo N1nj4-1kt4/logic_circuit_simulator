@@ -4,6 +4,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { DialogManager } from '../../../src/ui/DialogManager.js';
+import { eventBus, EVENT_TYPES } from '../../../src/utils/eventBus.js';
 
 // Mock DialogFactory
 vi.mock('../../../src/ui/DialogFactory.js', () => ({
@@ -364,6 +365,77 @@ describe('DialogManager', () => {
             expect(formContentCall.buttons).toHaveLength(2);
             expect(formContentCall.buttons.find(b => b.id === 'confirmSave')).toBeDefined();
             expect(formContentCall.buttons.find(b => b.id === 'cancelSave')).toBeDefined();
+        });
+    });
+
+    describe('confirmRename', () => {
+        let labelChangedHandler;
+
+        beforeEach(() => {
+            // Add onRenameComplete callback
+            mockCallbacks.onRenameComplete = vi.fn();
+
+            dialogManager.init();
+            labelChangedHandler = vi.fn();
+            eventBus.on(EVENT_TYPES.COMPONENT_LABEL_CHANGED, labelChangedHandler);
+
+            // Setup rename dialog mock
+            dialogManager.dialogs.rename = document.createElement('div');
+
+            // Setup input element mock
+            mockDOM.elements['newComponentLabel'] = {
+                value: 'NewLabel',
+                addEventListener: vi.fn()
+            };
+        });
+
+        afterEach(() => {
+            eventBus.off(EVENT_TYPES.COMPONENT_LABEL_CHANGED, labelChangedHandler);
+        });
+
+        it('emits COMPONENT_LABEL_CHANGED event when label is changed', () => {
+            const component = { id: 1, type: 'INPUT', label: 'OldLabel' };
+            dialogManager.state.renameTarget = component;
+
+            dialogManager.confirmRename();
+
+            expect(labelChangedHandler).toHaveBeenCalledWith({
+                component,
+                oldLabel: 'OldLabel',
+                newLabel: 'NewLabel'
+            });
+        });
+
+        it('updates component label directly', () => {
+            const component = { id: 1, type: 'INPUT', label: 'OldLabel' };
+            dialogManager.state.renameTarget = component;
+
+            dialogManager.confirmRename();
+
+            expect(component.label).toBe('NewLabel');
+        });
+
+        it('shows warning when label is empty', () => {
+            mockDOM.elements['newComponentLabel'].value = '   ';
+            const component = { id: 1, type: 'INPUT', label: 'OldLabel' };
+            dialogManager.state.renameTarget = component;
+
+            dialogManager.confirmRename();
+
+            expect(DialogFactory.showAlert).toHaveBeenCalledWith({
+                message: expect.any(String),
+                type: 'warning'
+            });
+            expect(labelChangedHandler).not.toHaveBeenCalled();
+        });
+
+        it('clears rename target after successful rename', () => {
+            const component = { id: 1, type: 'INPUT', label: 'OldLabel' };
+            dialogManager.state.renameTarget = component;
+
+            dialogManager.confirmRename();
+
+            expect(dialogManager.state.renameTarget).toBeNull();
         });
     });
 });
