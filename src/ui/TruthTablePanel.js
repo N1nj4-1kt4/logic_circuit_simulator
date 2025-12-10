@@ -380,6 +380,7 @@ export class TruthTablePanel {
                 if (this.state) {
                     this.state.height = '';
                     this.state.width = '';
+                    this.state.rowHeight = null;
                 }
                 await this._renderQueue.enqueue(() => this._safeRenderTable());
                 this._setupInteractions();
@@ -629,6 +630,7 @@ export class TruthTablePanel {
             if (currentColumnCount !== savedColumnCount) {
                 this.state.width = '';
                 this.state.height = '';
+                this.state.rowHeight = null;
                 this.panel.style.width = '';
                 this.panel.style.height = '';
                 // Column order is preserved - merge logic handles structure changes
@@ -751,10 +753,25 @@ export class TruthTablePanel {
                 // Fit panel when: no saved size state (new board or first open)
                 const hasValidSavedHeight = this.state && this.state.height && this.state.height !== '';
                 const hasValidSavedWidth = this.state && this.state.width && this.state.width !== '';
+                const savedRowHeight = this.state?.rowHeight;
+
+                logger.debug('[TruthTablePanel] tableBuilt - state:', {
+                    hasValidSavedHeight,
+                    savedRowHeight,
+                    panelHeight: this.panel.offsetHeight
+                });
 
                 // Fit height if no saved height
                 if (availableHeight > 0) {
-                    this._applyTableHeight(availableHeight, { fitPanel: !hasValidSavedHeight });
+                    if (hasValidSavedHeight && savedRowHeight) {
+                        // Restore saved row height instead of recalculating
+                        this._applyTableHeight(availableHeight, {
+                            fitPanel: false,
+                            targetRowHeight: savedRowHeight
+                        });
+                    } else {
+                        this._applyTableHeight(availableHeight, { fitPanel: !hasValidSavedHeight });
+                    }
                 }
 
                 // Fit width if no saved width
@@ -929,9 +946,10 @@ export class TruthTablePanel {
      * @param {number} availableHeight - Maximum available height for the table content
      * @param {Object} options - Options object
      * @param {boolean} options.fitPanel - If true, resize the panel to fit content
+     * @param {number|null} options.targetRowHeight - If provided, use this row height instead of calculating
      * @private
      */
-    _applyTableHeight(availableHeight, { fitPanel = false } = {}) {
+    _applyTableHeight(availableHeight, { fitPanel = false, targetRowHeight = null } = {}) {
         if (!this.tabulatorInstance) return;
 
         const content = document.getElementById('truthTableContent');
@@ -959,7 +977,11 @@ export class TruthTablePanel {
             const minRowHeight = 25;
             const maxRowHeight = 36;
 
-            if (fitPanel) {
+            if (targetRowHeight !== null) {
+                // Use provided target row height (from saved state)
+                rowHeight = Math.max(minRowHeight, Math.min(maxRowHeight, targetRowHeight));
+                logger.debug('[TruthTablePanel] _applyTableHeight - using targetRowHeight:', targetRowHeight);
+            } else if (fitPanel) {
                 // When fitting panel to content, use max row height for optimal display
                 rowHeight = maxRowHeight;
             } else if (rowAreaHeight > 0) {
@@ -968,6 +990,9 @@ export class TruthTablePanel {
                 rowHeight = Math.max(minRowHeight, Math.min(maxRowHeight, calculatedHeight));
             }
 
+            // Store current row height for state persistence
+            this._currentRowHeight = rowHeight;
+
             // Calculate actual content height
             const neededHeight = rowCount * rowHeight;
             // When fitting panel, expand to needed height; otherwise constrain to available
@@ -975,6 +1000,8 @@ export class TruthTablePanel {
 
             // Apply row height via CSS on the rows and cells
             this._applyRowStyles(content, rowHeight);
+
+            logger.debug('[TruthTablePanel] _applyTableHeight - applied rowHeight:', rowHeight, 'rowCount:', rowCount);
         }
 
         // Calculate actual total height needed (header + rows)
@@ -1224,13 +1251,14 @@ export class TruthTablePanel {
             columnOrder: columns,
             width: width,
             height: height,
+            rowHeight: this._currentRowHeight || null,
             x: x,
             y: y,
             visible: this.panel.style.opacity !== '0',
             highlightedRow: stateMachineState.lastCycleIndex
         };
 
-        logger.debug('[TruthTablePanel] _saveState - saving state:', JSON.stringify(this.state));
+        logger.debug('[TruthTablePanel] _saveState - saving state:', JSON.stringify(this.state), 'rowHeight:', this._currentRowHeight);
 
         // Trigger callback to save to localStorage
         if (this.onStateChange) {
