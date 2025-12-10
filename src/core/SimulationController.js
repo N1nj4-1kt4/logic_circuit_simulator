@@ -10,6 +10,7 @@ import { eventBus, EVENT_TYPES } from '../utils/eventBus.js';
 import { simulateCircuit } from './circuitEvaluator.js';
 import { TIMING } from '../constants.js';
 import { InvalidCircuitError } from './errors.js';
+import { logger } from '../utils/logger.js';
 
 /**
  * Simulation states
@@ -181,8 +182,13 @@ export class SimulationController {
      * Emits SIMULATION_STEP_COMPLETED for truth table row highlighting
      */
     onToggleInput() {
+        const inputs = this._getInputs();
+        logger.debug('[SimulationController] onToggleInput - INPUT values:', JSON.stringify(inputs.map(i => ({ id: i.id, label: i.label, value: i.value }))));
+
         this.cycleIndex = this._calculateIndexFromInputs();
-        this.totalCombinations = Math.pow(2, this._getInputs().length);
+        this.totalCombinations = Math.pow(2, inputs.length);
+
+        logger.debug('[SimulationController] onToggleInput - calculated cycleIndex:', this.cycleIndex, 'totalCombinations:', this.totalCombinations);
 
         // Simulate (inputs already set by caller)
         this._simulateAndEmit();
@@ -328,11 +334,14 @@ export class SimulationController {
      */
     _restoreFromCacheOrSimulate(cycleIndex, components) {
         const cache = this.circuitState.getCircuitAnalysis();
+        logger.debug('[SimulationController] _restoreFromCacheOrSimulate - cycleIndex:', cycleIndex, 'cache exists:', !!cache, 'cache.isValid:', cache?.isValid, 'cache.table exists:', !!cache?.table, 'row exists:', !!cache?.table?.[cycleIndex]);
+
         if (cache && cache.isValid && cache.table && cache.table[cycleIndex]) {
             const row = cache.table[cycleIndex];
 
             // Restore ALL component values from cache
             if (row.componentValues) {
+                logger.debug('[SimulationController] _restoreFromCacheOrSimulate - Restoring from cache, row.componentValues:', row.componentValues);
                 components.forEach(comp => {
                     const cached = row.componentValues[comp.id];
                     if (cached) {
@@ -348,6 +357,7 @@ export class SimulationController {
             return true;
         } else {
             // Fallback to full simulation
+            logger.debug('[SimulationController] _restoreFromCacheOrSimulate - Falling back to full simulation');
             this._simulate();
             return false;
         }
@@ -358,10 +368,17 @@ export class SimulationController {
      * @private
      */
     _simulate() {
+        const components = this.circuitState.getComponents();
+        const inputs = components.filter(c => c.type === 'INPUT');
+        logger.debug('[SimulationController] _simulate - INPUT values before simulateCircuit:', JSON.stringify(inputs.map(i => ({ id: i.id, label: i.label, value: i.value }))));
+
         simulateCircuit(
-            this.circuitState.getComponents(),
+            components,
             this.circuitState.getConnections()
         );
+
+        logger.debug('[SimulationController] _simulate - INPUT values after simulateCircuit:', JSON.stringify(inputs.map(i => ({ id: i.id, label: i.label, value: i.value }))));
+
         eventBus.emit(EVENT_TYPES.CANVAS_REDRAW);
     }
 

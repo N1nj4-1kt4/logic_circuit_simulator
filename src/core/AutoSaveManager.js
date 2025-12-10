@@ -7,6 +7,7 @@
 
 import { eventBus, EVENT_TYPES } from '../utils/eventBus.js';
 import { captureCircuitSnapshot } from '../utils/stateSnapshot.js';
+import { logger } from '../utils/logger.js';
 
 export class AutoSaveManager {
     /**
@@ -33,7 +34,8 @@ export class AutoSaveManager {
      */
     setupAutoSave() {
         // Create debounced save handler
-        this.debouncedSave = () => {
+        this.debouncedSave = (eventName) => {
+            logger.debug('[AutoSaveManager] debouncedSave triggered by event:', eventName);
             // Clear existing timer
             if (this.autoSaveTimer) {
                 clearTimeout(this.autoSaveTimer);
@@ -41,6 +43,7 @@ export class AutoSaveManager {
 
             // Set new timer
             this.autoSaveTimer = setTimeout(async () => {
+                logger.debug('[AutoSaveManager] debouncedSave timer fired, calling saveBoardState');
                 await this.saveBoardState();
             }, this.autoSaveDelay);
         };
@@ -50,6 +53,10 @@ export class AutoSaveManager {
         eventBus.on(EVENT_TYPES.BOARD_LOADED, this.debouncedSave);
         eventBus.on(EVENT_TYPES.TRUTH_TABLE_PANEL_STATE_CHANGED, this.debouncedSave);
         eventBus.on(EVENT_TYPES.THEME_CHANGED, this.debouncedSave);
+
+        // Listen to simulation step completion to persist input values
+        // This ensures circuit state is saved when user steps through combinations
+        eventBus.on(EVENT_TYPES.SIMULATION_STEP_COMPLETED, this.debouncedSave);
 
         // When board is cleared, save immediately (no debounce) to persist the cleared state
         // This preserves lastSavedState so user can still revert to the saved version
@@ -74,6 +81,7 @@ export class AutoSaveManager {
             eventBus.off(EVENT_TYPES.BOARD_LOADED, this.debouncedSave);
             eventBus.off(EVENT_TYPES.TRUTH_TABLE_PANEL_STATE_CHANGED, this.debouncedSave);
             eventBus.off(EVENT_TYPES.THEME_CHANGED, this.debouncedSave);
+            eventBus.off(EVENT_TYPES.SIMULATION_STEP_COMPLETED, this.debouncedSave);
         }
 
         if (this.handleBoardCleared) {
@@ -100,6 +108,10 @@ export class AutoSaveManager {
             lastSavedState: this.state.getLastSavedState()
         };
 
+        // DEBUG: Log input component values being saved
+        const inputs = boardData.components.filter(c => c.type === 'INPUT');
+        logger.debug('[AutoSaveManager] saveBoardState - INPUT values:', JSON.stringify(inputs.map(i => ({ id: i.id, label: i.label, value: i.value }))));
+
         try {
             await this.storage.setItem('currentBoard', JSON.stringify(boardData));
         } catch (error) {
@@ -119,6 +131,10 @@ export class AutoSaveManager {
             if (savedState) {
                 const boardData = JSON.parse(savedState);
 
+                // DEBUG: Log input component values being loaded
+                const inputs = (boardData.components || []).filter(c => c.type === 'INPUT');
+                logger.debug('[AutoSaveManager] loadBoardState - INPUT values from storage:', JSON.stringify(inputs.map(i => ({ id: i.id, label: i.label, value: i.value }))));
+
                 // Load working state
                 this.state.loadState({
                     components: boardData.components || [],
@@ -126,6 +142,10 @@ export class AutoSaveManager {
                     nextId: (boardData.nextId || 0) + 1,
                     customComponents: boardData.customComponents || {}
                 });
+
+                // DEBUG: Log input values after loadState
+                const loadedInputs = this.state.getComponents().filter(c => c.type === 'INPUT');
+                logger.debug('[AutoSaveManager] loadBoardState - INPUT values after loadState:', JSON.stringify(loadedInputs.map(i => ({ id: i.id, label: i.label, value: i.value }))));
 
                 // Restore current board/component names
                 this.state.setCurrentBoardName(boardData.currentBoardName || null);

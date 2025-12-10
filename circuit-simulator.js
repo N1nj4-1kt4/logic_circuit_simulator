@@ -15,6 +15,7 @@ import {
 } from './src/constants.js';
 
 import { eventBus, EVENT_TYPES } from './src/utils/eventBus.js';
+import { logger } from './src/utils/logger.js';
 
 import { findComponentAt, findPortAt, findConnectionAt, snapToGrid } from './src/utils/hitDetection.js';
 import { generateNextBoardName } from './src/utils/naming.js';
@@ -252,6 +253,23 @@ class CircuitSimulator {
         this.canvasRenderer.updateComponents(this.state.getComponents());
         this.canvasRenderer.updateConnections(this.state.getConnections());
         this.canvasRenderer.render();
+
+        // After loading, run simulation to restore circuit state from saved input values
+        const components = this.state.getComponents();
+        const inputs = components.filter(c => c.type === 'INPUT');
+        logger.debug('[CircuitSimulator] init - INPUT values before simulation:', JSON.stringify(inputs.map(i => ({ id: i.id, label: i.label, value: i.value }))));
+
+        const hasInputs = inputs.length > 0;
+        if (hasInputs && components.length > 0) {
+            logger.debug('[CircuitSimulator] init - Running simulation to restore circuit state');
+            this.simulationController.onToggleInput();
+
+            // DEBUG: Log input values after simulation
+            const inputsAfter = this.state.getComponents().filter(c => c.type === 'INPUT');
+            logger.debug('[CircuitSimulator] init - INPUT values after simulation:', JSON.stringify(inputsAfter.map(i => ({ id: i.id, label: i.label, value: i.value }))));
+        } else {
+            logger.debug('[CircuitSimulator] init - No inputs found, skipping simulation');
+        }
 
         // Restore truth table if it was visible
         const truthTablePanelState = this.state.getTruthTablePanelState();
