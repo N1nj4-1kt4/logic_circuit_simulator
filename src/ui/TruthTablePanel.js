@@ -1516,15 +1516,36 @@ export class TruthTablePanel {
                         renderVertical: 'virtual',
                     });
 
-                    // Re-setup interactions after rebuild
-                    this._setupInteractions();
+                    // Wait for tableBuilt before highlighting and setup
+                    // Tabulator uses async initialization; rows aren't available until tableBuilt fires
+                    await new Promise((resolve) => {
+                        this.tabulatorInstance.on('tableBuilt', () => {
+                            // Re-setup interactions after rebuild
+                            this._setupInteractions();
+
+                            // Update highlight using tracked cycle index
+                            const state = this._stateMachine.getState();
+                            if (state.lastCycleIndex !== null) {
+                                this._highlightRowByIndex(state.lastCycleIndex);
+                            }
+
+                            resolve();
+                        });
+                    });
+
+                    eventBus.emit(EVENT_TYPES.TRUTH_TABLE_SHOWN);
+                    return;
                 }
             }
 
-            // Update highlight
-            const state = this._stateMachine.getState();
-            if (state.lastCycleIndex !== null && this.tabulatorInstance) {
-                this._highlightRowByIndex(state.lastCycleIndex);
+            // Fallback: Tabulator exists but couldn't rebuild (no content element)
+            // Or: no Tabulator instance at all
+            // Update highlight if we have an existing Tabulator instance
+            if (this.tabulatorInstance) {
+                const state = this._stateMachine.getState();
+                if (state.lastCycleIndex !== null) {
+                    this._highlightRowByIndex(state.lastCycleIndex);
+                }
             }
 
             eventBus.emit(EVENT_TYPES.TRUTH_TABLE_SHOWN);

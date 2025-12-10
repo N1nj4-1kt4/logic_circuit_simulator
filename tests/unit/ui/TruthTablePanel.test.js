@@ -2935,5 +2935,128 @@ describe('TruthTablePanel', () => {
                 expect(renderCount).toBe(2);
             });
         });
+
+        describe('Row highlighting after show() with hidden panel', () => {
+            it('should highlight correct row when panel was hidden during simulation step (fallback path)', async () => {
+                const validCache = createValidCache();
+                const circuitState = createMockCircuitState(validCache);
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                // Mark as initialized
+                panel._initialized = true;
+                panel.panel = mockDOM.panelEl;
+                panel.circuitAnalysis = validCache;
+
+                // Simulate hidden panel receiving step event (sets lastCycleIndex)
+                // This mimics what happens when simulation steps while panel is hidden
+                panel._stateMachine.handleStepCompleted({ cycleIndex: 2 });
+
+                // Verify lastCycleIndex was saved
+                expect(panel._stateMachine.getState().lastCycleIndex).toBe(2);
+
+                // Setup: panel exists with tabulatorInstance
+                const mockRows = [
+                    { select: vi.fn(), scrollTo: vi.fn() },
+                    { select: vi.fn(), scrollTo: vi.fn() },
+                    { select: vi.fn(), scrollTo: vi.fn() },
+                    { select: vi.fn(), scrollTo: vi.fn() }
+                ];
+
+                panel.tabulatorInstance = {
+                    destroy: vi.fn(),
+                    on: vi.fn(),
+                    getRows: vi.fn().mockReturnValue(mockRows),
+                    deselectRow: vi.fn()
+                };
+
+                // Mock getElementById to return null for truthTableContent to use fallback path
+                // (fallback path = existing Tabulator, no rebuild, direct highlight)
+                const originalGetById = document.getElementById;
+                document.getElementById = vi.fn((id) => {
+                    if (id === 'truthTableContent') return null;
+                    return originalGetById?.(id);
+                });
+
+                // Make state machine return NONE
+                vi.spyOn(panel._stateMachine, 'handleShow').mockReturnValue({ action: 'NONE' });
+                vi.spyOn(panel._stateMachine, 'getState').mockReturnValue({
+                    panel: 'visible_table',
+                    lastCycleIndex: 2
+                });
+
+                // Spy on highlight method
+                const highlightSpy = vi.spyOn(panel, '_highlightRowByIndex');
+
+                await panel.show();
+
+                // Restore
+                document.getElementById = originalGetById;
+
+                // Should have called highlight with the tracked cycle index
+                expect(highlightSpy).toHaveBeenCalledWith(2);
+            });
+
+            it('should not highlight if lastCycleIndex is null when panel shown (fallback path)', async () => {
+                const validCache = createValidCache();
+                const circuitState = createMockCircuitState(validCache);
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                // Mark as initialized
+                panel._initialized = true;
+                panel.panel = mockDOM.panelEl;
+                panel.circuitAnalysis = validCache;
+
+                // No simulation step occurred (lastCycleIndex is null)
+                expect(panel._stateMachine.getState().lastCycleIndex).toBe(null);
+
+                // Setup: panel exists with tabulatorInstance
+                const mockRows = [
+                    { select: vi.fn(), scrollTo: vi.fn() },
+                    { select: vi.fn(), scrollTo: vi.fn() }
+                ];
+
+                panel.tabulatorInstance = {
+                    destroy: vi.fn(),
+                    on: vi.fn(),
+                    getRows: vi.fn().mockReturnValue(mockRows),
+                    deselectRow: vi.fn()
+                };
+
+                // Mock getElementById to return null for truthTableContent to use fallback path
+                const originalGetById = document.getElementById;
+                document.getElementById = vi.fn((id) => {
+                    if (id === 'truthTableContent') return null;
+                    return originalGetById?.(id);
+                });
+
+                // Make state machine return NONE
+                vi.spyOn(panel._stateMachine, 'handleShow').mockReturnValue({ action: 'NONE' });
+                vi.spyOn(panel._stateMachine, 'getState').mockReturnValue({
+                    panel: 'visible_table',
+                    lastCycleIndex: null
+                });
+
+                // Spy on highlight method
+                const highlightSpy = vi.spyOn(panel, '_highlightRowByIndex');
+
+                await panel.show();
+
+                // Restore
+                document.getElementById = originalGetById;
+
+                // Should NOT have called highlight (lastCycleIndex is null)
+                expect(highlightSpy).not.toHaveBeenCalled();
+            });
+        });
     });
 });
