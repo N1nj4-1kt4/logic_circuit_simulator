@@ -761,15 +761,8 @@ export class TruthTablePanel {
                     this.panel.style.height = '';
                 }
 
-                // Save state after showing the panel
-                this._saveState();
-                // Override visible to true since panel is now visible
-                if (this.state) {
-                    this.state.visible = true;
-                    if (this.onStateChange) {
-                        this.onStateChange(this.state);
-                    }
-                }
+                // Save state with visible: true after showing the panel
+                this._saveVisibleState();
 
                 // Highlight current row AFTER height is applied (for proper scrollTo)
                 this._updateHighlight();
@@ -1202,6 +1195,21 @@ export class TruthTablePanel {
     }
 
     /**
+     * Save state with visible: true after panel is shown.
+     * Used by all show() paths to ensure visibility is persisted.
+     * @private
+     */
+    _saveVisibleState() {
+        this._saveState();
+        if (this.state) {
+            this.state.visible = true;
+            if (this.onStateChange) {
+                this.onStateChange(this.state);
+            }
+        }
+    }
+
+    /**
      * Restore panel state
      * @private
      */
@@ -1470,6 +1478,7 @@ export class TruthTablePanel {
             if (state.lastCycleIndex !== null) {
                 this._highlightRowByIndex(state.lastCycleIndex);
             }
+            this._saveVisibleState();
             eventBus.emit(EVENT_TYPES.TRUTH_TABLE_SHOWN);
             return;
         }
@@ -1542,6 +1551,7 @@ export class TruthTablePanel {
                                 this._highlightRowByIndex(state.lastCycleIndex);
                             }
 
+                            this._saveVisibleState();
                             resolve();
                         });
                     });
@@ -1561,6 +1571,7 @@ export class TruthTablePanel {
                 }
             }
 
+            this._saveVisibleState();
             eventBus.emit(EVENT_TYPES.TRUTH_TABLE_SHOWN);
             return;
         }

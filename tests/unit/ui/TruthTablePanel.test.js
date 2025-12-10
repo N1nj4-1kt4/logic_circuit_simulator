@@ -1174,6 +1174,245 @@ describe('TruthTablePanel', () => {
         });
     });
 
+    describe('_saveVisibleState()', () => {
+        it('should call _saveState and set visible to true', () => {
+            const circuitState = createMockCircuitState(createValidCache());
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            const mockTabulatorInstance = {
+                getColumns: vi.fn().mockReturnValue([])
+            };
+
+            panel.panel = mockDOM.panelEl;
+            panel.tabulatorInstance = mockTabulatorInstance;
+
+            // Spy on _saveState
+            const saveStateSpy = vi.spyOn(panel, '_saveState');
+
+            panel._saveVisibleState();
+
+            // Should have called _saveState
+            expect(saveStateSpy).toHaveBeenCalled();
+
+            // Should have set visible to true
+            expect(panel.state.visible).toBe(true);
+        });
+
+        it('should call onStateChange callback with visible: true', () => {
+            const circuitState = createMockCircuitState(createValidCache());
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            const mockTabulatorInstance = {
+                getColumns: vi.fn().mockReturnValue([])
+            };
+
+            panel.panel = mockDOM.panelEl;
+            panel.tabulatorInstance = mockTabulatorInstance;
+
+            // Set up onStateChange callback
+            const onStateChangeSpy = vi.fn();
+            panel.onStateChange = onStateChangeSpy;
+
+            panel._saveVisibleState();
+
+            // Should have called onStateChange with state containing visible: true
+            expect(onStateChangeSpy).toHaveBeenCalled();
+            const savedState = onStateChangeSpy.mock.calls[onStateChangeSpy.mock.calls.length - 1][0];
+            expect(savedState.visible).toBe(true);
+        });
+
+        it('should override visible: false from _saveState with visible: true', () => {
+            const circuitState = createMockCircuitState(createValidCache());
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            const mockTabulatorInstance = {
+                getColumns: vi.fn().mockReturnValue([])
+            };
+
+            panel.panel = mockDOM.panelEl;
+            panel.tabulatorInstance = mockTabulatorInstance;
+
+            // Simulate hidden panel (opacity: 0)
+            mockDOM.panelEl.style.opacity = '0';
+
+            panel._saveVisibleState();
+
+            // Despite _saveState using opacity check, visible should be overridden to true
+            expect(panel.state.visible).toBe(true);
+        });
+    });
+
+    describe('Visible state persistence after show()', () => {
+        it('should save visible: true after show() with SYNC action', async () => {
+            const validCache = createValidCache();
+            const circuitState = createMockCircuitState(validCache);
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            panel._initialized = true;
+            panel.panel = mockDOM.panelEl;
+            panel.circuitAnalysis = validCache;
+            panel.tabulatorInstance = {
+                destroy: vi.fn(),
+                on: vi.fn(),
+                getRows: vi.fn().mockReturnValue([]),
+                deselectRow: vi.fn(),
+                setData: vi.fn(),
+                getColumns: vi.fn().mockReturnValue([])
+            };
+
+            // Set up onStateChange callback
+            const onStateChangeSpy = vi.fn();
+            panel.onStateChange = onStateChangeSpy;
+
+            // Make state machine return SYNC
+            vi.spyOn(panel._stateMachine, 'handleShow').mockReturnValue({ action: 'SYNC' });
+            vi.spyOn(panel._stateMachine, 'getState').mockReturnValue({
+                panel: 'visible_table',
+                lastCycleIndex: null
+            });
+
+            // Mock _syncTabulatorWithAnalysis to avoid Tabulator constructor call
+            vi.spyOn(panel, '_syncTabulatorWithAnalysis').mockResolvedValue();
+
+            await panel.show();
+
+            // Should have saved state with visible: true
+            expect(onStateChangeSpy).toHaveBeenCalled();
+            const lastCall = onStateChangeSpy.mock.calls[onStateChangeSpy.mock.calls.length - 1][0];
+            expect(lastCall.visible).toBe(true);
+        });
+
+        it('should save visible: true after show() with NONE action (fallback path)', async () => {
+            const validCache = createValidCache();
+            const circuitState = createMockCircuitState(validCache);
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            panel._initialized = true;
+            panel.panel = mockDOM.panelEl;
+            panel.circuitAnalysis = validCache;
+            panel.tabulatorInstance = {
+                destroy: vi.fn(),
+                on: vi.fn(),
+                getRows: vi.fn().mockReturnValue([]),
+                deselectRow: vi.fn(),
+                getColumns: vi.fn().mockReturnValue([])
+            };
+
+            // Set up onStateChange callback
+            const onStateChangeSpy = vi.fn();
+            panel.onStateChange = onStateChangeSpy;
+
+            // Mock getElementById to return null for truthTableContent to trigger fallback path
+            const originalGetById = document.getElementById;
+            document.getElementById = vi.fn((id) => {
+                if (id === 'truthTableContent') return null;
+                return originalGetById?.(id);
+            });
+
+            // Make state machine return NONE
+            vi.spyOn(panel._stateMachine, 'handleShow').mockReturnValue({ action: 'NONE' });
+            vi.spyOn(panel._stateMachine, 'getState').mockReturnValue({
+                panel: 'visible_table',
+                lastCycleIndex: null
+            });
+
+            await panel.show();
+
+            // Restore
+            document.getElementById = originalGetById;
+
+            // Should have saved state with visible: true
+            expect(onStateChangeSpy).toHaveBeenCalled();
+            const lastCall = onStateChangeSpy.mock.calls[onStateChangeSpy.mock.calls.length - 1][0];
+            expect(lastCall.visible).toBe(true);
+        });
+
+        it('should persist visible: true after hide → show cycle', async () => {
+            const validCache = createValidCache();
+            const circuitState = createMockCircuitState(validCache);
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            panel._initialized = true;
+            panel.panel = mockDOM.panelEl;
+            panel.circuitAnalysis = validCache;
+            panel.tabulatorInstance = {
+                destroy: vi.fn(),
+                on: vi.fn(),
+                getRows: vi.fn().mockReturnValue([]),
+                deselectRow: vi.fn(),
+                getColumns: vi.fn().mockReturnValue([])
+            };
+
+            // Set up onStateChange callback to track all state changes
+            const stateHistory = [];
+            panel.onStateChange = (state) => {
+                stateHistory.push({ ...state });
+            };
+
+            // Mock getElementById to return null for truthTableContent to trigger fallback path
+            const originalGetById = document.getElementById;
+            document.getElementById = vi.fn((id) => {
+                if (id === 'truthTableContent') return null;
+                return originalGetById?.(id);
+            });
+
+            // Initially show sets visible: true
+            vi.spyOn(panel._stateMachine, 'handleShow').mockReturnValue({ action: 'NONE' });
+            vi.spyOn(panel._stateMachine, 'getState').mockReturnValue({
+                panel: 'visible_table',
+                lastCycleIndex: null
+            });
+            vi.spyOn(panel._stateMachine, 'handleHide').mockReturnValue({ action: 'HIDE' });
+
+            await panel.show();
+
+            // Verify visible: true was saved
+            expect(stateHistory.length).toBeGreaterThan(0);
+            expect(stateHistory[stateHistory.length - 1].visible).toBe(true);
+
+            // Now hide - should save visible: false
+            panel.hide();
+            expect(stateHistory[stateHistory.length - 1].visible).toBe(false);
+
+            // Show again - should save visible: true
+            await panel.show();
+            expect(stateHistory[stateHistory.length - 1].visible).toBe(true);
+
+            // Restore
+            document.getElementById = originalGetById;
+        });
+    });
+
     describe('Invalid Circuit Handling', () => {
         it('_setCircuitAnalysisLocalCopy() should store data for invalid circuit cache', () => {
             const invalidCache = createInvalidCache('Please add at least one gate');
@@ -1689,7 +1928,8 @@ describe('TruthTablePanel', () => {
                     { select: vi.fn(), scrollTo: vi.fn() },
                     { select: vi.fn(), scrollTo: vi.fn() }
                 ]),
-                destroy: vi.fn() // NONE action does quick rebuild which calls destroy()
+                destroy: vi.fn(), // NONE action does quick rebuild which calls destroy()
+                getColumns: vi.fn().mockReturnValue([])
             };
             panel.circuitAnalysis = validCache;
 
@@ -1741,7 +1981,8 @@ describe('TruthTablePanel', () => {
             panel.tabulatorInstance = {
                 deselectRow: vi.fn(),
                 getRows: vi.fn().mockReturnValue([]),
-                destroy: vi.fn() // NONE action does quick rebuild which calls destroy()
+                destroy: vi.fn(), // NONE action does quick rebuild which calls destroy()
+                getColumns: vi.fn().mockReturnValue([])
             };
             panel.circuitAnalysis = validCache;
 
@@ -2590,7 +2831,8 @@ describe('TruthTablePanel', () => {
                     getRows: vi.fn().mockReturnValue([
                         { select: vi.fn(), scrollTo: vi.fn() },
                         { select: vi.fn(), scrollTo: vi.fn() }
-                    ])
+                    ]),
+                    getColumns: vi.fn().mockReturnValue([])
                 };
 
                 vi.spyOn(panel._stateMachine, 'handleShow').mockReturnValue({ action: 'SYNC' });
@@ -2971,7 +3213,8 @@ describe('TruthTablePanel', () => {
                     destroy: vi.fn(),
                     on: vi.fn(),
                     getRows: vi.fn().mockReturnValue(mockRows),
-                    deselectRow: vi.fn()
+                    deselectRow: vi.fn(),
+                    getColumns: vi.fn().mockReturnValue([])
                 };
 
                 // Mock getElementById to return null for truthTableContent to use fallback path
@@ -3029,7 +3272,8 @@ describe('TruthTablePanel', () => {
                     destroy: vi.fn(),
                     on: vi.fn(),
                     getRows: vi.fn().mockReturnValue(mockRows),
-                    deselectRow: vi.fn()
+                    deselectRow: vi.fn(),
+                    getColumns: vi.fn().mockReturnValue([])
                 };
 
                 // Mock getElementById to return null for truthTableContent to use fallback path
