@@ -436,8 +436,15 @@ export class TruthTablePanel {
      */
     _hidePanel() {
         if (!this.panel) return;
-        // Save state BEFORE hiding
+        // Save state BEFORE hiding (captures position, size, columns)
         this._saveState();
+        // Override visible to false since we're hiding
+        if (this.state) {
+            this.state.visible = false;
+            if (this.onStateChange) {
+                this.onStateChange(this.state);
+            }
+        }
         this.panel.style.display = 'none';
         this.panel.classList.add('hidden');
     }
@@ -713,9 +720,6 @@ export class TruthTablePanel {
                     this._saveState();
                 });
 
-                // Highlight current row after table is built
-                this._updateHighlight();
-
                 // Apply height to Tabulator after table is built
                 // Calculate from panel dimensions for accuracy
                 // IMPORTANT: Do this BEFORE releasing preserved dimensions so Tabulator
@@ -745,17 +749,27 @@ export class TruthTablePanel {
 
                 // Release preserved dimensions AFTER height/width applied
                 // This ensures Tabulator's virtual rendering has stable container dimensions
-                // Only clear dimensions if we restored saved values (not when auto-fitting)
-                // Otherwise the auto-fitted width/height gets lost
-                if (preservedDimensions && hasValidSavedWidth) {
+                // Only clear dimensions when auto-fitting (no saved values)
+                // Keep saved dimensions intact to preserve user's panel size
+                if (preservedDimensions && !hasValidSavedWidth) {
                     this.panel.style.width = '';
                 }
-                if (preservedDimensions && hasValidSavedHeight) {
+                if (preservedDimensions && !hasValidSavedHeight) {
                     this.panel.style.height = '';
                 }
 
                 // Save state after showing the panel
                 this._saveState();
+                // Override visible to true since panel is now visible
+                if (this.state) {
+                    this.state.visible = true;
+                    if (this.onStateChange) {
+                        this.onStateChange(this.state);
+                    }
+                }
+
+                // Highlight current row AFTER height is applied (for proper scrollTo)
+                this._updateHighlight();
 
                 // Signal that table is ready for common post-render setup
                 resolve();
@@ -1168,7 +1182,8 @@ export class TruthTablePanel {
             height: height,
             x: x,
             y: y,
-            visible: this.panel.style.opacity !== '0'
+            visible: this.panel.style.opacity !== '0',
+            highlightedRow: this._stateMachine.getState().lastCycleIndex
         };
 
         // Trigger callback to save to localStorage
@@ -1604,6 +1619,10 @@ export class TruthTablePanel {
         this.state = sanitizedState;
         if (sanitizedState.columnOrder) {
             this.columnOrder = sanitizedState.columnOrder;
+        }
+        // Restore highlighted row to state machine for scroll position restoration
+        if (sanitizedState.highlightedRow !== undefined && sanitizedState.highlightedRow !== null) {
+            this._stateMachine.setLastCycleIndex(sanitizedState.highlightedRow);
         }
     }
 

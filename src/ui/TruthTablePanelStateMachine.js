@@ -179,6 +179,14 @@ export class TruthTablePanelStateMachine {
     }
 
     /**
+     * Set the lastCycleIndex (for restoring from persisted state)
+     * @param {number|null} index - The cycle index to restore
+     */
+    setLastCycleIndex(index) {
+        this._state.lastCycleIndex = index;
+    }
+
+    /**
      * Check if panel is in a visible state
      * @returns {boolean}
      */
