@@ -1520,6 +1520,19 @@ export class TruthTablePanel {
                     // Tabulator uses async initialization; rows aren't available until tableBuilt fires
                     await new Promise((resolve) => {
                         this.tabulatorInstance.on('tableBuilt', () => {
+                            // Apply height like _renderTabulator does
+                            const panelHeader = this.panel.querySelector('.panel-header');
+                            const headerHeight = panelHeader ? panelHeader.offsetHeight : 0;
+                            const panelStyles = getComputedStyle(this.panel);
+                            const paddingTop = parseFloat(panelStyles.paddingTop) || 0;
+                            const paddingBottom = parseFloat(panelStyles.paddingBottom) || 0;
+                            const panelHeight = this.panel.offsetHeight;
+                            const availableHeight = panelHeight - headerHeight - paddingTop - paddingBottom;
+
+                            if (availableHeight > 0) {
+                                this._applyTableHeight(availableHeight, { fitPanel: false });
+                            }
+
                             // Re-setup interactions after rebuild
                             this._setupInteractions();
 
