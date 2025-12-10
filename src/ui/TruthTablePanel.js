@@ -6,6 +6,7 @@ import { positionPanelSmartly } from '../utils/positioning.js';
 import { buildTruthTableColumns, inputValuesToIndex, estimatePanelHeight } from '../utils/truthTableUtils.js';
 import { UI, TRUTH_TABLE } from '../constants.js';
 import { eventBus, EVENT_TYPES } from '../utils/eventBus.js';
+import { logger } from '../utils/logger.js';
 import {
     TruthTablePanelStateMachine,
     RenderQueue,
@@ -187,7 +188,9 @@ export class TruthTablePanel {
      * @private
      */
     _handleStepCompleted(data) {
+        logger.debug('[TruthTablePanel] _handleStepCompleted - cycleIndex:', data.cycleIndex, 'totalCombinations:', data.totalCombinations);
         const action = this._stateMachine.handleStepCompleted(data);
+        logger.debug('[TruthTablePanel] _handleStepCompleted - action:', action);
         this._executeAction(action);
     }
 
@@ -1162,6 +1165,7 @@ export class TruthTablePanel {
      */
     _saveState() {
         if (!this.panel || !this.tabulatorInstance) {
+            logger.debug('[TruthTablePanel] _saveState - skipped, panel:', !!this.panel, 'tabulatorInstance:', !!this.tabulatorInstance);
             return;
         }
 
@@ -1176,6 +1180,9 @@ export class TruthTablePanel {
         const width = this.panel.style.width || (this.panel.offsetWidth + 'px');
         const height = this.panel.style.height || (this.panel.offsetHeight + 'px');
 
+        const stateMachineState = this._stateMachine.getState();
+        logger.debug('[TruthTablePanel] _saveState - stateMachine.lastCycleIndex:', stateMachineState.lastCycleIndex);
+
         this.state = {
             columnOrder: columns,
             width: width,
@@ -1183,8 +1190,10 @@ export class TruthTablePanel {
             x: x,
             y: y,
             visible: this.panel.style.opacity !== '0',
-            highlightedRow: this._stateMachine.getState().lastCycleIndex
+            highlightedRow: stateMachineState.lastCycleIndex
         };
+
+        logger.debug('[TruthTablePanel] _saveState - saving state:', JSON.stringify(this.state));
 
         // Trigger callback to save to localStorage
         if (this.onStateChange) {
@@ -1575,10 +1584,14 @@ export class TruthTablePanel {
 
         // Update highlight using tracked cycle index (if panel is showing table)
         const state = this._stateMachine.getState();
+        logger.debug('[TruthTablePanel] show() - post-render, state:', JSON.stringify(state), 'tabulatorInstance:', !!this.tabulatorInstance);
         if (state.lastCycleIndex !== null &&
             state.panel === PANEL_STATES.VISIBLE_TABLE &&
             this.tabulatorInstance) {
+            logger.debug('[TruthTablePanel] show() - highlighting row:', state.lastCycleIndex);
             this._highlightRowByIndex(state.lastCycleIndex);
+        } else {
+            logger.debug('[TruthTablePanel] show() - NOT highlighting. lastCycleIndex:', state.lastCycleIndex, 'panel state:', state.panel, 'tabulatorInstance:', !!this.tabulatorInstance);
         }
 
         eventBus.emit(EVENT_TYPES.TRUTH_TABLE_SHOWN);
@@ -1596,6 +1609,7 @@ export class TruthTablePanel {
      * @private
      */
     _setState(state) {
+        logger.debug('[TruthTablePanel] _setState - received state:', JSON.stringify(state));
         if (!state) {
             this.state = null;
             return;
@@ -1622,6 +1636,7 @@ export class TruthTablePanel {
         }
         // Restore highlighted row to state machine for scroll position restoration
         if (sanitizedState.highlightedRow !== undefined && sanitizedState.highlightedRow !== null) {
+            logger.debug('[TruthTablePanel] _setState - restoring highlightedRow:', sanitizedState.highlightedRow);
             this._stateMachine.setLastCycleIndex(sanitizedState.highlightedRow);
         }
     }

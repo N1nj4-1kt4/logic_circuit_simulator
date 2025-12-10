@@ -55,8 +55,19 @@ export class AutoSaveManager {
         eventBus.on(EVENT_TYPES.THEME_CHANGED, this.debouncedSave);
 
         // Listen to simulation step completion to persist input values
-        // This ensures circuit state is saved when user steps through combinations
-        eventBus.on(EVENT_TYPES.SIMULATION_STEP_COMPLETED, this.debouncedSave);
+        // During auto-cycling, save immediately (no debounce) because:
+        // - Auto-cycle interval (750ms) < debounce delay (1000ms)
+        // - Without immediate save, debounce resets on each step, causing stale state on refresh
+        this.handleSimulationStep = () => {
+            if (this.state.isAutoCyclingActive()) {
+                // Save immediately during auto-cycling
+                this.saveBoardState();
+            } else {
+                // Use debounce for manual stepping
+                this.debouncedSave('SIMULATION_STEP_COMPLETED');
+            }
+        };
+        eventBus.on(EVENT_TYPES.SIMULATION_STEP_COMPLETED, this.handleSimulationStep);
 
         // When board is cleared, save immediately (no debounce) to persist the cleared state
         // This preserves lastSavedState so user can still revert to the saved version
@@ -81,7 +92,10 @@ export class AutoSaveManager {
             eventBus.off(EVENT_TYPES.BOARD_LOADED, this.debouncedSave);
             eventBus.off(EVENT_TYPES.TRUTH_TABLE_PANEL_STATE_CHANGED, this.debouncedSave);
             eventBus.off(EVENT_TYPES.THEME_CHANGED, this.debouncedSave);
-            eventBus.off(EVENT_TYPES.SIMULATION_STEP_COMPLETED, this.debouncedSave);
+        }
+
+        if (this.handleSimulationStep) {
+            eventBus.off(EVENT_TYPES.SIMULATION_STEP_COMPLETED, this.handleSimulationStep);
         }
 
         if (this.handleBoardCleared) {
@@ -105,7 +119,9 @@ export class AutoSaveManager {
             currentComponentName: this.state.getCurrentComponentName(),
             customComponents: this.state.getCustomComponents(),
             // Base state for revert (persisted from CircuitState)
-            lastSavedState: this.state.getLastSavedState()
+            lastSavedState: this.state.getLastSavedState(),
+            // Auto-cycling state (to resume on page refresh)
+            isAutoCycling: this.state.isAutoCyclingActive()
         };
 
         // DEBUG: Log input component values being saved
@@ -168,6 +184,11 @@ export class AutoSaveManager {
                 } else {
                     // Migration: no lastSavedState in old format
                     this.state.setLastSavedState(null);
+                }
+
+                // Restore auto-cycling state (coordinator will resume cycling after init)
+                if (boardData.isAutoCycling) {
+                    this.state.setPendingAutoCycle(true);
                 }
 
                 // Emit event to update toolbar displays

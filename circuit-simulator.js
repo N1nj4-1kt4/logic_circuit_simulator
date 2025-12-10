@@ -259,6 +259,14 @@ class CircuitSimulator {
         const inputs = components.filter(c => c.type === 'INPUT');
         logger.debug('[CircuitSimulator] init - INPUT values before simulation:', JSON.stringify(inputs.map(i => ({ id: i.id, label: i.label, value: i.value }))));
 
+        // Restore truth table BEFORE running simulation so it can receive the SIMULATION_STEP_COMPLETED event
+        const truthTablePanelState = this.state.getTruthTablePanelState();
+        logger.debug('[CircuitSimulator] init - truthTablePanelState:', JSON.stringify(truthTablePanelState));
+        if (truthTablePanelState && truthTablePanelState.visible) {
+            logger.debug('[CircuitSimulator] init - Restoring truth table from saved state BEFORE simulation');
+            this.generateTruthTable();
+        }
+
         const hasInputs = inputs.length > 0;
         if (hasInputs && components.length > 0) {
             logger.debug('[CircuitSimulator] init - Running simulation to restore circuit state');
@@ -267,15 +275,15 @@ class CircuitSimulator {
             // DEBUG: Log input values after simulation
             const inputsAfter = this.state.getComponents().filter(c => c.type === 'INPUT');
             logger.debug('[CircuitSimulator] init - INPUT values after simulation:', JSON.stringify(inputsAfter.map(i => ({ id: i.id, label: i.label, value: i.value }))));
+
+            // Resume auto-cycling if it was active before page refresh
+            if (this.state.getPendingAutoCycle()) {
+                logger.debug('[CircuitSimulator] init - Resuming auto-cycling from saved state');
+                this.state.clearPendingAutoCycle();
+                this.simulationController.autocycleStart();
+            }
         } else {
             logger.debug('[CircuitSimulator] init - No inputs found, skipping simulation');
-        }
-
-        // Restore truth table if it was visible
-        const truthTablePanelState = this.state.getTruthTablePanelState();
-        if (truthTablePanelState && truthTablePanelState.visible) {
-            console.log('Restoring truth table from saved state...');
-            this.generateTruthTable();
         }
 
         // Initialize canvas interaction layer

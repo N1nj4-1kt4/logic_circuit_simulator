@@ -442,6 +442,29 @@ export class CircuitState {
     }
 
     /**
+     * Set pending auto-cycle flag (for restoring auto-cycle state after page load)
+     * @param {boolean} value - Whether auto-cycling should resume
+     */
+    setPendingAutoCycle(value) {
+        this.pendingAutoCycle = value;
+    }
+
+    /**
+     * Get pending auto-cycle flag
+     * @returns {boolean} Whether auto-cycling should resume
+     */
+    getPendingAutoCycle() {
+        return this.pendingAutoCycle || false;
+    }
+
+    /**
+     * Clear pending auto-cycle flag
+     */
+    clearPendingAutoCycle() {
+        this.pendingAutoCycle = false;
+    }
+
+    /**
      * Set auto-cycle timeout
      * @param {number|null} timeout - Timeout ID or null
      */

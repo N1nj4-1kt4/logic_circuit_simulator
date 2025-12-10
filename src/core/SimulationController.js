@@ -306,6 +306,7 @@ export class SimulationController {
 
         // Apply inputs for this index and simulate
         this._applyInputsForIndex(this.cycleIndex);
+        logger.debug('[SimulationController] _executeAutoCycleStep - cycleIndex:', this.cycleIndex, 'INPUT values:', JSON.stringify(inputs.map(i => ({ id: i.id, label: i.label, value: i.value }))));
         this._simulateAndEmit();
 
         // Advance to next and schedule
