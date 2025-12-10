@@ -144,11 +144,13 @@ const createValidCache = (numInputs = 2, numOutputs = 1) => {
     const numRows = Math.pow(2, numInputs);
     const table = Array.from({ length: numRows }, (_, rowIndex) => {
         const row = {};
-        inputs.forEach((_, i) => {
-            row[`input${i}`] = (rowIndex >> (numInputs - 1 - i)) & 1;
+        inputs.forEach((input, i) => {
+            // Use ID-based field names: input_1, input_2, etc.
+            row[`input_${input.id}`] = (rowIndex >> (numInputs - 1 - i)) & 1;
         });
-        outputs.forEach((_, i) => {
-            row[`output${i}`] = 0;
+        outputs.forEach((output) => {
+            // Use ID-based field names: output_3, output_4, etc.
+            row[`output_${output.id}`] = 0;
         });
         return row;
     });
@@ -750,9 +752,9 @@ describe('TruthTablePanel', () => {
             panel.circuitAnalysis = createValidCache(3, 1); // 3 inputs now
             panel.tabulatorInstance = {
                 getColumns: vi.fn().mockReturnValue([
-                    { getField: () => 'input0' },
-                    { getField: () => 'input1' },
-                    { getField: () => 'output0' }
+                    { getField: () => 'input_1' },
+                    { getField: () => 'input_2' },
+                    { getField: () => 'output_3' }
                 ]) // Only 2 inputs in Tabulator
             };
 
@@ -768,9 +770,9 @@ describe('TruthTablePanel', () => {
         it('should update headers when labels change', async () => {
             // Create analysis with new labels (what circuitState will return)
             const freshAnalysis = {
-                inputs: [{ label: 'NewLabel', value: 0 }],
-                outputs: [{ label: 'Q', value: 0 }],
-                table: [{ input0: 0, output0: 0 }, { input0: 1, output0: 1 }],
+                inputs: [{ id: 1, label: 'NewLabel', value: 0 }],
+                outputs: [{ id: 2, label: 'Q', value: 0 }],
+                table: [{ input_1: 0, output_2: 0 }, { input_1: 1, output_2: 1 }],
                 isValid: true
             };
             const circuitState = createMockCircuitState(freshAnalysis);
@@ -784,15 +786,15 @@ describe('TruthTablePanel', () => {
             panel.panel = mockDOM.panelEl;
             // Local copy has old labels
             panel.circuitAnalysis = {
-                inputs: [{ label: 'OldLabel', value: 0 }],
-                outputs: [{ label: 'Q', value: 0 }],
-                table: [{ input0: 0, output0: 0 }, { input0: 1, output0: 1 }],
+                inputs: [{ id: 1, label: 'OldLabel', value: 0 }],
+                outputs: [{ id: 2, label: 'Q', value: 0 }],
+                table: [{ input_1: 0, output_2: 0 }, { input_1: 1, output_2: 1 }],
                 isValid: true
             };
             panel.tabulatorInstance = {
                 getColumns: vi.fn().mockReturnValue([
-                    { getField: () => 'input0', getDefinition: () => ({ title: 'OldLabel' }) },
-                    { getField: () => 'output0', getDefinition: () => ({ title: 'Q' }) }
+                    { getField: () => 'input_1', getDefinition: () => ({ title: 'OldLabel' }) },
+                    { getField: () => 'output_2', getDefinition: () => ({ title: 'Q' }) }
                 ]),
                 setColumns: vi.fn(),
                 setData: vi.fn()
@@ -811,9 +813,9 @@ describe('TruthTablePanel', () => {
         it('should use setData for data-only changes', async () => {
             // Create analysis with same structure but different output values
             const freshAnalysis = {
-                inputs: [{ label: 'A', value: 0 }],
-                outputs: [{ label: 'Q', value: 0 }],
-                table: [{ input0: 0, output0: 1 }, { input0: 1, output0: 0 }], // Updated data
+                inputs: [{ id: 1, label: 'A', value: 0 }],
+                outputs: [{ id: 2, label: 'Q', value: 0 }],
+                table: [{ input_1: 0, output_2: 1 }, { input_1: 1, output_2: 0 }], // Updated data
                 isValid: true
             };
             const circuitState = createMockCircuitState(freshAnalysis);
@@ -827,15 +829,15 @@ describe('TruthTablePanel', () => {
             panel.panel = mockDOM.panelEl;
             // Local copy has old data
             panel.circuitAnalysis = {
-                inputs: [{ label: 'A', value: 0 }],
-                outputs: [{ label: 'Q', value: 0 }],
-                table: [{ input0: 0, output0: 0 }, { input0: 1, output0: 1 }], // Old data
+                inputs: [{ id: 1, label: 'A', value: 0 }],
+                outputs: [{ id: 2, label: 'Q', value: 0 }],
+                table: [{ input_1: 0, output_2: 0 }, { input_1: 1, output_2: 1 }], // Old data
                 isValid: true
             };
             const mockTabulator = {
                 getColumns: vi.fn().mockReturnValue([
-                    { getField: () => 'input0', getDefinition: () => ({ title: 'A' }) },
-                    { getField: () => 'output0', getDefinition: () => ({ title: 'Q' }) }
+                    { getField: () => 'input_1', getDefinition: () => ({ title: 'A' }) },
+                    { getField: () => 'output_2', getDefinition: () => ({ title: 'Q' }) }
                 ]),
                 setData: vi.fn()
             };
@@ -950,15 +952,15 @@ describe('TruthTablePanel', () => {
             );
 
             panel.circuitAnalysis = {
-                inputs: [{ label: 'NewLabel', value: 0 }],
-                outputs: [{ label: 'Q', value: 0 }],
+                inputs: [{ id: 1, label: 'NewLabel', value: 0 }],
+                outputs: [{ id: 2, label: 'Q', value: 0 }],
                 table: [],
                 isValid: true
             };
             panel.tabulatorInstance = {
                 getColumns: vi.fn().mockReturnValue([
-                    { getField: () => 'input0', getDefinition: () => ({ title: 'OldLabel' }) },
-                    { getField: () => 'output0', getDefinition: () => ({ title: 'Q' }) }
+                    { getField: () => 'input_1', getDefinition: () => ({ title: 'OldLabel' }) },
+                    { getField: () => 'output_2', getDefinition: () => ({ title: 'Q' }) }
                 ])
             };
 
@@ -975,15 +977,15 @@ describe('TruthTablePanel', () => {
             );
 
             panel.circuitAnalysis = {
-                inputs: [{ label: 'A', value: 0 }],
-                outputs: [{ label: 'NewQ', value: 0 }],
+                inputs: [{ id: 1, label: 'A', value: 0 }],
+                outputs: [{ id: 2, label: 'NewQ', value: 0 }],
                 table: [],
                 isValid: true
             };
             panel.tabulatorInstance = {
                 getColumns: vi.fn().mockReturnValue([
-                    { getField: () => 'input0', getDefinition: () => ({ title: 'A' }) },
-                    { getField: () => 'output0', getDefinition: () => ({ title: 'OldQ' }) }
+                    { getField: () => 'input_1', getDefinition: () => ({ title: 'A' }) },
+                    { getField: () => 'output_2', getDefinition: () => ({ title: 'OldQ' }) }
                 ])
             };
 
@@ -1000,15 +1002,15 @@ describe('TruthTablePanel', () => {
             );
 
             panel.circuitAnalysis = {
-                inputs: [{ label: 'A', value: 0 }],
-                outputs: [{ label: 'Q', value: 0 }],
+                inputs: [{ id: 1, label: 'A', value: 0 }],
+                outputs: [{ id: 2, label: 'Q', value: 0 }],
                 table: [],
                 isValid: true
             };
             panel.tabulatorInstance = {
                 getColumns: vi.fn().mockReturnValue([
-                    { getField: () => 'input0', getDefinition: () => ({ title: 'A' }) },
-                    { getField: () => 'output0', getDefinition: () => ({ title: 'Q' }) }
+                    { getField: () => 'input_1', getDefinition: () => ({ title: 'A' }) },
+                    { getField: () => 'output_2', getDefinition: () => ({ title: 'Q' }) }
                 ])
             };
 

@@ -3,6 +3,12 @@
  * Consolidated from: tableColumns.js, tableLayout.js, panelBounds.js, truthTableSearch.js
  */
 
+import {
+    createFieldName,
+    mergeColumnOrderByGroup,
+    COLUMN_ORDER_STRATEGIES
+} from './columnOrderStrategies.js';
+
 // ============================================================================
 // SECTION: Layout Constants
 // ============================================================================
@@ -17,16 +23,18 @@ export const CONTENT_HEIGHT = 20;
 
 /**
  * Build Tabulator column definitions for truth table
- * @param {Array} inputs - Input component descriptors [{label, ...}]
- * @param {Array} outputs - Output component descriptors [{label, ...}]
- * @param {Array|null} savedColumnOrder - Saved column field order (e.g., ['input0', 'input1', 'output0'])
+ * @param {Array} inputs - Input component descriptors [{id, label, ...}]
+ * @param {Array} outputs - Output component descriptors [{id, label, ...}]
+ * @param {Array|null} savedColumnOrder - Saved column field order (e.g., ['input_5', 'input_3', 'output_7'])
+ * @param {string} strategy - Ordering strategy for new columns (default: CHRONOLOGICAL)
  * @returns {Array} Tabulator column definitions with Input/Output groups
  */
-export function buildTruthTableColumns(inputs, outputs, savedColumnOrder = null) {
-    // Create all column definitions
+export function buildTruthTableColumns(inputs, outputs, savedColumnOrder = null, strategy = COLUMN_ORDER_STRATEGIES.CHRONOLOGICAL) {
+    // Create all column definitions with ID-based field names
     const inputCols = inputs.map((input, i) => ({
-        title: input.label || `I${i}`,
-        field: `input${i}`,
+        title: input.label || `I${i + 1}`,
+        field: createFieldName('input', input.id),
+        componentId: input.id,
         minWidth: 60,
         headerSort: false,
         formatter: (cell) => cell.getValue() ? '1' : '0',
@@ -34,8 +42,9 @@ export function buildTruthTableColumns(inputs, outputs, savedColumnOrder = null)
     }));
 
     const outputCols = outputs.map((output, i) => ({
-        title: output.label || `O${i}`,
-        field: `output${i}`,
+        title: output.label || `O${i + 1}`,
+        field: createFieldName('output', output.id),
+        componentId: output.id,
         minWidth: 60,
         headerSort: false,
         formatter: (cell) => {
@@ -45,52 +54,22 @@ export function buildTruthTableColumns(inputs, outputs, savedColumnOrder = null)
         cssClass: 'output-cell'
     }));
 
-    // If we have a saved column order, reorder the columns to match
-    if (savedColumnOrder && savedColumnOrder.length > 0) {
-        const orderedInputCols = [];
-        const orderedOutputCols = [];
+    // Merge saved column order with current columns
+    const { orderedInputCols, orderedOutputCols } = mergeColumnOrderByGroup(
+        inputCols,
+        outputCols,
+        savedColumnOrder,
+        strategy
+    );
 
-        // Reorder based on saved state
-        savedColumnOrder.forEach(fieldName => {
-            if (!fieldName) return;
-
-            if (fieldName.startsWith('input')) {
-                const index = parseInt(fieldName.replace('input', ''));
-                if (inputCols[index]) {
-                    orderedInputCols.push(inputCols[index]);
-                }
-            } else if (fieldName.startsWith('output')) {
-                const index = parseInt(fieldName.replace('output', ''));
-                if (outputCols[index]) {
-                    orderedOutputCols.push(outputCols[index]);
-                }
-            }
-        });
-
-        // Use ordered columns if we successfully reordered them
-        if (orderedInputCols.length === inputCols.length && orderedOutputCols.length === outputCols.length) {
-            return [
-                {
-                    title: 'Inputs',
-                    columns: orderedInputCols
-                },
-                {
-                    title: 'Outputs',
-                    columns: orderedOutputCols
-                }
-            ];
-        }
-    }
-
-    // Default: return columns in original order
     return [
         {
             title: 'Inputs',
-            columns: inputCols
+            columns: orderedInputCols
         },
         {
             title: 'Outputs',
-            columns: outputCols
+            columns: orderedOutputCols
         }
     ];
 }

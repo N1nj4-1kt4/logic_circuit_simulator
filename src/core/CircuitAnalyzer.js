@@ -7,6 +7,7 @@
  */
 
 import { simulateCircuit } from './circuitEvaluator.js';
+import { createFieldName } from '../utils/columnOrderStrategies.js';
 
 /**
  * Validate if the circuit is suitable for analysis
@@ -135,7 +136,7 @@ function generateInvalidCircuitAnalysis(components, connections, validation) {
         clonedInputs.forEach((input, index) => {
             const bitValue = (i >> (inputs.length - 1 - index)) & 1;
             input.value = bitValue;
-            row[`input${index}`] = bitValue;
+            row[createFieldName('input', input.id)] = bitValue;
         });
 
         // Simulate circuit on cloned components (partial simulation)
@@ -161,8 +162,8 @@ function generateInvalidCircuitAnalysis(components, connections, validation) {
             .filter(c => c.type === 'OUTPUT')
             .sort((a, b) => (a.label || '').localeCompare(b.label || ''));
 
-        clonedOutputs.forEach((output, index) => {
-            row[`output${index}`] = output.value !== null ? output.value : '?';
+        clonedOutputs.forEach((output) => {
+            row[createFieldName('output', output.id)] = output.value !== null ? output.value : '?';
         });
 
         table.push(row);
@@ -224,7 +225,7 @@ export function computeCircuitAnalysis(components, connections) {
         clonedInputs.forEach((input, index) => {
             const bitValue = (i >> (inputs.length - 1 - index)) & 1;
             input.value = bitValue;
-            row[`input${index}`] = bitValue;
+            row[createFieldName('input', input.id)] = bitValue;
         });
 
         // Simulate circuit on cloned components
@@ -244,8 +245,8 @@ export function computeCircuitAnalysis(components, connections) {
             .filter(c => c.type === 'OUTPUT')
             .sort((a, b) => (a.label || '').localeCompare(b.label || ''));
 
-        clonedOutputs.forEach((output, index) => {
-            row[`output${index}`] = output.value !== null ? output.value : '?';
+        clonedOutputs.forEach((output) => {
+            row[createFieldName('output', output.id)] = output.value !== null ? output.value : '?';
         });
 
         table.push(row);
@@ -305,7 +306,7 @@ export async function computeCircuitAnalysisAsync(components, connections, optio
             clonedInputs.forEach((input, index) => {
                 const bitValue = (i >> (inputs.length - 1 - index)) & 1;
                 input.value = bitValue;
-                row[`input${index}`] = bitValue;
+                row[createFieldName('input', input.id)] = bitValue;
             });
 
             // Simulate circuit on cloned components
@@ -325,8 +326,8 @@ export async function computeCircuitAnalysisAsync(components, connections, optio
                 .filter(c => c.type === 'OUTPUT')
                 .sort((a, b) => (a.label || '').localeCompare(b.label || ''));
 
-            clonedOutputs.forEach((output, index) => {
-                row[`output${index}`] = output.value !== null ? output.value : '?';
+            clonedOutputs.forEach((output) => {
+                row[createFieldName('output', output.id)] = output.value !== null ? output.value : '?';
             });
 
             table.push(row);

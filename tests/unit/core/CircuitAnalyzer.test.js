@@ -187,10 +187,12 @@ describe('CircuitAnalyzer', () => {
             expect(result.table).toHaveLength(4); // 2^2 = 4 combinations
 
             // AND truth table: output is 1 only when both inputs are 1
-            expect(result.table[0]).toMatchObject({ input0: 0, input1: 0, output0: 0 });
-            expect(result.table[1]).toMatchObject({ input0: 0, input1: 1, output0: 0 });
-            expect(result.table[2]).toMatchObject({ input0: 1, input1: 0, output0: 0 });
-            expect(result.table[3]).toMatchObject({ input0: 1, input1: 1, output0: 1 });
+            // Note: field names are ID-based (input_1, input_2, output_4)
+            // Inputs are sorted by label: I1 (id:1), I2 (id:2)
+            expect(result.table[0]).toMatchObject({ input_1: 0, input_2: 0, output_4: 0 });
+            expect(result.table[1]).toMatchObject({ input_1: 0, input_2: 1, output_4: 0 });
+            expect(result.table[2]).toMatchObject({ input_1: 1, input_2: 0, output_4: 0 });
+            expect(result.table[3]).toMatchObject({ input_1: 1, input_2: 1, output_4: 1 });
         });
 
         it('should compute correct truth table for OR gate', () => {
@@ -201,10 +203,12 @@ describe('CircuitAnalyzer', () => {
             expect(result.table).toHaveLength(4);
 
             // OR truth table: output is 1 when any input is 1
-            expect(result.table[0]).toMatchObject({ input0: 0, input1: 0, output0: 0 });
-            expect(result.table[1]).toMatchObject({ input0: 0, input1: 1, output0: 1 });
-            expect(result.table[2]).toMatchObject({ input0: 1, input1: 0, output0: 1 });
-            expect(result.table[3]).toMatchObject({ input0: 1, input1: 1, output0: 1 });
+            // Note: field names are ID-based (input_1, input_2, output_4)
+            // Inputs are sorted by label: A (id:1), B (id:2)
+            expect(result.table[0]).toMatchObject({ input_1: 0, input_2: 0, output_4: 0 });
+            expect(result.table[1]).toMatchObject({ input_1: 0, input_2: 1, output_4: 1 });
+            expect(result.table[2]).toMatchObject({ input_1: 1, input_2: 0, output_4: 1 });
+            expect(result.table[3]).toMatchObject({ input_1: 1, input_2: 1, output_4: 1 });
         });
 
         it('should NOT modify original components during computation', () => {
@@ -240,8 +244,9 @@ describe('CircuitAnalyzer', () => {
 
             expect(result.isValid).toBe(true);
             expect(result.table).toHaveLength(2); // 2^1 = 2 combinations
-            expect(result.table[0]).toMatchObject({ input0: 0, output0: 1 }); // NOT 0 = 1
-            expect(result.table[1]).toMatchObject({ input0: 1, output0: 0 }); // NOT 1 = 0
+            // Note: field names are ID-based (input_1, output_3)
+            expect(result.table[0]).toMatchObject({ input_1: 0, output_3: 1 }); // NOT 0 = 1
+            expect(result.table[1]).toMatchObject({ input_1: 1, output_3: 0 }); // NOT 1 = 0
         });
 
         it('should handle three input circuit', () => {
@@ -267,10 +272,11 @@ describe('CircuitAnalyzer', () => {
             expect(result.table).toHaveLength(8); // 2^3 = 8 combinations
 
             // Only when all three inputs are 1 should output be 1
-            expect(result.table[7]).toMatchObject({ input0: 1, input1: 1, input2: 1, output0: 1 });
+            // Note: inputs sorted by label (A, B, C), IDs are (1, 2, 3), output is id:6
+            expect(result.table[7]).toMatchObject({ input_1: 1, input_2: 1, input_3: 1, output_6: 1 });
             // All other combinations should be 0
             for (let i = 0; i < 7; i++) {
-                expect(result.table[i].output0).toBe(0);
+                expect(result.table[i].output_6).toBe(0);
             }
         });
 
@@ -291,10 +297,11 @@ describe('CircuitAnalyzer', () => {
 
             expect(result.isValid).toBe(true);
             expect(result.outputs).toHaveLength(2);
-            expect(result.table[0].output0).toBe(0); // O1 = I1 = 0
-            expect(result.table[0].output1).toBe(1); // O2 = NOT I1 = 1
-            expect(result.table[1].output0).toBe(1); // O1 = I1 = 1
-            expect(result.table[1].output1).toBe(0); // O2 = NOT I1 = 0
+            // Note: outputs sorted by label (O1, O2), IDs are (3, 4)
+            expect(result.table[0].output_3).toBe(0); // O1 = I1 = 0
+            expect(result.table[0].output_4).toBe(1); // O2 = NOT I1 = 1
+            expect(result.table[1].output_3).toBe(1); // O1 = I1 = 1
+            expect(result.table[1].output_4).toBe(0); // O2 = NOT I1 = 0
         });
 
         it('should return inputs and outputs arrays in result', () => {
@@ -318,14 +325,16 @@ describe('CircuitAnalyzer', () => {
 
         it('should return correct row for input combination', () => {
             // Input [0, 0] should be row 0
+            // Component IDs: input1 (id:1), input2 (id:2), output (id:4)
             const row = lookupAnalysisRow(cache, [0, 0]);
-            expect(row).toMatchObject({ input0: 0, input1: 0, output0: 0 });
+            expect(row).toMatchObject({ input_1: 0, input_2: 0, output_4: 0 });
         });
 
         it('should return correct row for different combinations', () => {
             // Input [1, 1] should be row 3
+            // Component IDs: input1 (id:1), input2 (id:2), output (id:4)
             const row = lookupAnalysisRow(cache, [1, 1]);
-            expect(row).toMatchObject({ input0: 1, input1: 1, output0: 1 });
+            expect(row).toMatchObject({ input_1: 1, input_2: 1, output_4: 1 });
         });
 
         it('should return null for invalid cache', () => {

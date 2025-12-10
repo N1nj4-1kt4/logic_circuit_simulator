@@ -4,6 +4,7 @@ import 'tabulator-tables/dist/css/tabulator_midnight.min.css';
 import interact from 'interactjs';
 import { positionPanelSmartly } from '../utils/positioning.js';
 import { buildTruthTableColumns, inputValuesToIndex, estimatePanelHeight } from '../utils/truthTableUtils.js';
+import { createFieldName } from '../utils/columnOrderStrategies.js';
 import { UI, TRUTH_TABLE } from '../constants.js';
 import { eventBus, EVENT_TYPES } from '../utils/eventBus.js';
 import { logger } from '../utils/logger.js';
@@ -374,12 +375,12 @@ export class TruthTablePanel {
 
             case ACTION_TYPES.REBUILD_TABLE:
                 // Structure changed - clear saved dimensions before rebuild
+                // Column order is preserved - merge logic handles structure changes
                 this._saveState();
                 if (this.state) {
                     this.state.height = '';
                     this.state.width = '';
                 }
-                this.columnOrder = null;
                 await this._renderQueue.enqueue(() => this._safeRenderTable());
                 this._setupInteractions();
                 break;
@@ -619,6 +620,8 @@ export class TruthTablePanel {
 
         // Detect if structure changed since state was saved (e.g., inputs/outputs added while panel was closed)
         // If structure changed, clear saved dimensions so panel auto-fits to new content
+        // NOTE: Column order is NOT reset - the merge logic in buildTruthTableColumns handles
+        // preserving existing column positions and appending new columns at the end
         if (this.state && this.state.columnOrder) {
             const currentColumnCount = this.circuitAnalysis.inputs.length + this.circuitAnalysis.outputs.length;
             const savedColumnCount = this.state.columnOrder.length;
@@ -627,8 +630,7 @@ export class TruthTablePanel {
                 this.state.height = '';
                 this.panel.style.width = '';
                 this.panel.style.height = '';
-                // Reset column order for new structure
-                this.columnOrder = null;
+                // Column order is preserved - merge logic handles structure changes
             }
         }
 
@@ -1408,6 +1410,7 @@ export class TruthTablePanel {
         if (structureChanged) {
             // Full rebuild needed - structure changed while panel was hidden
             // Clear saved dimensions so panel auto-fits to new column structure
+            // Column order is preserved - merge logic handles structure changes
             this._saveState();
             if (this.state) {
                 this.state.height = '';
@@ -1415,7 +1418,6 @@ export class TruthTablePanel {
             }
             this.panel.style.width = '';
             this.panel.style.height = '';
-            this.columnOrder = null;
 
             const content = document.getElementById('truthTableContent');
             if (content) {
@@ -1450,18 +1452,20 @@ export class TruthTablePanel {
         const columns = this.tabulatorInstance.getColumns();
         const { inputs, outputs } = this.circuitAnalysis;
 
-        // Check input labels
-        for (let i = 0; i < inputs.length; i++) {
-            const col = columns.find(c => c.getField() === `input${i}`);
-            if (col && col.getDefinition().title !== inputs[i].label) {
+        // Check input labels using ID-based field names
+        for (const input of inputs) {
+            const fieldName = createFieldName('input', input.id);
+            const col = columns.find(c => c.getField() === fieldName);
+            if (col && col.getDefinition().title !== input.label) {
                 return true;
             }
         }
 
-        // Check output labels
-        for (let i = 0; i < outputs.length; i++) {
-            const col = columns.find(c => c.getField() === `output${i}`);
-            if (col && col.getDefinition().title !== outputs[i].label) {
+        // Check output labels using ID-based field names
+        for (const output of outputs) {
+            const fieldName = createFieldName('output', output.id);
+            const col = columns.find(c => c.getField() === fieldName);
+            if (col && col.getDefinition().title !== output.label) {
                 return true;
             }
         }

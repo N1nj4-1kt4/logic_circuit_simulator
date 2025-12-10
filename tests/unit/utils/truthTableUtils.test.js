@@ -24,8 +24,8 @@ import {
 describe('buildTruthTableColumns', () => {
     describe('basic column generation', () => {
         it('generates columns for single input and output', () => {
-            const inputs = [{ label: 'A' }];
-            const outputs = [{ label: 'Y' }];
+            const inputs = [{ id: 1, label: 'A' }];
+            const outputs = [{ id: 2, label: 'Y' }];
 
             const columns = buildTruthTableColumns(inputs, outputs);
 
@@ -33,17 +33,17 @@ describe('buildTruthTableColumns', () => {
             expect(columns[0].title).toBe('Inputs');
             expect(columns[0].columns).toHaveLength(1);
             expect(columns[0].columns[0].title).toBe('A');
-            expect(columns[0].columns[0].field).toBe('input0');
+            expect(columns[0].columns[0].field).toBe('input_1');
 
             expect(columns[1].title).toBe('Outputs');
             expect(columns[1].columns).toHaveLength(1);
             expect(columns[1].columns[0].title).toBe('Y');
-            expect(columns[1].columns[0].field).toBe('output0');
+            expect(columns[1].columns[0].field).toBe('output_2');
         });
 
         it('generates columns for multiple inputs and outputs', () => {
-            const inputs = [{ label: 'A' }, { label: 'B' }, { label: 'C' }];
-            const outputs = [{ label: 'X' }, { label: 'Y' }];
+            const inputs = [{ id: 1, label: 'A' }, { id: 2, label: 'B' }, { id: 3, label: 'C' }];
+            const outputs = [{ id: 4, label: 'X' }, { id: 5, label: 'Y' }];
 
             const columns = buildTruthTableColumns(inputs, outputs);
 
@@ -58,19 +58,19 @@ describe('buildTruthTableColumns', () => {
         });
 
         it('uses default labels when not provided', () => {
-            const inputs = [{}, {}];
-            const outputs = [{}];
+            const inputs = [{ id: 1 }, { id: 2 }];
+            const outputs = [{ id: 3 }];
 
             const columns = buildTruthTableColumns(inputs, outputs);
 
-            expect(columns[0].columns[0].title).toBe('I0');
-            expect(columns[0].columns[1].title).toBe('I1');
-            expect(columns[1].columns[0].title).toBe('O0');
+            expect(columns[0].columns[0].title).toBe('I1');
+            expect(columns[0].columns[1].title).toBe('I2');
+            expect(columns[1].columns[0].title).toBe('O1');
         });
 
         it('handles empty inputs array', () => {
             const inputs = [];
-            const outputs = [{ label: 'Y' }];
+            const outputs = [{ id: 1, label: 'Y' }];
 
             const columns = buildTruthTableColumns(inputs, outputs);
 
@@ -79,7 +79,7 @@ describe('buildTruthTableColumns', () => {
         });
 
         it('handles empty outputs array', () => {
-            const inputs = [{ label: 'A' }];
+            const inputs = [{ id: 1, label: 'A' }];
             const outputs = [];
 
             const columns = buildTruthTableColumns(inputs, outputs);
@@ -91,8 +91,8 @@ describe('buildTruthTableColumns', () => {
 
     describe('column properties', () => {
         it('sets correct minWidth for all columns', () => {
-            const inputs = [{ label: 'A' }];
-            const outputs = [{ label: 'Y' }];
+            const inputs = [{ id: 1, label: 'A' }];
+            const outputs = [{ id: 2, label: 'Y' }];
 
             const columns = buildTruthTableColumns(inputs, outputs);
 
@@ -101,8 +101,8 @@ describe('buildTruthTableColumns', () => {
         });
 
         it('sets headerSort to false for all columns', () => {
-            const inputs = [{ label: 'A' }];
-            const outputs = [{ label: 'Y' }];
+            const inputs = [{ id: 1, label: 'A' }];
+            const outputs = [{ id: 2, label: 'Y' }];
 
             const columns = buildTruthTableColumns(inputs, outputs);
 
@@ -111,8 +111,8 @@ describe('buildTruthTableColumns', () => {
         });
 
         it('sets correct cssClass for input and output columns', () => {
-            const inputs = [{ label: 'A' }];
-            const outputs = [{ label: 'Y' }];
+            const inputs = [{ id: 1, label: 'A' }];
+            const outputs = [{ id: 2, label: 'Y' }];
 
             const columns = buildTruthTableColumns(inputs, outputs);
 
@@ -123,7 +123,7 @@ describe('buildTruthTableColumns', () => {
 
     describe('formatters', () => {
         it('input formatter returns "1" for truthy values', () => {
-            const inputs = [{ label: 'A' }];
+            const inputs = [{ id: 1, label: 'A' }];
             const outputs = [];
             const columns = buildTruthTableColumns(inputs, outputs);
             const formatter = columns[0].columns[0].formatter;
@@ -136,7 +136,7 @@ describe('buildTruthTableColumns', () => {
         });
 
         it('input formatter returns "0" for falsy values', () => {
-            const inputs = [{ label: 'A' }];
+            const inputs = [{ id: 1, label: 'A' }];
             const outputs = [];
             const columns = buildTruthTableColumns(inputs, outputs);
             const formatter = columns[0].columns[0].formatter;
@@ -150,7 +150,7 @@ describe('buildTruthTableColumns', () => {
 
         it('output formatter returns bold "1" for truthy values', () => {
             const inputs = [];
-            const outputs = [{ label: 'Y' }];
+            const outputs = [{ id: 1, label: 'Y' }];
             const columns = buildTruthTableColumns(inputs, outputs);
             const formatter = columns[1].columns[0].formatter;
 
@@ -160,7 +160,7 @@ describe('buildTruthTableColumns', () => {
 
         it('output formatter returns bold "0" for falsy values', () => {
             const inputs = [];
-            const outputs = [{ label: 'Y' }];
+            const outputs = [{ id: 1, label: 'Y' }];
             const columns = buildTruthTableColumns(inputs, outputs);
             const formatter = columns[1].columns[0].formatter;
 
@@ -170,7 +170,7 @@ describe('buildTruthTableColumns', () => {
 
         it('output formatter returns bold "?" for unknown values', () => {
             const inputs = [];
-            const outputs = [{ label: 'Y' }];
+            const outputs = [{ id: 1, label: 'Y' }];
             const columns = buildTruthTableColumns(inputs, outputs);
             const formatter = columns[1].columns[0].formatter;
 
@@ -181,9 +181,10 @@ describe('buildTruthTableColumns', () => {
 
     describe('column reordering with savedColumnOrder', () => {
         it('reorders input columns based on saved order', () => {
-            const inputs = [{ label: 'A' }, { label: 'B' }, { label: 'C' }];
-            const outputs = [{ label: 'Y' }];
-            const savedOrder = ['input2', 'input0', 'input1', 'output0'];
+            const inputs = [{ id: 1, label: 'A' }, { id: 2, label: 'B' }, { id: 3, label: 'C' }];
+            const outputs = [{ id: 4, label: 'Y' }];
+            // Request order: C (id:3), A (id:1), B (id:2)
+            const savedOrder = ['input_3', 'input_1', 'input_2', 'output_4'];
 
             const columns = buildTruthTableColumns(inputs, outputs, savedOrder);
 
@@ -193,9 +194,10 @@ describe('buildTruthTableColumns', () => {
         });
 
         it('reorders output columns based on saved order', () => {
-            const inputs = [{ label: 'A' }];
-            const outputs = [{ label: 'X' }, { label: 'Y' }, { label: 'Z' }];
-            const savedOrder = ['input0', 'output2', 'output0', 'output1'];
+            const inputs = [{ id: 1, label: 'A' }];
+            const outputs = [{ id: 2, label: 'X' }, { id: 3, label: 'Y' }, { id: 4, label: 'Z' }];
+            // Request order: Z (id:4), X (id:2), Y (id:3)
+            const savedOrder = ['input_1', 'output_4', 'output_2', 'output_3'];
 
             const columns = buildTruthTableColumns(inputs, outputs, savedOrder);
 
@@ -204,23 +206,25 @@ describe('buildTruthTableColumns', () => {
             expect(columns[1].columns[2].title).toBe('Y');
         });
 
-        it('ignores saved order if column count mismatch', () => {
-            const inputs = [{ label: 'A' }, { label: 'B' }];
-            const outputs = [{ label: 'Y' }];
-            // Saved order has only 1 input, but we have 2
-            const savedOrder = ['input0', 'output0'];
+        it('appends new columns when structure changes', () => {
+            // User had A (id:1), B (id:2), then added C (id:3)
+            const inputs = [{ id: 1, label: 'A' }, { id: 2, label: 'B' }, { id: 3, label: 'C' }];
+            const outputs = [{ id: 4, label: 'Y' }];
+            // Saved order only has A and B (with B before A)
+            const savedOrder = ['input_2', 'input_1', 'output_4'];
 
             const columns = buildTruthTableColumns(inputs, outputs, savedOrder);
 
-            // Should fall back to original order
-            expect(columns[0].columns[0].title).toBe('A');
-            expect(columns[0].columns[1].title).toBe('B');
+            // B first (from saved), then A (from saved), then C (new, appended)
+            expect(columns[0].columns[0].title).toBe('B');
+            expect(columns[0].columns[1].title).toBe('A');
+            expect(columns[0].columns[2].title).toBe('C');
         });
 
         it('ignores null entries in saved order', () => {
-            const inputs = [{ label: 'A' }, { label: 'B' }];
-            const outputs = [{ label: 'Y' }];
-            const savedOrder = [null, 'input1', 'input0', 'output0'];
+            const inputs = [{ id: 1, label: 'A' }, { id: 2, label: 'B' }];
+            const outputs = [{ id: 3, label: 'Y' }];
+            const savedOrder = [null, 'input_2', 'input_1', 'output_3'];
 
             const columns = buildTruthTableColumns(inputs, outputs, savedOrder);
 
@@ -229,8 +233,8 @@ describe('buildTruthTableColumns', () => {
         });
 
         it('handles empty saved order array', () => {
-            const inputs = [{ label: 'A' }];
-            const outputs = [{ label: 'Y' }];
+            const inputs = [{ id: 1, label: 'A' }];
+            const outputs = [{ id: 2, label: 'Y' }];
 
             const columns = buildTruthTableColumns(inputs, outputs, []);
 
@@ -239,13 +243,26 @@ describe('buildTruthTableColumns', () => {
         });
 
         it('handles null saved order', () => {
-            const inputs = [{ label: 'A' }];
-            const outputs = [{ label: 'Y' }];
+            const inputs = [{ id: 1, label: 'A' }];
+            const outputs = [{ id: 2, label: 'Y' }];
 
             const columns = buildTruthTableColumns(inputs, outputs, null);
 
             expect(columns[0].columns[0].title).toBe('A');
             expect(columns[1].columns[0].title).toBe('Y');
+        });
+
+        it('handles legacy index-based format by falling back to default', () => {
+            const inputs = [{ id: 1, label: 'A' }, { id: 2, label: 'B' }];
+            const outputs = [{ id: 3, label: 'Y' }];
+            // Legacy format (input0, input1) cannot be mapped to IDs
+            const legacyOrder = ['input1', 'input0', 'output0'];
+
+            const columns = buildTruthTableColumns(inputs, outputs, legacyOrder);
+
+            // Should fall back to chronological order by ID
+            expect(columns[0].columns[0].title).toBe('A');
+            expect(columns[0].columns[1].title).toBe('B');
         });
     });
 });
