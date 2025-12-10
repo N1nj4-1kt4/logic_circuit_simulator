@@ -1557,11 +1557,7 @@ export class TruthTablePanel {
                     this.tabulatorInstance = null;
 
                     // Quick rebuild - reuse existing column config and data
-                    const columns = buildTruthTableColumns(
-                        this.circuitAnalysis.inputs,
-                        this.circuitAnalysis.outputs,
-                        this.columnOrder
-                    );
+                    const columns = this._generateColumns();
 
                     this.tabulatorInstance = new Tabulator(content, {
                         columns: columns,
