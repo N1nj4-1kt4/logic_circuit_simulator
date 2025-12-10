@@ -801,7 +801,7 @@ describe('TruthTablePanel', () => {
             };
 
             const updateHeadersSpy = vi.spyOn(panel, '_updateColumnHeaders').mockImplementation(() => {});
-            vi.spyOn(panel, '_reapplyRowHeights').mockImplementation(() => {});
+            vi.spyOn(panel, '_ensureTableHeight').mockImplementation(() => {});
             vi.spyOn(panel, '_updateHighlight').mockImplementation(() => {});
 
             await panel._syncTabulatorWithAnalysis();
@@ -842,6 +842,9 @@ describe('TruthTablePanel', () => {
                 setData: vi.fn()
             };
             panel.tabulatorInstance = mockTabulator;
+
+            // Mock _ensureTableHeight since it's called after setData
+            vi.spyOn(panel, '_ensureTableHeight').mockImplementation(() => {});
 
             await panel._syncTabulatorWithAnalysis();
 
@@ -1079,42 +1082,6 @@ describe('TruthTablePanel', () => {
         });
     });
 
-    describe('_reapplyRowHeights()', () => {
-        it('should apply row heights to all rows', () => {
-            const circuitState = createMockCircuitState(createValidCache());
-            const panel = new TruthTablePanel(
-                mockDOM.canvasEl,
-                [],
-                [],
-                circuitState
-            );
-
-            // Create mock row elements with cells
-            const mockCell1 = { style: { setProperty: vi.fn() } };
-            const mockCell2 = { style: { setProperty: vi.fn() } };
-            const mockRow = {
-                style: { setProperty: vi.fn() },
-                querySelectorAll: vi.fn().mockReturnValue([mockCell1, mockCell2])
-            };
-
-            mockDOM.contentEl.querySelectorAll = vi.fn().mockReturnValue([mockRow]);
-
-            panel.panel = mockDOM.panelEl;
-            panel.tabulatorInstance = {};
-
-            panel._reapplyRowHeights();
-
-            // Should set row height
-            expect(mockRow.style.setProperty).toHaveBeenCalledWith('height', '36px', 'important');
-            expect(mockRow.style.setProperty).toHaveBeenCalledWith('min-height', '36px', 'important');
-            expect(mockRow.style.setProperty).toHaveBeenCalledWith('max-height', '36px', 'important');
-
-            // Should set cell padding
-            expect(mockCell1.style.setProperty).toHaveBeenCalledWith('height', 'auto', 'important');
-            expect(mockCell1.style.setProperty).toHaveBeenCalledWith('padding-top', '8px', 'important');
-            expect(mockCell1.style.setProperty).toHaveBeenCalledWith('padding-bottom', '8px', 'important');
-        });
-    });
 
     describe('_saveState()', () => {
         it('should capture computed dimensions when inline styles are empty', () => {
@@ -1173,6 +1140,115 @@ describe('TruthTablePanel', () => {
             // Should use inline style values
             expect(panel.state.width).toBe('500px');
             expect(panel.state.height).toBe('400px');
+        });
+    });
+
+    describe('_restoreState()', () => {
+        it('should restore height exactly as saved without capping', () => {
+            const circuitState = createMockCircuitState(createValidCache());
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            panel.panel = mockDOM.panelEl;
+
+            // Simulate a saved height that's 100% of viewport (would have been capped before fix)
+            // window.innerHeight is mocked to 800 in setup
+            const state = {
+                width: '400px',
+                height: '800px',  // Full viewport height
+                x: 100,
+                y: 50
+            };
+
+            panel._restoreState(state);
+
+            // Height should be restored exactly as saved, not capped to 90%
+            expect(mockDOM.panelEl.style.height).toBe('800px');
+        });
+
+        it('should restore width exactly as saved without capping', () => {
+            const circuitState = createMockCircuitState(createValidCache());
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            panel.panel = mockDOM.panelEl;
+
+            // Simulate a saved width that's 100% of viewport
+            // window.innerWidth is mocked to 1024 in setup
+            const state = {
+                width: '1024px',  // Full viewport width
+                height: '400px',
+                x: 0,
+                y: 50
+            };
+
+            panel._restoreState(state);
+
+            // Width should be restored exactly as saved, not capped to 90%
+            expect(mockDOM.panelEl.style.width).toBe('1024px');
+        });
+
+        it('should restore dimensions larger than viewport without capping', () => {
+            const circuitState = createMockCircuitState(createValidCache());
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            panel.panel = mockDOM.panelEl;
+
+            // Edge case: saved dimensions exceed current viewport
+            // (could happen if user had larger monitor when saving)
+            const state = {
+                width: '2000px',
+                height: '1500px',
+                x: 0,
+                y: 0
+            };
+
+            panel._restoreState(state);
+
+            // Dimensions should be restored as-is, trusting the saved values
+            expect(mockDOM.panelEl.style.width).toBe('2000px');
+            expect(mockDOM.panelEl.style.height).toBe('1500px');
+        });
+
+        it('should not restore invalid dimensions (zero or negative)', () => {
+            const circuitState = createMockCircuitState(createValidCache());
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            panel.panel = mockDOM.panelEl;
+            // Set initial dimensions
+            mockDOM.panelEl.style.width = '400px';
+            mockDOM.panelEl.style.height = '300px';
+
+            const state = {
+                width: '0px',
+                height: '-100px',
+                x: 100,
+                y: 50
+            };
+
+            panel._restoreState(state);
+
+            // Invalid dimensions should not be applied
+            expect(mockDOM.panelEl.style.width).toBe('400px');
+            expect(mockDOM.panelEl.style.height).toBe('300px');
         });
     });
 
@@ -1885,8 +1961,8 @@ describe('TruthTablePanel', () => {
 
             // Spy on _renderTabulator to ensure full rebuild is NOT called
             const displaySpy = vi.spyOn(panel, '_renderTabulator');
-            // Mock _reapplyRowHeights and _updateHighlight (called after setColumns)
-            vi.spyOn(panel, '_reapplyRowHeights').mockImplementation(() => {});
+            // Mock _ensureTableHeight and _updateHighlight (called after setColumns)
+            vi.spyOn(panel, '_ensureTableHeight').mockImplementation(() => {});
             vi.spyOn(panel, '_updateHighlight').mockImplementation(() => {});
 
             await panel._handleComputed();
@@ -1897,8 +1973,8 @@ describe('TruthTablePanel', () => {
             // Should update column headers via setColumns (for grouped columns)
             expect(mockTable.setColumns).toHaveBeenCalled();
 
-            // Should reapply row heights and update highlight after setColumns
-            expect(panel._reapplyRowHeights).toHaveBeenCalled();
+            // Should ensure table height and update highlight after setColumns
+            expect(panel._ensureTableHeight).toHaveBeenCalled();
             expect(panel._updateHighlight).toHaveBeenCalled();
 
             // Should NOT update data - labels are display-only, table data is identical
@@ -2420,13 +2496,13 @@ describe('TruthTablePanel', () => {
                 );
 
                 const updateHeadersSpy = vi.spyOn(panel, '_updateColumnHeaders').mockImplementation(() => {});
-                const reapplyRowHeightsSpy = vi.spyOn(panel, '_reapplyRowHeights').mockImplementation(() => {});
+                const ensureTableHeightSpy = vi.spyOn(panel, '_ensureTableHeight').mockImplementation(() => {});
                 const updateHighlightSpy = vi.spyOn(panel, '_updateHighlight').mockImplementation(() => {});
 
                 await panel._executeAction({ action: 'UPDATE_HEADERS' });
 
                 expect(updateHeadersSpy).toHaveBeenCalled();
-                expect(reapplyRowHeightsSpy).toHaveBeenCalled();
+                expect(ensureTableHeightSpy).toHaveBeenCalled();
                 expect(updateHighlightSpy).toHaveBeenCalled();
             });
         });
@@ -3975,7 +4051,7 @@ describe('TruthTablePanel', () => {
                     panel.tabulatorInstance = createMockTabulator();
 
                     vi.spyOn(panel, '_updateColumnHeaders').mockImplementation(() => {});
-                    vi.spyOn(panel, '_reapplyRowHeights').mockImplementation(() => {});
+                    vi.spyOn(panel, '_ensureTableHeight').mockImplementation(() => {});
 
                     const updateHighlightSpy = vi.spyOn(panel, '_updateHighlight');
 
@@ -4914,6 +4990,200 @@ describe('TruthTablePanel', () => {
                         expect(saveStateSpy).toHaveBeenCalled();
                     }
                 });
+            });
+        });
+    });
+
+    describe('_ensureTableHeight() - scrollbar support', () => {
+        /**
+         * Tests for _ensureTableHeight() helper method.
+         *
+         * This method ensures scrollbars work correctly by recalculating
+         * and applying table heights. It's used by action paths that don't
+         * rebuild the table but need to ensure scrollbar support:
+         * - UPDATE_HEADERS
+         * - UPDATE_DATA
+         * - SYNC (labels changed)
+         * - SYNC (data only)
+         * - NONE path
+         */
+
+        describe('_ensureTableHeight() method', () => {
+            it('should do nothing if panel is null', () => {
+                const validCache = createValidCache(2, 1);
+                const circuitState = createMockCircuitState(validCache);
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel.panel = null;
+                panel.tabulatorInstance = { getRows: vi.fn() };
+
+                const applyTableHeightSpy = vi.spyOn(panel, '_applyTableHeight');
+
+                panel._ensureTableHeight();
+
+                expect(applyTableHeightSpy).not.toHaveBeenCalled();
+            });
+
+            it('should do nothing if tabulatorInstance is null', () => {
+                const validCache = createValidCache(2, 1);
+                const circuitState = createMockCircuitState(validCache);
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel.panel = mockDOM.panelEl;
+                panel.tabulatorInstance = null;
+
+                const applyTableHeightSpy = vi.spyOn(panel, '_applyTableHeight');
+
+                panel._ensureTableHeight();
+
+                expect(applyTableHeightSpy).not.toHaveBeenCalled();
+            });
+        });
+
+        describe('action paths call _ensureTableHeight()', () => {
+            it('UPDATE_HEADERS action should call _ensureTableHeight', async () => {
+                const validCache = createValidCache(2, 1);
+                const circuitState = createMockCircuitState(validCache);
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel.panel = mockDOM.panelEl;
+                panel.tabulatorInstance = {
+                    setColumns: vi.fn(),
+                    getRows: vi.fn().mockReturnValue([]),
+                    setHeight: vi.fn()
+                };
+                panel.circuitAnalysis = validCache;
+
+                const ensureTableHeightSpy = vi.spyOn(panel, '_ensureTableHeight').mockImplementation(() => {});
+                vi.spyOn(panel, '_updateColumnHeaders').mockImplementation(() => {});
+                vi.spyOn(panel, '_updateHighlight').mockImplementation(() => {});
+
+                await panel._executeAction({ action: 'UPDATE_HEADERS' });
+
+                expect(ensureTableHeightSpy).toHaveBeenCalled();
+            });
+
+            it('UPDATE_DATA action should call _ensureTableHeight', async () => {
+                const validCache = createValidCache(2, 1);
+                const circuitState = createMockCircuitState(validCache);
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel.panel = mockDOM.panelEl;
+                panel.tabulatorInstance = {
+                    setData: vi.fn(),
+                    getRows: vi.fn().mockReturnValue([]),
+                    setHeight: vi.fn()
+                };
+                panel.circuitAnalysis = validCache;
+
+                const ensureTableHeightSpy = vi.spyOn(panel, '_ensureTableHeight').mockImplementation(() => {});
+
+                await panel._executeAction({ action: 'UPDATE_DATA' });
+
+                expect(ensureTableHeightSpy).toHaveBeenCalled();
+            });
+
+            it('_syncTabulatorWithAnalysis should call _ensureTableHeight for label changes', async () => {
+                const validCache = createValidCache(2, 1);
+                const circuitState = createMockCircuitState(validCache);
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel.panel = mockDOM.panelEl;
+                panel.circuitAnalysis = validCache;
+                // Mock tabulator with same structure (2 inputs, 1 output) but different label
+                panel.tabulatorInstance = {
+                    getColumns: vi.fn().mockReturnValue([
+                        { getField: () => 'input_1', getDefinition: () => ({ title: 'OldLabel' }) },
+                        { getField: () => 'input_2', getDefinition: () => ({ title: 'I2' }) },
+                        { getField: () => 'output_3', getDefinition: () => ({ title: 'O1' }) }
+                    ]),
+                    setColumns: vi.fn(),
+                    getRows: vi.fn().mockReturnValue([]),
+                    setHeight: vi.fn(),
+                    destroy: vi.fn()
+                };
+
+                const ensureTableHeightSpy = vi.spyOn(panel, '_ensureTableHeight').mockImplementation(() => {});
+                vi.spyOn(panel, '_updateColumnHeaders').mockImplementation(() => {});
+                vi.spyOn(panel, '_updateHighlight').mockImplementation(() => {});
+
+                await panel._syncTabulatorWithAnalysis();
+
+                expect(ensureTableHeightSpy).toHaveBeenCalled();
+            });
+
+            it('_syncTabulatorWithAnalysis should call _ensureTableHeight for data-only changes', async () => {
+                const validCache = createValidCache(2, 1);
+                const circuitState = createMockCircuitState(validCache);
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                panel.panel = mockDOM.panelEl;
+                panel.circuitAnalysis = validCache;
+                panel.tabulatorInstance = {
+                    getColumns: vi.fn().mockReturnValue([
+                        { getField: () => 'input_1', getDefinition: () => ({ title: 'I1' }) },
+                        { getField: () => 'input_2', getDefinition: () => ({ title: 'I2' }) },
+                        { getField: () => 'output_3', getDefinition: () => ({ title: 'O1' }) }
+                    ]),
+                    setData: vi.fn(),
+                    getRows: vi.fn().mockReturnValue([]),
+                    setHeight: vi.fn(),
+                    destroy: vi.fn()
+                };
+
+                const ensureTableHeightSpy = vi.spyOn(panel, '_ensureTableHeight').mockImplementation(() => {});
+
+                await panel._syncTabulatorWithAnalysis();
+
+                expect(ensureTableHeightSpy).toHaveBeenCalled();
+            });
+        });
+
+        describe('code structure verification', () => {
+            it('should have _ensureTableHeight in NONE path (show method)', () => {
+                // Verify the show method contains _ensureTableHeight call
+                const showMethodSource = TruthTablePanel.prototype.show.toString();
+                expect(showMethodSource).toContain('_ensureTableHeight');
+            });
+
+            it('should NOT have _reapplyRowHeights in UPDATE_HEADERS or SYNC paths', () => {
+                // _reapplyRowHeights was removed and replaced with _ensureTableHeight
+                const executeActionSource = TruthTablePanel.prototype._executeAction.toString();
+                const syncSource = TruthTablePanel.prototype._syncTabulatorWithAnalysis.toString();
+
+                // Should not contain _reapplyRowHeights
+                expect(executeActionSource).not.toContain('_reapplyRowHeights');
+                expect(syncSource).not.toContain('_reapplyRowHeights');
             });
         });
     });

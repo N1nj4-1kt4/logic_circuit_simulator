@@ -387,13 +387,14 @@ export class TruthTablePanel {
 
             case ACTION_TYPES.UPDATE_HEADERS:
                 this._updateColumnHeaders();
-                this._reapplyRowHeights();
+                this._ensureTableHeight();
                 this._updateHighlight();
                 break;
 
             case ACTION_TYPES.UPDATE_DATA:
                 if (this.tabulatorInstance) {
                     this.tabulatorInstance.setData(this.circuitAnalysis.table);
+                    this._ensureTableHeight();
                 }
                 break;
 
@@ -647,14 +648,19 @@ export class TruthTablePanel {
         // Generate Tabulator columns with groups
         const columns = this._generateColumns();
 
-        // Estimate height upfront when panel wasn't visible and no Tabulator exists
+        // Estimate height upfront when panel wasn't visible, no Tabulator exists, AND no saved height
         // This prevents the rendering spinner from appearing in a too-small panel
-        if (!wasVisible && !this.tabulatorInstance && this.circuitAnalysis?.table?.length) {
+        // Skip if we have a saved height - user's preference takes priority
+        const hasValidSavedHeightForEstimate = this.state && this.state.height && this.state.height !== '';
+        if (!wasVisible && !this.tabulatorInstance && this.circuitAnalysis?.table?.length && !hasValidSavedHeightForEstimate) {
             const estimatedHeight = estimatePanelHeight(
                 this.circuitAnalysis.table.length,
                 TRUTH_TABLE
             );
             this.panel.style.height = `${estimatedHeight}px`;
+            logger.debug('[TruthTablePanel] _renderTabulator - estimated height applied:', estimatedHeight);
+        } else if (hasValidSavedHeightForEstimate) {
+            logger.debug('[TruthTablePanel] _renderTabulator - skipping height estimate, using saved height:', this.state.height);
         }
 
         // PRESERVE DIMENSIONS before destroying old Tabulator (prevents panel shrink)
@@ -727,6 +733,12 @@ export class TruthTablePanel {
                 // Calculate from panel dimensions for accuracy
                 // IMPORTANT: Do this BEFORE releasing preserved dimensions so Tabulator
                 // has stable container dimensions for virtual rendering calculations
+                //
+                // NOTE: Cannot use _ensureTableHeight() here because we need:
+                // 1. Conditional fitPanel based on hasValidSavedHeight
+                // 2. Width fitting immediately after via _applyTableWidth()
+                // 3. Preserved dimensions release in specific order
+                // See _ensureTableHeight() JSDoc for details.
                 const panelHeader = this.panel.querySelector('.panel-header');
                 const headerHeight = panelHeader ? panelHeader.offsetHeight : 0;
                 const panelStyles = getComputedStyle(this.panel);
@@ -1021,6 +1033,38 @@ export class TruthTablePanel {
     }
 
     /**
+     * Ensure table height is correctly applied.
+     * Consolidates the panel→available height calculation used in multiple paths.
+     *
+     * Used by: UPDATE_HEADERS, UPDATE_DATA, SYNC (labels/data), NONE path
+     *
+     * NOT used by _renderTabulator() because that method requires:
+     * 1. Conditional fitPanel based on hasValidSavedHeight (not a fixed value)
+     * 2. Width fitting via _applyTableWidth() immediately after
+     * 3. Preserved dimensions release in specific order after height/width applied
+     * 4. These operations must happen in sequence within the tableBuilt callback
+     *
+     * @param {Object} options - Options object
+     * @param {boolean} options.fitPanel - If true, resize the panel to fit content
+     * @private
+     */
+    _ensureTableHeight({ fitPanel = false } = {}) {
+        if (!this.panel || !this.tabulatorInstance) return;
+
+        const panelHeader = this.panel.querySelector('.panel-header');
+        const headerHeight = panelHeader ? panelHeader.offsetHeight : 0;
+        const panelStyles = getComputedStyle(this.panel);
+        const paddingTop = parseFloat(panelStyles.paddingTop) || 0;
+        const paddingBottom = parseFloat(panelStyles.paddingBottom) || 0;
+        const panelHeight = this.panel.offsetHeight;
+        const availableHeight = panelHeight - headerHeight - paddingTop - paddingBottom;
+
+        if (availableHeight > 0) {
+            this._applyTableHeight(availableHeight, { fitPanel });
+        }
+    }
+
+    /**
      * Apply width to panel to fit table content
      * Called when panel needs to auto-fit to new column structure
      * @private
@@ -1270,28 +1314,36 @@ export class TruthTablePanel {
     _restoreState(state) {
         if (!state || !this.panel) return;
 
-        // Cap dimensions to reasonable viewport percentages to prevent
-        // restoring absurdly large saved dimensions from large tables
-        const maxWidth = window.innerWidth * 0.9;
-        const maxHeight = window.innerHeight * 0.9;
+        logger.debug('[TruthTablePanel] _restoreState - input state:', {
+            width: state.width,
+            height: state.height,
+            x: state.x,
+            y: state.y
+        });
 
-        // Restore size (only if valid and within reasonable bounds)
+        // Restore size exactly as saved - trust the saved dimensions
+        // since they were valid when the user set them
         if (state.width && state.width !== '') {
             const savedWidth = parseFloat(state.width);
-            if (savedWidth > 0 && savedWidth <= maxWidth) {
+            if (savedWidth > 0) {
                 this.panel.style.width = state.width;
-            } else if (savedWidth > maxWidth) {
-                this.panel.style.width = maxWidth + 'px';
+                logger.debug('[TruthTablePanel] _restoreState - applied width:', state.width);
             }
         }
         if (state.height && state.height !== '') {
             const savedHeight = parseFloat(state.height);
-            if (savedHeight > 0 && savedHeight <= maxHeight) {
+            if (savedHeight > 0) {
                 this.panel.style.height = state.height;
-            } else if (savedHeight > maxHeight) {
-                this.panel.style.height = maxHeight + 'px';
+                logger.debug('[TruthTablePanel] _restoreState - applied height:', state.height);
             }
         }
+
+        logger.debug('[TruthTablePanel] _restoreState - after applying dimensions:', {
+            styleWidth: this.panel.style.width,
+            styleHeight: this.panel.style.height,
+            offsetWidth: this.panel.offsetWidth,
+            offsetHeight: this.panel.offsetHeight
+        });
 
         // Restore position (prefer transform over left/top)
         if (state.x !== undefined && state.y !== undefined) {
@@ -1303,15 +1355,10 @@ export class TruthTablePanel {
             const viewportWidth = window.innerWidth;
             const viewportHeight = window.innerHeight;
 
-            // Get panel dimensions from ACTUAL applied styles (after capping above)
-            // This ensures we use the capped dimensions, not the potentially corrupted saved values
+            // Get panel dimensions from ACTUAL applied styles
             const computedStyle = window.getComputedStyle(this.panel);
-            let panelWidth = parseFloat(computedStyle.width) || 400; // Default 400px
-            let panelHeight = parseFloat(computedStyle.height) || 300; // Default 300px
-
-            // Ensure dimensions don't exceed viewport for clamping calculations
-            panelWidth = Math.min(panelWidth, maxWidth);
-            panelHeight = Math.min(panelHeight, maxHeight);
+            const panelWidth = parseFloat(computedStyle.width) || 400; // Default 400px
+            const panelHeight = parseFloat(computedStyle.height) || 300; // Default 300px
 
             // Clamp position to keep panel at least partially visible
             // Allow panel to be positioned at most 80% off-screen
@@ -1356,19 +1403,6 @@ export class TruthTablePanel {
         // Use setColumns to update all column headers at once
         // This is more efficient than full table rebuild and preserves data
         this.tabulatorInstance.setColumns(newColumns);
-    }
-
-    /**
-     * Re-apply row heights to maintain consistent appearance after data updates
-     * Called after replaceData() which resets Tabulator's internal row styles
-     * @private
-     */
-    _reapplyRowHeights() {
-        const content = document.getElementById('truthTableContent');
-        if (!content) return;
-
-        const rowHeight = 36; // Use max row height for consistent display
-        this._applyRowStyles(content, rowHeight);
     }
 
     /**
@@ -1432,13 +1466,14 @@ export class TruthTablePanel {
 
         if (labelsChanged) {
             this._updateColumnHeaders();
-            this._reapplyRowHeights();
+            this._ensureTableHeight();
             this._updateHighlight();
             return;
         }
 
         // Data only change
         this.tabulatorInstance.setData(this.circuitAnalysis.table);
+        this._ensureTableHeight();
     }
 
     /**
@@ -1574,18 +1609,8 @@ export class TruthTablePanel {
                     // Wait for tableBuilt before highlighting and setup
                     await new Promise((resolve) => {
                         this.tabulatorInstance.on('tableBuilt', () => {
-                            // Apply height like _renderTabulator does
-                            const panelHeader = this.panel.querySelector('.panel-header');
-                            const headerHeight = panelHeader ? panelHeader.offsetHeight : 0;
-                            const panelStyles = getComputedStyle(this.panel);
-                            const paddingTop = parseFloat(panelStyles.paddingTop) || 0;
-                            const paddingBottom = parseFloat(panelStyles.paddingBottom) || 0;
-                            const panelHeight = this.panel.offsetHeight;
-                            const availableHeight = panelHeight - headerHeight - paddingTop - paddingBottom;
-
-                            if (availableHeight > 0) {
-                                this._applyTableHeight(availableHeight, { fitPanel: false });
-                            }
+                            // Apply height to enable scrollbar
+                            this._ensureTableHeight();
 
                             // Listen for column reorder (save state when user drags columns)
                             // This mirrors the setup in _renderTabulator() for RENDER_TABLE path
