@@ -445,6 +445,89 @@ const storage = new IndexedDBAdapter();
 const boardManager = new BoardManager(storage);
 ```
 
+### State Machine + Action Path Pattern
+
+Used by TruthTablePanel for managing complex UI with multiple code paths. The pattern separates **decision logic** (state machine) from **execution logic** (action handlers).
+
+**Architecture:**
+```
+StateMachine          Panel
+    │                   │
+    │ handleShow()      │
+    │ ──────────────►   │
+    │                   │
+    │ { action: SYNC }  │
+    │ ◄──────────────   │
+    │                   │
+    │                   │ _executeAction(action)
+    │                   │ ──────────────────────►
+    │                   │
+    │                   │ _finalizeShow()
+    │                   │ ──────────────────────►
+```
+
+**Key files:**
+- `src/ui/TruthTablePanelStateMachine.js` - State machine (returns action objects)
+- `src/ui/TruthTablePanel.js` - Executes actions returned by state machine
+
+**The Three-Phase Pattern:**
+```javascript
+async show() {
+    // 1. PRE-ACTION: Panel visibility, position restoration
+    this._revealPanel();
+    this._restorePositionIfNeeded();
+
+    // 2. DISPATCH: Action-specific logic (single dispatch point)
+    const action = this._stateMachine.handleShow();
+    await this._executeAction(action);
+
+    // 3. FINALIZE: Common cleanup (single finalization point)
+    this._finalizeShow();
+}
+```
+
+**When to use this pattern:**
+- Complex UI with multiple visibility states (hidden, showing, visible)
+- Multiple triggers that can cause the same visual change (button click, event, restore from persistence)
+- Need to separate "what should happen" from "how to do it"
+
+**Best Practices (Lessons from TruthTablePanel):**
+
+1. **Document the post-action contract in code:**
+```javascript
+/**
+ * POST-SHOW CONTRACT - After any action that shows the panel:
+ * 1. _setupInteractions() - if table is present
+ * 2. _saveVisibleState() - always
+ * 3. _highlightRowByIndex() - if lastCycleIndex exists
+ * 4. emit TRUTH_TABLE_SHOWN - always
+ */
+```
+
+2. **Single dispatch point:** All actions should flow through ONE method (`_executeAction()`). Avoid having separate switch statements in multiple methods.
+
+3. **Single finalization point:** Common cleanup should happen in ONE place, not scattered across action paths. This prevents "misses" when adding new paths.
+
+4. **Write invariant tests immediately:** When introducing action paths, write tests that verify ALL paths satisfy the same invariants:
+```javascript
+describe.each([
+    ['SYNC'], ['NONE'], ['RENDER_TABLE'], ['SHOW_COMPUTING']
+])('%s action', (action) => {
+    it('calls _saveVisibleState()');
+    it('calls _setupInteractions() when table present');
+    it('emits TRUTH_TABLE_SHOWN event');
+});
+```
+
+5. **Keep actions atomic:** Each action should do ONE specific thing. Common operations belong in finalization, not duplicated in each action.
+
+**Anti-patterns to avoid:**
+- Multiple switch statements handling the same actions in different methods
+- Scattering common operations (like `_saveVisibleState()`) across multiple code paths
+- Adding new action paths without updating the invariant test matrix
+
+**Reference documentation:** See `docs/TRUTH_TABLE_PANEL_REFACTORING.md` for detailed analysis and the required post-operations matrix per action type.
+
 ## Logging Best Practices
 
 **Never use `console.log` in production code.** Use the logger utility from `src/utils/logger.js`:
@@ -636,4 +719,6 @@ npm run test:run # Single test run
 | `src/utils/logger.js` | Development logging utility |
 | `src/constants.js` | All configuration values |
 | `src/ui/messages.js` | User-facing strings |
+| `src/ui/TruthTablePanelStateMachine.js` | State machine for TruthTablePanel action paths |
 | `ARCHITECTURE.md` | Detailed architecture documentation |
+| `docs/TRUTH_TABLE_PANEL_REFACTORING.md` | Action path pattern analysis and refactoring plan |
