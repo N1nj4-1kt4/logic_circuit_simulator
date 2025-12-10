@@ -75,6 +75,13 @@ export class AutoSaveManager {
             await this.saveBoardState();
         };
         eventBus.on(EVENT_TYPES.BOARD_CLEARED, this.handleBoardCleared);
+
+        // Save immediately when auto-cycling state changes (start or stop)
+        // This persists isAutoCycling flag so page refresh restores correct state
+        this.handleAutoCycleChanged = () => {
+            this.saveBoardState();
+        };
+        eventBus.on(EVENT_TYPES.AUTOCYCLE_STATE_CHANGED, this.handleAutoCycleChanged);
     }
 
     /**
@@ -100,6 +107,10 @@ export class AutoSaveManager {
 
         if (this.handleBoardCleared) {
             eventBus.off(EVENT_TYPES.BOARD_CLEARED, this.handleBoardCleared);
+        }
+
+        if (this.handleAutoCycleChanged) {
+            eventBus.off(EVENT_TYPES.AUTOCYCLE_STATE_CHANGED, this.handleAutoCycleChanged);
         }
     }
 

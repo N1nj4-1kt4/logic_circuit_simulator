@@ -404,6 +404,7 @@ export class SimulationController {
     _emitAutocycleStateChanged(state, options = {}) {
         eventBus.emit(EVENT_TYPES.AUTOCYCLE_STATE_CHANGED, {
             state,
+            isAutoCycling: state === 'running',
             ...options
         });
     }

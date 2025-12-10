@@ -123,7 +123,7 @@ export const EVENT_TYPES = {
     SIMULATION_RESET: 'simulation:reset',
 
     // Simulation lifecycle events
-    // Payload: { state: 'running' | 'stopped' | 'error', error?: string }
+    // Payload: { state: 'running' | 'stopped' | 'error', isAutoCycling: boolean, error?: string }
     AUTOCYCLE_STATE_CHANGED: 'simulation:autocycleStateChanged',
     // Payload: { cycleIndex, totalCombinations, inputValues }
     SIMULATION_STEP_COMPLETED: 'simulation:stepCompleted',

@@ -326,6 +326,7 @@ describe('SimulationController', () => {
             expect(controller.getState().state).toBe(SIMULATION_STATES.IDLE);
             expect(handler).toHaveBeenCalledWith({
                 state: 'error',
+                isAutoCycling: false,
                 error: 'Circuit became invalid: Output disconnected'
             });
         });

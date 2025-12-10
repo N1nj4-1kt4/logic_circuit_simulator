@@ -430,7 +430,8 @@ export class CircuitState {
      */
     setAutoCycling(isAutoCycling) {
         this.isAutoCycling = isAutoCycling;
-        eventBus.emit('simulation:autoCycleChanged', { isAutoCycling });
+        // Note: Event emission handled by SimulationController via AUTOCYCLE_STATE_CHANGED
+        // to avoid duplicate events and maintain single source of truth
     }
 
     /**
