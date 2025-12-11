@@ -252,6 +252,16 @@ export class TruthTablePanel {
         await this._executeAction(action);
     }
 
+    /**
+     * Handle board changed event.
+     * Marks data as STALE immediately so show() knows analysis is outdated
+     * before debounced recomputation even starts.
+     * @private
+     */
+    _handleBoardChanged() {
+        this._stateMachine.handleBoardChanged();
+    }
+
     // ============================================================================
     // SECTION: Progress UI
     // ============================================================================
@@ -345,32 +355,93 @@ export class TruthTablePanel {
 
     /**
      * Execute an action returned by the state machine.
-     * This is the central dispatcher that translates state machine actions
-     * into actual UI operations.
+     * This is the SINGLE dispatcher that translates ALL state machine actions
+     * into actual UI operations. Both show() and event handlers use this method.
+     *
+     * ## Unified Dispatch Architecture
+     *
+     * All actions flow through this method with three phases:
+     * 1. PRE-ACTION: Panel reveal, position/dimension restoration
+     * 2. DISPATCH: Action-specific execution
+     * 3. POST-ACTION: Finalization (interactions, highlight, state save, event)
      *
      * @param {Object} action - Action object with `action` type and optional parameters
+     * @param {Object} options - Execution options
+     * @param {boolean} options.isShowCall - True if called from show() (enables pre-action setup)
+     * @param {boolean} options.wasHidden - True if panel was hidden before this action
      * @returns {Promise<void>}
      * @private
      */
-    async _executeAction(action) {
+    async _executeAction(action, options = {}) {
+        const { isShowCall = false, wasHidden = false } = options;
+
+        // ========================================================================
+        // NONE action: Special handling for Tabulator virtual DOM rebuild
+        // Tabulator's virtual DOM doesn't properly re-render after display:none,
+        // so we rebuild it. A full rebuild (~50ms) is faster than async row rendering (~1400ms).
+        // ========================================================================
         if (!action || action.action === ACTION_TYPES.NONE) {
+            if (action?.action === ACTION_TYPES.NONE && isShowCall && this.tabulatorInstance && this.circuitAnalysis) {
+                // PRE-ACTION: Reveal panel and restore geometry
+                this._revealPanel();
+                if (wasHidden && this.state) {
+                    this._restoreSavedPosition();
+                    this._restoreSavedDimensions();
+                }
+
+                // DISPATCH: Quick rebuild of Tabulator
+                await this._buildTabulator({ isQuickRebuild: true, clearDimensionsOnStructureChange: false });
+
+                // POST-ACTION: Finalization
+                this._finalizeShow();
+            }
             return;
         }
 
+        // ========================================================================
+        // PRE-ACTION: Panel visibility and geometry restoration
+        // Only for show() calls that need to reveal the panel
+        // ========================================================================
+        if (isShowCall && wasHidden && this._shouldRevealPanel(action)) {
+            // Reveal panel with opacity 0 until content ready (for slow paths)
+            this.panel.classList.remove('hidden');
+            this.panel.style.display = 'block';
+            this.panel.style.opacity = '0';
+            this.panel.style.pointerEvents = 'auto';
+
+            // Restore saved position before rendering (avoids flicker)
+            this._restoreSavedPosition();
+        }
+
+        // ========================================================================
+        // DISPATCH: Action-specific execution
+        // ========================================================================
         switch (action.action) {
             case ACTION_TYPES.SHOW_COMPUTING:
-                this._revealPanel();
+                if (!isShowCall) {
+                    this._revealPanel();
+                }
                 this._renderComputingState();
                 break;
 
             case ACTION_TYPES.SHOW_INVALID:
-                this._revealPanel();
+                if (!isShowCall) {
+                    this._revealPanel();
+                }
                 this._renderInvalidState(action.reason);
                 break;
 
             case ACTION_TYPES.RENDER_TABLE:
-                await this._renderQueue.enqueue(() => this._safeRenderTable());
-                this._setupInteractions();
+                // Ensure we have analysis data
+                if (isShowCall && wasHidden) {
+                    this._setCircuitAnalysisLocalCopy();
+                }
+                this._stateMachine.renderStarted();
+                try {
+                    await this._buildTabulator({ isQuickRebuild: false });
+                } finally {
+                    this._stateMachine.renderCompleted();
+                }
                 break;
 
             case ACTION_TYPES.REBUILD_TABLE:
@@ -382,8 +453,12 @@ export class TruthTablePanel {
                     this.state.width = '';
                     this.state.rowHeight = null;
                 }
-                await this._renderQueue.enqueue(() => this._safeRenderTable());
-                this._setupInteractions();
+                this._stateMachine.renderStarted();
+                try {
+                    await this._buildTabulator({ isQuickRebuild: false });
+                } finally {
+                    this._stateMachine.renderCompleted();
+                }
                 break;
 
             case ACTION_TYPES.UPDATE_HEADERS:
@@ -412,12 +487,35 @@ export class TruthTablePanel {
                 break;
 
             case ACTION_TYPES.SYNC:
+                // PRE-ACTION for SYNC: Reveal if hidden
+                if (isShowCall && wasHidden) {
+                    this._revealPanel();
+                    this._restoreSavedPosition();
+                }
                 await this._syncTabulatorWithAnalysis();
                 break;
 
             default:
                 // Unknown action - ignore
-                break;
+                return;
+        }
+
+        // ========================================================================
+        // POST-ACTION: Finalization
+        // Make panel visible and run common finalization for applicable actions
+        // ========================================================================
+        if (isShowCall && wasHidden && this.panel) {
+            // Make panel fully visible (was opacity 0 during rendering)
+            this.panel.style.opacity = '1';
+        }
+
+        if (this._needsFinalization(action, options)) {
+            // Full finalization for show() calls
+            const skipInteractions = !this._isTableAction(action);
+            this._finalizeShow({ skipInteractions });
+        } else if (this._isTableAction(action) && !isShowCall) {
+            // Event-driven table builds: only setup interactions (no state save/event)
+            this._setupInteractions();
         }
     }
 
@@ -451,27 +549,6 @@ export class TruthTablePanel {
         }
         this.panel.style.display = 'none';
         this.panel.classList.add('hidden');
-    }
-
-    /**
-     * Safe wrapper around _renderTabulator that integrates with state machine.
-     * Notifies state machine of render lifecycle.
-     * @returns {Promise<void>}
-     * @private
-     */
-    async _safeRenderTable() {
-        const content = document.getElementById('truthTableContent');
-        if (!content || !this.circuitAnalysis) return;
-
-        // Compute wasVisible for positioning logic
-        const wasVisible = this._isVisible() && this.tabulatorInstance !== null;
-
-        this._stateMachine.renderStarted();
-        try {
-            await this._renderTabulator(content, wasVisible);
-        } finally {
-            this._stateMachine.renderCompleted();
-        }
     }
 
     // ============================================================================
@@ -590,41 +667,43 @@ export class TruthTablePanel {
     // ============================================================================
 
     /**
-     * Build Tabulator instance and return Promise that resolves when table is ready.
-     * Only handles Tabulator creation - caller (show()) handles common post-render setup.
+     * Unified Tabulator builder. Handles both full renders and quick rebuilds.
+     *
+     * This is the SINGLE place where Tabulator instances are created. It handles:
+     * - Destroying existing Tabulator and Interact.js bindings
+     * - Creating new Tabulator with virtual DOM rendering
+     * - Setting up tableBuilt callback with height/width fitting
+     * - Registering columnMoved listener for state persistence
      *
      * ## Two-Level Lifecycle Architecture
      *
      * This method implements "Table Rebuild" - the fine-grained lifecycle level:
      * - Destroys only the Tabulator instance and Interact.js bindings
      * - Preserves panel state (position, size, column order)
-     * - Called when circuit structure changes (inputs/outputs added/removed)
+     * - Called when circuit structure changes OR panel re-shown after hide
      *
      * This is distinct from destroy() which implements "Full Destroy":
      * - Destroys the entire TruthTablePanel object
      * - Unsubscribes all EventBus listeners
      * - Called by coordinator when switching/clearing boards
      *
-     * | Level          | Method             | When                    | Preserves                     |
-     * |----------------|--------------------|-------------------------|-------------------------------|
-     * | Table Rebuild  | _renderTabulator() | Structure changes       | Position, size, subscriptions |
-     * | Full Destroy   | destroy()          | Board switch/clear      | Nothing (fresh start)         |
-     *
-     * @param {HTMLElement} content - The content container element
-     * @param {boolean} wasVisible - Whether panel was already visible before this call
+     * @param {Object} options - Build options
+     * @param {boolean} options.isQuickRebuild - True for NONE path (skip dimension logic)
+     * @param {boolean} options.clearDimensionsOnStructureChange - Check and clear saved dims if structure changed
      * @returns {Promise<void>} Resolves when tableBuilt event fires
      * @private
      */
-    _renderTabulator(content, wasVisible) {
+    async _buildTabulator({ isQuickRebuild = false, clearDimensionsOnStructureChange = true } = {}) {
+        const content = document.getElementById('truthTableContent');
         if (!this.circuitAnalysis || !content) {
-            return Promise.resolve();
+            return;
         }
 
         // Detect if structure changed since state was saved (e.g., inputs/outputs added while panel was closed)
         // If structure changed, clear saved dimensions so panel auto-fits to new content
         // NOTE: Column order is NOT reset - the merge logic in buildTruthTableColumns handles
         // preserving existing column positions and appending new columns at the end
-        if (this.state && this.state.columnOrder) {
+        if (clearDimensionsOnStructureChange && this.state && this.state.columnOrder) {
             const currentColumnCount = this.circuitAnalysis.inputs.length + this.circuitAnalysis.outputs.length;
             const savedColumnCount = this.state.columnOrder.length;
             if (currentColumnCount !== savedColumnCount) {
@@ -637,12 +716,12 @@ export class TruthTablePanel {
             }
         }
 
-        // Apply saved dimensions BEFORE Tabulator builds (so it can measure correctly)
-        if (this.state && !wasVisible) {
-            if (this.state.width) {
+        // For full renders (not quick rebuild), apply saved dimensions BEFORE Tabulator builds
+        if (!isQuickRebuild && this.state) {
+            if (this.state.width && this.state.width !== '') {
                 this.panel.style.width = this.state.width;
             }
-            if (this.state.height) {
+            if (this.state.height && this.state.height !== '') {
                 this.panel.style.height = this.state.height;
             }
         }
@@ -650,19 +729,19 @@ export class TruthTablePanel {
         // Generate Tabulator columns with groups
         const columns = this._generateColumns();
 
-        // Estimate height upfront when panel wasn't visible, no Tabulator exists, AND no saved height
+        // Estimate height upfront when no Tabulator exists AND no saved height
         // This prevents the rendering spinner from appearing in a too-small panel
         // Skip if we have a saved height - user's preference takes priority
         const hasValidSavedHeightForEstimate = this.state && this.state.height && this.state.height !== '';
-        if (!wasVisible && !this.tabulatorInstance && this.circuitAnalysis?.table?.length && !hasValidSavedHeightForEstimate) {
+        if (!isQuickRebuild && !this.tabulatorInstance && this.circuitAnalysis?.table?.length && !hasValidSavedHeightForEstimate) {
             const estimatedHeight = estimatePanelHeight(
                 this.circuitAnalysis.table.length,
                 TRUTH_TABLE
             );
             this.panel.style.height = `${estimatedHeight}px`;
-            logger.debug('[TruthTablePanel] _renderTabulator - estimated height applied:', estimatedHeight);
+            logger.debug('[TruthTablePanel] _buildTabulator - estimated height applied:', estimatedHeight);
         } else if (hasValidSavedHeightForEstimate) {
-            logger.debug('[TruthTablePanel] _renderTabulator - skipping height estimate, using saved height:', this.state.height);
+            logger.debug('[TruthTablePanel] _buildTabulator - skipping height estimate, using saved height:', this.state.height);
         }
 
         // PRESERVE DIMENSIONS before destroying old Tabulator (prevents panel shrink)
@@ -676,8 +755,10 @@ export class TruthTablePanel {
             this.panel.style.width = `${preservedDimensions.width}px`;
             this.panel.style.height = `${preservedDimensions.height}px`;
 
-            // Show rendering spinner before destroying old table
-            this._showRenderingSpinner();
+            // Show rendering spinner before destroying old table (only for full renders)
+            if (!isQuickRebuild) {
+                this._showRenderingSpinner();
+            }
         }
 
         // Destroy existing Tabulator instance right before creating a new one
@@ -718,9 +799,6 @@ export class TruthTablePanel {
         // Return Promise that resolves when tableBuilt fires
         // Tabulator.js uses asynchronous initialization. The 'tableBuilt' event is fired
         // internally by Tabulator after the table DOM is fully rendered and ready.
-        // We must wait for this event before calling Tabulator methods (getRows, deselectRow, etc.)
-        // or manipulating table DOM elements - doing so earlier causes inconsistent behavior or errors.
-        // See: https://tabulator.info/docs/6.3/events
         return new Promise((resolve) => {
             this.tabulatorInstance.on('tableBuilt', () => {
                 // Hide rendering spinner now that table is ready
@@ -733,14 +811,6 @@ export class TruthTablePanel {
 
                 // Apply height to Tabulator after table is built
                 // Calculate from panel dimensions for accuracy
-                // IMPORTANT: Do this BEFORE releasing preserved dimensions so Tabulator
-                // has stable container dimensions for virtual rendering calculations
-                //
-                // NOTE: Cannot use _ensureTableHeight() here because we need:
-                // 1. Conditional fitPanel based on hasValidSavedHeight
-                // 2. Width fitting immediately after via _applyTableWidth()
-                // 3. Preserved dimensions release in specific order
-                // See _ensureTableHeight() JSDoc for details.
                 const panelHeader = this.panel.querySelector('.panel-header');
                 const headerHeight = panelHeader ? panelHeader.offsetHeight : 0;
                 const panelStyles = getComputedStyle(this.panel);
@@ -758,24 +828,25 @@ export class TruthTablePanel {
                 logger.debug('[TruthTablePanel] tableBuilt - state:', {
                     hasValidSavedHeight,
                     savedRowHeight,
-                    panelHeight: this.panel.offsetHeight
+                    panelHeight: this.panel.offsetHeight,
+                    isQuickRebuild
                 });
 
-                // Fit height if no saved height
+                // Apply height - for quick rebuilds, always preserve existing row height
                 if (availableHeight > 0) {
-                    if (hasValidSavedHeight && savedRowHeight) {
-                        // Restore saved row height instead of recalculating
+                    if (isQuickRebuild || (hasValidSavedHeight && savedRowHeight)) {
+                        // Quick rebuild or restore saved row height
                         this._applyTableHeight(availableHeight, {
                             fitPanel: false,
-                            targetRowHeight: savedRowHeight
+                            targetRowHeight: savedRowHeight || this._currentRowHeight
                         });
                     } else {
                         this._applyTableHeight(availableHeight, { fitPanel: !hasValidSavedHeight });
                     }
                 }
 
-                // Fit width if no saved width
-                if (!hasValidSavedWidth) {
+                // Fit width if no saved width (and not quick rebuild)
+                if (!isQuickRebuild && !hasValidSavedWidth) {
                     this._applyTableWidth();
                 }
 
@@ -790,13 +861,6 @@ export class TruthTablePanel {
                     this.panel.style.height = '';
                 }
 
-                // Save state with visible: true after showing the panel
-                this._saveVisibleState();
-
-                // Highlight current row AFTER height is applied (for proper scrollTo)
-                this._updateHighlight();
-
-                // Signal that table is ready for common post-render setup
                 resolve();
             });
         });
@@ -1344,6 +1408,93 @@ export class TruthTablePanel {
         eventBus.emit(EVENT_TYPES.TRUTH_TABLE_SHOWN);
     }
 
+    // ============================================================================
+    // SECTION: Action Dispatch Helpers
+    // ============================================================================
+
+    /**
+     * Determine if an action requires revealing the panel.
+     * @param {Object} action - Action object with `action` type
+     * @returns {boolean}
+     * @private
+     */
+    _shouldRevealPanel(action) {
+        if (!action) return false;
+        const revealActions = [
+            ACTION_TYPES.SHOW_COMPUTING,
+            ACTION_TYPES.SHOW_INVALID,
+            ACTION_TYPES.RENDER_TABLE,
+            ACTION_TYPES.SYNC
+        ];
+        return revealActions.includes(action.action);
+    }
+
+    /**
+     * Determine if an action needs finalization (interactions, highlight, state save, event).
+     * Only actions that change visibility or render tables need full finalization.
+     * @param {Object} action - Action object with `action` type
+     * @param {Object} options - Options passed to _executeAction
+     * @returns {boolean}
+     * @private
+     */
+    _needsFinalization(action, options = {}) {
+        if (!action) return false;
+
+        // Actions that never need finalization
+        const neverFinalizeActions = [
+            ACTION_TYPES.SHOW_PROGRESS,
+            ACTION_TYPES.HIGHLIGHT_ROW,
+            ACTION_TYPES.HIDE,
+            // These are incremental updates on an already-visible panel
+            // They have their own handling (height update, etc.) and don't need
+            // full finalization which would emit events and re-save state
+            ACTION_TYPES.UPDATE_HEADERS,
+            ACTION_TYPES.UPDATE_DATA
+        ];
+
+        if (neverFinalizeActions.includes(action.action)) {
+            return false;
+        }
+
+        // Only show() calls need full finalization (save state, emit event)
+        // Event-driven actions on already-visible panels only need interactions setup
+        // which is handled separately in _executeAction
+        return options.isShowCall === true;
+    }
+
+    /**
+     * Determine if an action renders/rebuilds a table (needs interactions setup).
+     * @param {Object} action - Action object with `action` type
+     * @returns {boolean}
+     * @private
+     */
+    _isTableAction(action) {
+        if (!action) return false;
+        const tableActions = [
+            ACTION_TYPES.RENDER_TABLE,
+            ACTION_TYPES.REBUILD_TABLE,
+            ACTION_TYPES.SYNC,
+            ACTION_TYPES.NONE // NONE path rebuilds Tabulator
+        ];
+        return tableActions.includes(action.action);
+    }
+
+    /**
+     * Restore saved dimensions from state.
+     * Helper method to reduce duplication in show() paths.
+     * @private
+     */
+    _restoreSavedDimensions() {
+        if (!this.state || !this.panel) return;
+
+        if (this.state.width && this.state.width !== '') {
+            this.panel.style.width = this.state.width;
+        }
+        if (this.state.height && this.state.height !== '') {
+            this.panel.style.height = this.state.height;
+        }
+    }
+
     /**
      * Restore panel state
      * @private
@@ -1470,31 +1621,32 @@ export class TruthTablePanel {
         const currentInputCount = currentColumns.filter(c => c.getField()?.startsWith('input')).length;
         const currentOutputCount = currentColumns.filter(c => c.getField()?.startsWith('output')).length;
 
-        // Compare with fresh analysis
-        const newInputCount = this.circuitAnalysis.inputs.length;
-        const newOutputCount = this.circuitAnalysis.outputs.length;
+        // Compare with ACTUAL current components (not cached analysis which may be stale during debounce)
+        // During the debounce window after BOARD_CHANGED, the cached analysis hasn't been recomputed yet,
+        // but the actual circuit components have changed. We need to detect this.
+        const components = this.circuitState.getComponents();
+        const actualInputCount = components.filter(c => c.type === 'INPUT').length;
+        const actualOutputCount = components.filter(c => c.type === 'OUTPUT').length;
 
+        // Structure changed if Tabulator columns don't match actual circuit components
         const structureChanged =
-            currentInputCount !== newInputCount ||
-            currentOutputCount !== newOutputCount;
+            currentInputCount !== actualInputCount ||
+            currentOutputCount !== actualOutputCount;
 
-        if (structureChanged) {
-            // Full rebuild needed - structure changed while panel was hidden
+        if (structureChanged) {            
             // Clear saved dimensions so panel auto-fits to new column structure
             // Column order is preserved - merge logic handles structure changes
             this._saveState();
             if (this.state) {
                 this.state.height = '';
                 this.state.width = '';
+                this.state.rowHeight = null;
             }
             this.panel.style.width = '';
             this.panel.style.height = '';
 
-            const content = document.getElementById('truthTableContent');
-            if (content) {
-                // Pass wasVisible=false since we cleared dimensions and want fresh auto-fit
-                await this._renderTabulator(content, false);
-            }
+            // Use unified builder with fresh auto-fit
+            await this._buildTabulator({ isQuickRebuild: false, clearDimensionsOnStructureChange: false });
             return;
         }
 
@@ -1559,14 +1711,15 @@ export class TruthTablePanel {
      * Show the truth table panel.
      * Uses state machine to determine appropriate rendering action.
      *
-     * ## Unified Architecture (Phase 2 Refactoring)
+     * ## Unified Dispatch Architecture (Phase 3 Refactoring)
      *
-     * All show() paths follow the pattern:
-     * 1. Pre-action: Reveal panel, restore position
-     * 2. Dispatch: Execute action-specific rendering
-     * 3. Finalize: Call _finalizeShow() for common cleanup
+     * This method is now a thin wrapper that delegates to _executeAction().
+     * All action handling, including pre-action setup and post-action finalization,
+     * happens in the unified dispatcher. This prevents code path fragmentation
+     * and ensures consistent behavior across all show scenarios.
      *
-     * This prevents the action path fragmentation that caused 14+ bug fix commits.
+     * The only show()-specific logic is smart positioning on first open,
+     * which must happen after _executeAction() makes the panel visible.
      */
     async show() {
         if (!this._initialized) {
@@ -1579,164 +1732,20 @@ export class TruthTablePanel {
             if (!this.panel) return;
         }
 
-        // Track if panel was visible before (for positioning logic)
-        const wasVisible = this._isVisible();
+        // Track if panel was hidden before (for positioning and pre-action setup)
+        const wasHidden = !this._isVisible();
 
         // Get action from state machine
         const action = this._stateMachine.handleShow();
 
-        // ========================================================================
-        // SYNC path: Sync Tabulator with analysis data
-        // Returned when: (1) panel already visible with stale data, OR
-        // (2) panel was hidden, has Tabulator, but data changed while hidden
-        // ========================================================================
-        if (action.action === ACTION_TYPES.SYNC) {
-            // Pre-action: Make panel visible if hidden
-            if (!wasVisible) {
-                this._revealPanel();
-                this._restoreSavedPosition();
-            }
+        // Delegate to unified dispatcher
+        await this._executeAction(action, { isShowCall: true, wasHidden });
 
-            // Dispatch: Sync tabulator
-            await this._syncTabulatorWithAnalysis();
-
-            // Finalize: Common post-render setup
-            this._finalizeShow();
-            return;
+        // Smart positioning only on first open (after panel is visible)
+        // This must happen after _executeAction() so panel has dimensions
+        if (wasHidden) {
+            this._positionPanelIfNeeded(false);
         }
-
-        // ========================================================================
-        // NONE path: Reuse existing Tabulator (or already visible)
-        // ========================================================================
-        if (action.action === ACTION_TYPES.NONE) {
-            // Pre-action: Make panel visible
-            this._revealPanel();
-
-            // Restore saved geometry when transitioning from hidden to visible
-            if (!wasVisible && this.state) {
-                this._restoreSavedPosition();
-                if (this.state.width && this.state.width !== '') {
-                    this.panel.style.width = this.state.width;
-                }
-                if (this.state.height && this.state.height !== '') {
-                    this.panel.style.height = this.state.height;
-                }
-            }
-
-            // Dispatch: Rebuild Tabulator for proper virtual DOM rendering
-            // Tabulator's virtual DOM doesn't properly rerender after display:none,
-            // so we rebuild it. A full rebuild (~50ms) is faster than async row rendering (~1400ms).
-            if (this.tabulatorInstance) {
-                const content = document.getElementById('truthTableContent');
-                if (content && this.circuitAnalysis) {
-                    // Unset Interact.js before destroying Tabulator
-                    if (this.interactionsSetup && this.panel) {
-                        interact(this.panel).unset();
-                        this.interactionsSetup = false;
-                    }
-
-                    // Destroy old instance
-                    this.tabulatorInstance.destroy();
-                    this.tabulatorInstance = null;
-
-                    // Quick rebuild - reuse existing column config and data
-                    const columns = this._generateColumns();
-
-                    this.tabulatorInstance = new Tabulator(content, {
-                        columns: columns,
-                        data: this.circuitAnalysis.table,
-                        layout: 'fitColumns',
-                        selectable: 1,
-                        movableColumns: true,
-                        columnHeaderVertAlign: 'bottom',
-                        reactiveData: false,
-                        height: '100%',
-                        renderVertical: 'virtual',
-                    });
-
-                    // Wait for tableBuilt before highlighting and setup
-                    await new Promise((resolve) => {
-                        this.tabulatorInstance.on('tableBuilt', () => {
-                            // Apply height to enable scrollbar
-                            this._ensureTableHeight();
-
-                            // Listen for column reorder (save state when user drags columns)
-                            // This mirrors the setup in _renderTabulator() for RENDER_TABLE path
-                            this.tabulatorInstance.on('columnMoved', () => {
-                                this._saveState();
-                            });
-
-                            resolve();
-                        });
-                    });
-
-                    // Finalize: Common post-render setup
-                    this._finalizeShow();
-                    return;
-                }
-            }
-
-            // Fallback: No Tabulator rebuild possible
-            this._finalizeShow();
-            return;
-        }
-
-        // ========================================================================
-        // Slow path: SHOW_COMPUTING, SHOW_INVALID, RENDER_TABLE
-        // Transitioning from hidden to visible with new content
-        // ========================================================================
-
-        // Ensure we have analysis data for local copy
-        this._setCircuitAnalysisLocalCopy();
-
-        // Pre-action: Reveal panel with opacity 0 until content ready
-        this.panel.classList.remove('hidden');
-        this.panel.style.display = 'block';
-        this.panel.style.opacity = '0';
-        this.panel.style.pointerEvents = 'auto';
-
-        // Restore saved position before rendering (avoids flicker)
-        if (!wasVisible) {
-            this._restoreSavedPosition();
-        }
-
-        // Dispatch: Execute action-specific rendering
-        // Determine if this action renders a table (for finalization options)
-        let rendersTable = false;
-
-        switch (action.action) {
-            case ACTION_TYPES.SHOW_COMPUTING:
-                this._renderComputingState();
-                break;
-
-            case ACTION_TYPES.SHOW_INVALID:
-                this._renderInvalidState(action.reason);
-                break;
-
-            case ACTION_TYPES.RENDER_TABLE: {
-                rendersTable = true;
-                const content = document.getElementById('truthTableContent');
-                if (content && this.circuitAnalysis) {
-                    this._stateMachine.renderStarted();
-                    try {
-                        await this._renderTabulator(content, wasVisible);
-                    } finally {
-                        this._stateMachine.renderCompleted();
-                    }
-                }
-                break;
-            }
-        }
-
-        // Position panel (smart positioning for first open)
-        this._positionPanelIfNeeded(wasVisible);
-
-        // Make panel fully visible
-        this.panel.style.opacity = '1';
-
-        // Finalize: Common post-render setup
-        // Skip interactions for non-table paths (SHOW_COMPUTING, SHOW_INVALID)
-        this._finalizeShow({ skipInteractions: !rendersTable });
     }
 
     /**

@@ -282,6 +282,7 @@ export class TruthTablePanelStateMachine {
         return { action: ACTION_TYPES.NONE };
     }
 
+
     /**
      * Handle CIRCUIT_ANALYSIS_COMPUTING event.
      *

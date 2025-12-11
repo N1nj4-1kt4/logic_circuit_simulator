@@ -233,8 +233,8 @@ describe('TruthTablePanel', () => {
             // Set state machine to visible_table (panel visible, expecting table)
             panel._stateMachine.setPanelState('visible_table');
 
-            // Mock render queue to track if rebuild was triggered
-            const enqueueSpy = vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
+            // After refactoring, _buildTabulator is called directly
+            const buildTabulatorSpy = vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
             vi.spyOn(panel, '_saveState').mockImplementation(() => {});
             vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
 
@@ -242,8 +242,8 @@ describe('TruthTablePanel', () => {
 
             // Should read cache and attempt to rebuild
             expect(circuitState.getCircuitAnalysis).toHaveBeenCalled();
-            // Since tabulatorInstance is null and we have table data, it should trigger rebuild via render queue
-            expect(enqueueSpy).toHaveBeenCalled();
+            // Since tabulatorInstance is null and we have table data, it should trigger rebuild
+            expect(buildTabulatorSpy).toHaveBeenCalled();
         });
 
         it('should sync data but not update Tabulator when panel is hidden', async () => {
@@ -298,14 +298,14 @@ describe('TruthTablePanel', () => {
             // Set state machine to visible_table (panel visible, expecting table)
             panel._stateMachine.setPanelState('visible_table');
 
-            // Mock render queue to track if rebuild was triggered
-            const enqueueSpy = vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
+            // After refactoring, _buildTabulator is called directly
+            const buildTabulatorSpy = vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
             vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
 
             await panel._handleComputed();
 
-            // Should render table via render queue (not invalid state) since event only fires for valid circuits
-            expect(enqueueSpy).toHaveBeenCalled();
+            // Should render table (not invalid state) since event only fires for valid circuits
+            expect(buildTabulatorSpy).toHaveBeenCalled();
             // Verify circuitAnalysis was updated with valid state
             expect(panel.circuitAnalysis.isValid).toBe(true);
             expect(panel.circuitAnalysis.table.length).toBeGreaterThan(0);
@@ -366,8 +366,8 @@ describe('TruthTablePanel', () => {
             // Set state machine to visible_table to enable rebuild detection
             panel._stateMachine.setPanelState('visible_table');
 
-            // Mock render queue to track if REBUILD_TABLE action was triggered
-            const enqueueSpy = vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
+            // After refactoring, _buildTabulator is called directly
+            const buildTabulatorSpy = vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
             const saveStateSpy = vi.spyOn(panel, '_saveState').mockImplementation(() => {});
             vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
 
@@ -375,9 +375,9 @@ describe('TruthTablePanel', () => {
 
             // Should NOT call replaceData (structure changed)
             expect(mockTabulatorInstance.replaceData).not.toHaveBeenCalled();
-            // Should save state and trigger rebuild via render queue
+            // Should save state and trigger rebuild
             expect(saveStateSpy).toHaveBeenCalled();
-            expect(enqueueSpy).toHaveBeenCalled();
+            expect(buildTabulatorSpy).toHaveBeenCalled();
             // Should reset column order
             expect(panel.columnOrder).toBeNull();
             // Should clear height/width to allow auto-fit, but keep position
@@ -418,15 +418,15 @@ describe('TruthTablePanel', () => {
             // Set state machine to visible_table to enable rebuild detection
             panel._stateMachine.setPanelState('visible_table');
 
-            // Mock render queue to track if REBUILD_TABLE action was triggered
-            const enqueueSpy = vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
+            // After refactoring, _buildTabulator is called directly
+            const buildTabulatorSpy = vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
             vi.spyOn(panel, '_saveState').mockImplementation(() => {});
             vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
 
             await panel._handleComputed();
 
             expect(mockTabulatorInstance.replaceData).not.toHaveBeenCalled();
-            expect(enqueueSpy).toHaveBeenCalled();
+            expect(buildTabulatorSpy).toHaveBeenCalled();
         });
 
         it('should handle missing circuitAnalysis gracefully', async () => {
@@ -458,16 +458,16 @@ describe('TruthTablePanel', () => {
             // Set state machine to visible_table to enable rebuild detection
             panel._stateMachine.setPanelState('visible_table');
 
-            // Mock render queue to track if rebuild was triggered
-            const enqueueSpy = vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
+            // After refactoring, _buildTabulator is called directly
+            const buildTabulatorSpy = vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
             vi.spyOn(panel, '_saveState').mockImplementation(() => {});
             vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
 
             // Should not throw
             await expect(panel._handleComputed()).resolves.not.toThrow();
 
-            // Should treat as structure change and trigger rebuild via render queue
-            expect(enqueueSpy).toHaveBeenCalled();
+            // Should treat as structure change and trigger rebuild
+            expect(buildTabulatorSpy).toHaveBeenCalled();
         });
 
         it('should mark state machine data as STALE when panel is hidden', async () => {
@@ -591,6 +591,39 @@ describe('TruthTablePanel', () => {
             // State machine should mark data as STALE so show() will sync
             const smState = panel._stateMachine.getState();
             expect(smState.data).toBe('stale');
+        });
+
+        it('should return SHOW_COMPUTING when data is COMPUTING even if old analysis exists (Test 8 fix)', () => {
+            // Bug fix: When user reopens panel during active computation,
+            // the old cached analysis still exists but should be ignored.
+            // State machine should return SHOW_COMPUTING based on data state.
+            const circuitState = createMockCircuitState(createValidCache());
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            // Setup: panel was shown before, has a Tabulator instance
+            panel.panel = mockDOM.panelEl;
+            panel.tabulatorInstance = { destroy: vi.fn(), getColumns: vi.fn() };
+            panel.circuitAnalysis = createValidCache();
+
+            // Mark panel as hidden
+            mockDOM.panelEl.classList.classes.add('hidden');
+            mockDOM.panelEl.style.display = 'none';
+
+            // Simulate: computation started while panel was hidden
+            // (e.g., user added input triggering recomputation)
+            panel._stateMachine.setDataState('computing');
+
+            // Now user tries to show the panel
+            const action = panel._stateMachine.handleShow();
+
+            // Should return SHOW_COMPUTING, not SYNC or NONE
+            expect(action.action).toBe('SHOW_COMPUTING');
+            expect(panel._stateMachine.getState().panel).toBe('showing_computing');
         });
     });
 
@@ -758,13 +791,51 @@ describe('TruthTablePanel', () => {
                 ]) // Only 2 inputs in Tabulator
             };
 
-            const renderSpy = vi.spyOn(panel, '_renderTabulator').mockResolvedValue();
+            const renderSpy = vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
             vi.spyOn(panel, '_saveState').mockImplementation(() => {});
 
             await panel._syncTabulatorWithAnalysis();
 
             // Should trigger full rebuild
             expect(renderSpy).toHaveBeenCalled();
+        });
+
+        it('should NOT clear panel style dimensions when structure changes (for rendering spinner)', async () => {
+            // Bug fix: _syncTabulatorWithAnalysis should NOT clear panel.style.width/height
+            // when structure changes. This allows _buildTabulator to preserve dimensions
+            // and show the rendering spinner before destroying old Tabulator.
+            const circuitState = createMockCircuitState(createValidCache(3, 1));
+            const panel = new TruthTablePanel(
+                mockDOM.canvasEl,
+                [],
+                [],
+                circuitState
+            );
+
+            panel.panel = mockDOM.panelEl;
+            // Set inline styles that should be preserved
+            mockDOM.panelEl.style.width = '500px';
+            mockDOM.panelEl.style.height = '400px';
+
+            panel.circuitAnalysis = createValidCache(3, 1); // 3 inputs now
+            panel.tabulatorInstance = {
+                getColumns: vi.fn().mockReturnValue([
+                    { getField: () => 'input_1' },
+                    { getField: () => 'input_2' },
+                    { getField: () => 'output_3' }
+                ]) // Only 2 inputs in Tabulator - structure differs
+            };
+            panel.state = { width: '500px', height: '400px' };
+
+            vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
+            vi.spyOn(panel, '_saveState').mockImplementation(() => {});
+
+            await panel._syncTabulatorWithAnalysis();
+
+            // Panel style dimensions should NOT be cleared
+            // (they should still have their values so _buildTabulator can use them)
+            expect(mockDOM.panelEl.style.width).toBe('500px');
+            expect(mockDOM.panelEl.style.height).toBe('400px');
         });
 
         it('should update headers when labels change', async () => {
@@ -1595,15 +1666,15 @@ describe('TruthTablePanel', () => {
             // Set state machine to visible_table to enable rebuild detection
             panel._stateMachine.setPanelState('visible_table');
 
-            // Mock render queue to track if rebuild was triggered
-            const enqueueSpy = vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
+            // After refactoring, _buildTabulator is called directly instead of via render queue
+            const buildTabulatorSpy = vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
             vi.spyOn(panel, '_saveState').mockImplementation(() => {});
             vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
 
             await panel._handleComputed();
 
             // Should trigger full rebuild (structure changed - oldAnalysis had 0 inputs/outputs)
-            expect(enqueueSpy).toHaveBeenCalled();
+            expect(buildTabulatorSpy).toHaveBeenCalled();
             // circuitAnalysis should be updated with new table data
             expect(panel.circuitAnalysis.table.length).toBeGreaterThan(0);
         });
@@ -1959,8 +2030,8 @@ describe('TruthTablePanel', () => {
             // Update the mock to return updated cache
             circuitState.getCircuitAnalysis.mockReturnValue(updatedCache);
 
-            // Spy on _renderTabulator to ensure full rebuild is NOT called
-            const displaySpy = vi.spyOn(panel, '_renderTabulator');
+            // Spy on _buildTabulator to ensure full rebuild is NOT called
+            const displaySpy = vi.spyOn(panel, '_buildTabulator');
             // Mock _ensureTableHeight and _updateHighlight (called after setColumns)
             vi.spyOn(panel, '_ensureTableHeight').mockImplementation(() => {});
             vi.spyOn(panel, '_updateHighlight').mockImplementation(() => {});
@@ -2469,7 +2540,12 @@ describe('TruthTablePanel', () => {
                 expect(syncSpy).toHaveBeenCalled();
             });
 
-            it('should handle RENDER_TABLE action through render queue', async () => {
+            it('should restore dimensions before SYNC when isShowCall=true and wasHidden=true', async () => {
+                // Bug fix: When reopening panel after structure change while hidden,
+                // dimensions should be restored BEFORE _syncTabulatorWithAnalysis runs.
+                // This prevents the panel from appearing empty until Tabulator builds.
+                //
+                // Flow: Common PRE-ACTION restores position → SYNC case restores dimensions → sync runs
                 const circuitState = createMockCircuitState(createValidCache());
                 const panel = new TruthTablePanel(
                     mockDOM.canvasEl,
@@ -2478,12 +2554,54 @@ describe('TruthTablePanel', () => {
                     circuitState
                 );
 
-                const enqueueSpy = vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
+                panel.panel = mockDOM.panelEl;
+
+                // Saved state with dimensions
+                panel.state = {
+                    width: '500px',
+                    height: '400px',
+                    x: 100,
+                    y: 50
+                };
+
+                // Position is restored by common PRE-ACTION block (via _shouldRevealPanel including SYNC)
+                const restorePositionSpy = vi.spyOn(panel, '_restoreSavedPosition').mockImplementation(() => {});
+                // Dimensions are restored by SYNC case specifically
+                const restoreDimensionsSpy = vi.spyOn(panel, '_restoreSavedDimensions').mockImplementation(() => {});
+                const syncSpy = vi.spyOn(panel, '_syncTabulatorWithAnalysis').mockResolvedValue();
+
+                await panel._executeAction({ action: 'SYNC' }, { isShowCall: true, wasHidden: true });
+
+                // Should call pre-action setup
+                expect(restorePositionSpy).toHaveBeenCalled();
+                expect(restoreDimensionsSpy).toHaveBeenCalled();
+                expect(syncSpy).toHaveBeenCalled();
+
+                // Verify order: position → dimensions → sync
+                const positionOrder = restorePositionSpy.mock.invocationCallOrder[0];
+                const dimensionsOrder = restoreDimensionsSpy.mock.invocationCallOrder[0];
+                const syncOrder = syncSpy.mock.invocationCallOrder[0];
+
+                expect(positionOrder).toBeLessThan(dimensionsOrder);
+                expect(dimensionsOrder).toBeLessThan(syncOrder);
+            });
+
+            it('should handle RENDER_TABLE action by calling _buildTabulator', async () => {
+                const circuitState = createMockCircuitState(createValidCache());
+                const panel = new TruthTablePanel(
+                    mockDOM.canvasEl,
+                    [],
+                    [],
+                    circuitState
+                );
+
+                // After refactoring, RENDER_TABLE calls _buildTabulator directly
+                const buildTabulatorSpy = vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
                 vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
 
                 await panel._executeAction({ action: 'RENDER_TABLE' });
 
-                expect(enqueueSpy).toHaveBeenCalled();
+                expect(buildTabulatorSpy).toHaveBeenCalled();
             });
 
             it('should handle UPDATE_HEADERS action', async () => {
@@ -2580,7 +2698,7 @@ describe('TruthTablePanel', () => {
                 expect(() => panel._hidePanel()).not.toThrow();
             });
 
-            it('_safeRenderTable should call state machine render lifecycle methods', async () => {
+            it('RENDER_TABLE action should call state machine render lifecycle methods', async () => {
                 const validCache = createValidCache();
                 const circuitState = createMockCircuitState(validCache);
                 const panel = new TruthTablePanel(
@@ -2590,20 +2708,22 @@ describe('TruthTablePanel', () => {
                     circuitState
                 );
 
+                panel._initialized = true;
                 panel.panel = mockDOM.panelEl;
                 panel.circuitAnalysis = validCache;
 
                 const renderStartedSpy = vi.spyOn(panel._stateMachine, 'renderStarted');
                 const renderCompletedSpy = vi.spyOn(panel._stateMachine, 'renderCompleted');
-                vi.spyOn(panel, '_renderTabulator').mockResolvedValue();
+                vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
 
-                await panel._safeRenderTable();
+                // Execute RENDER_TABLE action directly (as event-driven path would)
+                await panel._executeAction({ action: 'RENDER_TABLE' });
 
                 expect(renderStartedSpy).toHaveBeenCalled();
                 expect(renderCompletedSpy).toHaveBeenCalled();
             });
 
-            it('_safeRenderTable should call renderCompleted even if render throws', async () => {
+            it('RENDER_TABLE action should call renderCompleted even if build throws', async () => {
                 const validCache = createValidCache();
                 const circuitState = createMockCircuitState(validCache);
                 const panel = new TruthTablePanel(
@@ -2613,19 +2733,20 @@ describe('TruthTablePanel', () => {
                     circuitState
                 );
 
+                panel._initialized = true;
                 panel.panel = mockDOM.panelEl;
                 panel.circuitAnalysis = validCache;
 
                 const renderCompletedSpy = vi.spyOn(panel._stateMachine, 'renderCompleted');
-                vi.spyOn(panel, '_renderTabulator').mockRejectedValue(new Error('Render error'));
+                vi.spyOn(panel, '_buildTabulator').mockRejectedValue(new Error('Render error'));
 
-                await expect(panel._safeRenderTable()).rejects.toThrow('Render error');
+                await expect(panel._executeAction({ action: 'RENDER_TABLE' })).rejects.toThrow('Render error');
 
                 // renderCompleted should still be called via finally block
                 expect(renderCompletedSpy).toHaveBeenCalled();
             });
 
-            it('_safeRenderTable should return early if no content element', async () => {
+            it('RENDER_TABLE action with no content element returns early in _buildTabulator', async () => {
                 const circuitState = createMockCircuitState(createValidCache());
                 const panel = new TruthTablePanel(
                     mockDOM.canvasEl,
@@ -2633,6 +2754,10 @@ describe('TruthTablePanel', () => {
                     [],
                     circuitState
                 );
+
+                panel._initialized = true;
+                panel.panel = mockDOM.panelEl;
+                panel.circuitAnalysis = createValidCache();
 
                 // Make getElementById return null for truthTableContent
                 mockDOM.mockDocument.getElementById = vi.fn((id) => {
@@ -2642,10 +2767,10 @@ describe('TruthTablePanel', () => {
 
                 const renderStartedSpy = vi.spyOn(panel._stateMachine, 'renderStarted');
 
-                await panel._safeRenderTable();
+                await panel._executeAction({ action: 'RENDER_TABLE' });
 
-                // Should not have called renderStarted since we returned early
-                expect(renderStartedSpy).not.toHaveBeenCalled();
+                // renderStarted IS called, but _buildTabulator returns early
+                expect(renderStartedSpy).toHaveBeenCalled();
             });
         });
 
@@ -2807,7 +2932,17 @@ describe('TruthTablePanel', () => {
 
                 panel._initialized = true;
                 panel.panel = mockDOM.panelEl;
+                panel.circuitAnalysis = validCache;
+                // Inline mock Tabulator instance (createMockTabulator not in scope)
+                panel.tabulatorInstance = {
+                    destroy: vi.fn(),
+                    on: vi.fn(),
+                    getRows: vi.fn().mockReturnValue([]),
+                    getColumns: vi.fn().mockReturnValue([])
+                };
                 vi.spyOn(panel._stateMachine, 'handleShow').mockReturnValue({ action: 'NONE' });
+                // Mock _buildTabulator to avoid Tabulator constructor error
+                vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
 
                 const eventHandler = vi.fn();
                 eventBus.on(EVENT_TYPES.TRUTH_TABLE_SHOWN, eventHandler);
@@ -2902,7 +3037,7 @@ describe('TruthTablePanel', () => {
                 vi.spyOn(panel._stateMachine, 'handleShow').mockReturnValue({ action: 'RENDER_TABLE' });
                 const renderStartedSpy = vi.spyOn(panel._stateMachine, 'renderStarted');
                 const renderCompletedSpy = vi.spyOn(panel._stateMachine, 'renderCompleted');
-                vi.spyOn(panel, '_renderTabulator').mockResolvedValue();
+                vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
                 vi.spyOn(panel, '_positionPanelIfNeeded').mockImplementation(() => {});
                 vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
 
@@ -2943,7 +3078,7 @@ describe('TruthTablePanel', () => {
                     panel: 'visible_table',
                     lastCycleIndex: 2
                 });
-                vi.spyOn(panel, '_renderTabulator').mockResolvedValue();
+                vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
                 vi.spyOn(panel, '_positionPanelIfNeeded').mockImplementation(() => {});
                 vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
 
@@ -3040,13 +3175,14 @@ describe('TruthTablePanel', () => {
                 const validCache = createValidCache();
                 circuitState.getCircuitAnalysis.mockReturnValue(validCache);
 
-                vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
+                // After refactoring, _buildTabulator is called directly
+                const buildTabulatorSpy = vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
                 vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
 
                 await panel._handleComputed();
 
-                // Should have triggered RENDER_TABLE action
-                expect(panel._renderQueue.enqueue).toHaveBeenCalled();
+                // Should have triggered RENDER_TABLE action which calls _buildTabulator
+                expect(buildTabulatorSpy).toHaveBeenCalled();
             });
         });
 
@@ -3124,7 +3260,7 @@ describe('TruthTablePanel', () => {
                     destroy: vi.fn() // NONE action does quick rebuild which calls destroy()
                 };
 
-                vi.spyOn(panel, '_renderTabulator').mockResolvedValue();
+                vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
                 vi.spyOn(panel, '_positionPanelIfNeeded').mockImplementation(() => {});
                 vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
                 vi.spyOn(panel, '_saveState').mockImplementation(() => {});
@@ -3177,7 +3313,8 @@ describe('TruthTablePanel', () => {
                 panel._stateMachine.handleStepCompleted({ cycleIndex: 2 });
                 expect(panel._stateMachine.getState().lastCycleIndex).toBe(2);
 
-                vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
+                // After refactoring, _buildTabulator is called directly
+                vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
                 vi.spyOn(panel, '_saveState').mockImplementation(() => {});
                 vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
 
@@ -3211,7 +3348,7 @@ describe('TruthTablePanel', () => {
                 // 1. state.width cleared (as REBUILD_TABLE does)
                 panel.state = { width: '', height: '', x: 100, y: 100 };
 
-                // 2. _renderTabulator runs with preservedDimensions (existing tabulatorInstance)
+                // 2. _buildTabulator runs with preservedDimensions (existing tabulatorInstance)
                 //    After _applyTableWidth runs, line 749-750 should NOT clear style.width
                 //    because hasValidSavedWidth is false (state.width === '')
 
@@ -3271,15 +3408,15 @@ describe('TruthTablePanel', () => {
                 panel.circuitAnalysis = validCache;
 
                 const executionOrder = [];
-                vi.spyOn(panel, '_renderTabulator').mockImplementation(async () => {
+                vi.spyOn(panel, '_buildTabulator').mockImplementation(async () => {
                     executionOrder.push('start');
                     await new Promise(resolve => setTimeout(resolve, 10));
                     executionOrder.push('end');
                 });
 
-                // Queue multiple renders
-                const promise1 = panel._renderQueue.enqueue(() => panel._safeRenderTable());
-                const promise2 = panel._renderQueue.enqueue(() => panel._safeRenderTable());
+                // Queue multiple builds directly (after refactoring, _buildTabulator is the render function)
+                const promise1 = panel._renderQueue.enqueue(() => panel._buildTabulator());
+                const promise2 = panel._renderQueue.enqueue(() => panel._buildTabulator());
 
                 await Promise.all([promise1, promise2]);
 
@@ -3301,15 +3438,15 @@ describe('TruthTablePanel', () => {
                 panel.circuitAnalysis = validCache;
 
                 let renderCount = 0;
-                vi.spyOn(panel, '_renderTabulator').mockImplementation(async () => {
+                vi.spyOn(panel, '_buildTabulator').mockImplementation(async () => {
                     renderCount++;
                     await new Promise(resolve => setTimeout(resolve, 20));
                 });
 
-                // Queue three renders while first is running
-                const promise1 = panel._renderQueue.enqueue(() => panel._safeRenderTable());
-                const promise2 = panel._renderQueue.enqueue(() => panel._safeRenderTable());
-                const promise3 = panel._renderQueue.enqueue(() => panel._safeRenderTable());
+                // Queue three builds while first is running
+                const promise1 = panel._renderQueue.enqueue(() => panel._buildTabulator());
+                const promise2 = panel._renderQueue.enqueue(() => panel._buildTabulator());
+                const promise3 = panel._renderQueue.enqueue(() => panel._buildTabulator());
 
                 await Promise.all([promise1, promise2, promise3]);
 
@@ -3902,8 +4039,8 @@ describe('TruthTablePanel', () => {
                         lastCycleIndex: null
                     });
 
-                    // Mock _renderTabulator to avoid full Tabulator construction
-                    vi.spyOn(panel, '_renderTabulator').mockResolvedValue();
+                    // Mock _buildTabulator to avoid full Tabulator construction
+                    vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
                     vi.spyOn(panel._stateMachine, 'renderStarted').mockImplementation(() => {});
                     vi.spyOn(panel._stateMachine, 'renderCompleted').mockImplementation(() => {});
 
@@ -3924,7 +4061,7 @@ describe('TruthTablePanel', () => {
                         lastCycleIndex: null
                     });
 
-                    vi.spyOn(panel, '_renderTabulator').mockResolvedValue();
+                    vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
                     vi.spyOn(panel._stateMachine, 'renderStarted').mockImplementation(() => {});
                     vi.spyOn(panel._stateMachine, 'renderCompleted').mockImplementation(() => {});
 
@@ -3948,8 +4085,8 @@ describe('TruthTablePanel', () => {
                         lastCycleIndex: 2
                     });
 
-                    // After _renderTabulator, panel should have a Tabulator instance
-                    vi.spyOn(panel, '_renderTabulator').mockImplementation(async () => {
+                    // After _buildTabulator, panel should have a Tabulator instance
+                    vi.spyOn(panel, '_buildTabulator').mockImplementation(async () => {
                         panel.tabulatorInstance = createMockTabulator();
                     });
                     vi.spyOn(panel._stateMachine, 'renderStarted').mockImplementation(() => {});
@@ -4091,7 +4228,8 @@ describe('TruthTablePanel', () => {
                     mockDOM.panelEl.style.display = 'block';
 
                     vi.spyOn(panel, '_saveState').mockImplementation(() => {});
-                    vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
+                    // Mock _buildTabulator directly (after refactoring, it's called directly not via render queue)
+                    vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
 
                     const setupInteractionsSpy = vi.spyOn(panel, '_setupInteractions');
 
@@ -4108,7 +4246,8 @@ describe('TruthTablePanel', () => {
                     mockDOM.panelEl.style.display = 'block';
 
                     vi.spyOn(panel, '_saveState').mockImplementation(() => {});
-                    vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
+                    // Mock _buildTabulator directly (after refactoring, it's called directly not via render queue)
+                    vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
 
                     const saveVisibleStateSpy = vi.spyOn(panel, '_saveVisibleState');
 
@@ -4126,7 +4265,8 @@ describe('TruthTablePanel', () => {
                     const { panel } = createInitializedPanel();
                     panel.tabulatorInstance = null;
 
-                    vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
+                    // Mock _buildTabulator directly (after refactoring, it's called directly not via render queue)
+                    vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
 
                     const setupInteractionsSpy = vi.spyOn(panel, '_setupInteractions');
 
@@ -4230,7 +4370,7 @@ describe('TruthTablePanel', () => {
                     }},
                     { action: 'RENDER_TABLE', setupMocks: (panel) => {
                         panel.tabulatorInstance = null;
-                        vi.spyOn(panel, '_renderTabulator').mockResolvedValue();
+                        vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
                         vi.spyOn(panel._stateMachine, 'renderStarted').mockImplementation(() => {});
                         vi.spyOn(panel._stateMachine, 'renderCompleted').mockImplementation(() => {});
                     }},
@@ -4290,7 +4430,8 @@ describe('TruthTablePanel', () => {
                         if (action === 'REBUILD_TABLE' || (action === 'RENDER_TABLE' && via === '_executeAction()')) {
                             panel.tabulatorInstance = createMockTabulator();
                             vi.spyOn(panel, '_saveState').mockImplementation(() => {});
-                            vi.spyOn(panel._renderQueue, 'enqueue').mockResolvedValue();
+                            // After refactoring, _buildTabulator is called directly not via render queue
+                            vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
                         }
 
                         if (action === 'SYNC') {
@@ -4322,7 +4463,7 @@ describe('TruthTablePanel', () => {
 
                             if (action === 'RENDER_TABLE') {
                                 panel.tabulatorInstance = null;
-                                vi.spyOn(panel, '_renderTabulator').mockResolvedValue();
+                                vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
                                 vi.spyOn(panel._stateMachine, 'renderStarted').mockImplementation(() => {});
                                 vi.spyOn(panel._stateMachine, 'renderCompleted').mockImplementation(() => {});
                             }
@@ -4579,7 +4720,7 @@ describe('TruthTablePanel', () => {
                         panel: 'visible_table',
                         lastCycleIndex: null
                     });
-                    vi.spyOn(panel, '_renderTabulator').mockResolvedValue();
+                    vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
                     vi.spyOn(panel._stateMachine, 'renderStarted').mockImplementation(() => {});
                     vi.spyOn(panel._stateMachine, 'renderCompleted').mockImplementation(() => {});
 
@@ -4763,7 +4904,7 @@ describe('TruthTablePanel', () => {
                         panel: 'visible_table',
                         lastCycleIndex: null
                     });
-                    vi.spyOn(panel, '_renderTabulator').mockResolvedValue();
+                    vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
                     vi.spyOn(panel._stateMachine, 'renderStarted').mockImplementation(() => {});
                     vi.spyOn(panel._stateMachine, 'renderCompleted').mockImplementation(() => {});
 
@@ -4834,7 +4975,7 @@ describe('TruthTablePanel', () => {
                             vi.spyOn(panel, '_syncTabulatorWithAnalysis').mockResolvedValue();
                         }
                         if (actionType === 'RENDER_TABLE') {
-                            vi.spyOn(panel, '_renderTabulator').mockResolvedValue();
+                            vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
                             vi.spyOn(panel._stateMachine, 'renderStarted').mockImplementation(() => {});
                             vi.spyOn(panel._stateMachine, 'renderCompleted').mockImplementation(() => {});
                         }
@@ -4897,7 +5038,7 @@ describe('TruthTablePanel', () => {
                         }},
                         { action: 'RENDER_TABLE', setup: (p) => {
                             p.tabulatorInstance = null;
-                            vi.spyOn(p, '_renderTabulator').mockResolvedValue();
+                            vi.spyOn(p, '_buildTabulator').mockResolvedValue();
                             vi.spyOn(p._stateMachine, 'renderStarted').mockImplementation(() => {});
                             vi.spyOn(p._stateMachine, 'renderCompleted').mockImplementation(() => {});
                         }},
@@ -4944,7 +5085,7 @@ describe('TruthTablePanel', () => {
                         }},
                         { action: 'RENDER_TABLE', setup: (p) => {
                             p.tabulatorInstance = null;
-                            vi.spyOn(p, '_renderTabulator').mockResolvedValue();
+                            vi.spyOn(p, '_buildTabulator').mockResolvedValue();
                             vi.spyOn(p._stateMachine, 'renderStarted').mockImplementation(() => {});
                             vi.spyOn(p._stateMachine, 'renderCompleted').mockImplementation(() => {});
                         }}
@@ -5035,25 +5176,25 @@ describe('TruthTablePanel', () => {
                 // since module-level Tabulator mocks can't be dynamically reconfigured.
                 // The actual fix is verified through code review and integration tests.
 
-                it('should have columnMoved listener pattern in NONE path (code review verification)', async () => {
+                it('should have columnMoved listener pattern in _buildTabulator (code review verification)', async () => {
                     // This test verifies the fix exists by checking the implementation
-                    // The NONE path creates a new Tabulator with movableColumns: true
+                    // _buildTabulator creates Tabulator with movableColumns: true
                     // and must attach a columnMoved listener to persist column order
 
                     // Read the source code to verify the pattern exists
                     // This is a code structure test, not a behavioral test
                     const { TruthTablePanel } = await import('../../../src/ui/TruthTablePanel.js');
 
-                    // Get the source code of the show method
-                    const showMethodSource = TruthTablePanel.prototype.show.toString();
+                    // After refactoring, columnMoved is in _buildTabulator (unified Tabulator builder)
+                    const buildTabulatorSource = TruthTablePanel.prototype._buildTabulator.toString();
 
-                    // Verify the NONE path has columnMoved listener
+                    // Verify _buildTabulator has columnMoved listener
                     // The pattern should include: .on('columnMoved', ...)
-                    expect(showMethodSource).toContain('columnMoved');
-                    expect(showMethodSource).toContain('_saveState');
+                    expect(buildTabulatorSource).toContain('columnMoved');
+                    expect(buildTabulatorSource).toContain('_saveState');
                 });
 
-                it('should call _saveState when columns are moved (via _renderTabulator path)', async () => {
+                it('should call _saveState when columns are moved (via _buildTabulator path)', async () => {
                     // This tests the RENDER_TABLE path which has the same columnMoved pattern
                     // Both paths (RENDER_TABLE and NONE) attach columnMoved -> _saveState
 
@@ -5394,10 +5535,10 @@ describe('TruthTablePanel', () => {
         });
 
         describe('code structure verification', () => {
-            it('should have _ensureTableHeight in NONE path (show method)', () => {
-                // Verify the show method contains _ensureTableHeight call
-                const showMethodSource = TruthTablePanel.prototype.show.toString();
-                expect(showMethodSource).toContain('_ensureTableHeight');
+            it('should have _ensureTableHeight in unified dispatch (_executeAction)', () => {
+                // After refactoring, _ensureTableHeight is in _executeAction (unified dispatcher)
+                const executeActionSource = TruthTablePanel.prototype._executeAction.toString();
+                expect(executeActionSource).toContain('_ensureTableHeight');
             });
 
             it('should NOT have _reapplyRowHeights in UPDATE_HEADERS or SYNC paths', () => {
