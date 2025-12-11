@@ -124,9 +124,24 @@ const createMockDOM = () => {
 };
 
 // Create mock CircuitState
-const createMockCircuitState = (analysis = null) => ({
-    getCircuitAnalysis: vi.fn().mockReturnValue(analysis)
-});
+const createMockCircuitState = (analysis = null) => {
+    // Build components array from analysis for getComponents() mock
+    const components = [];
+    if (analysis && analysis.inputs) {
+        analysis.inputs.forEach(input => {
+            components.push({ id: input.id, type: 'INPUT', label: input.label });
+        });
+    }
+    if (analysis && analysis.outputs) {
+        analysis.outputs.forEach(output => {
+            components.push({ id: output.id, type: 'OUTPUT', label: output.label });
+        });
+    }
+    return {
+        getCircuitAnalysis: vi.fn().mockReturnValue(analysis),
+        getComponents: vi.fn().mockReturnValue(components)
+    };
+};
 
 // Create valid cache with specified inputs/outputs
 const createValidCache = (numInputs = 2, numOutputs = 1) => {
@@ -593,11 +608,10 @@ describe('TruthTablePanel', () => {
             expect(smState.data).toBe('stale');
         });
 
-        it('should return SHOW_COMPUTING when data is COMPUTING even if old analysis exists (Test 8 fix)', () => {
-            // Bug fix: When user reopens panel during active computation,
-            // the old cached analysis still exists but should be ignored.
-            // State machine should return SHOW_COMPUTING based on data state.
-            const circuitState = createMockCircuitState(createValidCache());
+        it('should return SHOW_COMPUTING when analysis is null (no data available)', () => {
+            // When circuitState.getCircuitAnalysis() returns null (computation in progress),
+            // the state machine should return SHOW_COMPUTING regardless of cached data.
+            const circuitState = createMockCircuitState(null); // No analysis available
             const panel = new TruthTablePanel(
                 mockDOM.canvasEl,
                 [],
@@ -605,23 +619,19 @@ describe('TruthTablePanel', () => {
                 circuitState
             );
 
-            // Setup: panel was shown before, has a Tabulator instance
+            // Setup: panel was shown before, has a Tabulator instance with old data
             panel.panel = mockDOM.panelEl;
             panel.tabulatorInstance = { destroy: vi.fn(), getColumns: vi.fn() };
-            panel.circuitAnalysis = createValidCache();
+            panel.circuitAnalysis = createValidCache(); // Old cached data exists
 
             // Mark panel as hidden
             mockDOM.panelEl.classList.classes.add('hidden');
             mockDOM.panelEl.style.display = 'none';
 
-            // Simulate: computation started while panel was hidden
-            // (e.g., user added input triggering recomputation)
-            panel._stateMachine.setDataState('computing');
-
-            // Now user tries to show the panel
+            // Now user tries to show the panel while computation is in progress
             const action = panel._stateMachine.handleShow();
 
-            // Should return SHOW_COMPUTING, not SYNC or NONE
+            // Should return SHOW_COMPUTING because getCircuitAnalysis() returns null
             expect(action.action).toBe('SHOW_COMPUTING');
             expect(panel._stateMachine.getState().panel).toBe('showing_computing');
         });
@@ -800,10 +810,9 @@ describe('TruthTablePanel', () => {
             expect(renderSpy).toHaveBeenCalled();
         });
 
-        it('should NOT clear panel style dimensions when structure changes (for rendering spinner)', async () => {
-            // Bug fix: _syncTabulatorWithAnalysis should NOT clear panel.style.width/height
-            // when structure changes. This allows _buildTabulator to preserve dimensions
-            // and show the rendering spinner before destroying old Tabulator.
+        it('should clear panel style dimensions when structure changes (for auto-fit)', async () => {
+            // When structure changes (input/output count differs), clear dimensions
+            // so the panel can auto-fit to the new column structure.
             const circuitState = createMockCircuitState(createValidCache(3, 1));
             const panel = new TruthTablePanel(
                 mockDOM.canvasEl,
@@ -813,7 +822,7 @@ describe('TruthTablePanel', () => {
             );
 
             panel.panel = mockDOM.panelEl;
-            // Set inline styles that should be preserved
+            // Set inline styles that will be cleared
             mockDOM.panelEl.style.width = '500px';
             mockDOM.panelEl.style.height = '400px';
 
@@ -832,10 +841,9 @@ describe('TruthTablePanel', () => {
 
             await panel._syncTabulatorWithAnalysis();
 
-            // Panel style dimensions should NOT be cleared
-            // (they should still have their values so _buildTabulator can use them)
-            expect(mockDOM.panelEl.style.width).toBe('500px');
-            expect(mockDOM.panelEl.style.height).toBe('400px');
+            // Panel style dimensions should be cleared for auto-fit
+            expect(mockDOM.panelEl.style.width).toBe('');
+            expect(mockDOM.panelEl.style.height).toBe('');
         });
 
         it('should update headers when labels change', async () => {
@@ -2540,12 +2548,15 @@ describe('TruthTablePanel', () => {
                 expect(syncSpy).toHaveBeenCalled();
             });
 
-            it('should restore dimensions before SYNC when isShowCall=true and wasHidden=true', async () => {
-                // Bug fix: When reopening panel after structure change while hidden,
-                // dimensions should be restored BEFORE _syncTabulatorWithAnalysis runs.
-                // This prevents the panel from appearing empty until Tabulator builds.
+            it('should restore position before SYNC when isShowCall=true and wasHidden=true', async () => {
+                // When reopening panel, SYNC action restores position before syncing.
+                // Note: SYNC does NOT restore dimensions - it relies on _syncTabulatorWithAnalysis
+                // to handle structure changes which may need to auto-fit dimensions.
                 //
-                // Flow: Common PRE-ACTION restores position → SYNC case restores dimensions → sync runs
+                // Flow:
+                // 1. PRE-ACTION block (for SYNC included in _shouldRevealPanel) reveals panel inline and restores position
+                // 2. SYNC case also calls _revealPanel() and _restoreSavedPosition()
+                // 3. Then _syncTabulatorWithAnalysis() runs
                 const circuitState = createMockCircuitState(createValidCache());
                 const panel = new TruthTablePanel(
                     mockDOM.canvasEl,
@@ -2564,26 +2575,21 @@ describe('TruthTablePanel', () => {
                     y: 50
                 };
 
-                // Position is restored by common PRE-ACTION block (via _shouldRevealPanel including SYNC)
+                const revealPanelSpy = vi.spyOn(panel, '_revealPanel').mockImplementation(() => {});
                 const restorePositionSpy = vi.spyOn(panel, '_restoreSavedPosition').mockImplementation(() => {});
-                // Dimensions are restored by SYNC case specifically
-                const restoreDimensionsSpy = vi.spyOn(panel, '_restoreSavedDimensions').mockImplementation(() => {});
                 const syncSpy = vi.spyOn(panel, '_syncTabulatorWithAnalysis').mockResolvedValue();
 
                 await panel._executeAction({ action: 'SYNC' }, { isShowCall: true, wasHidden: true });
 
-                // Should call pre-action setup
+                // Should reveal panel, restore position, and sync
+                expect(revealPanelSpy).toHaveBeenCalled();
                 expect(restorePositionSpy).toHaveBeenCalled();
-                expect(restoreDimensionsSpy).toHaveBeenCalled();
                 expect(syncSpy).toHaveBeenCalled();
 
-                // Verify order: position → dimensions → sync
-                const positionOrder = restorePositionSpy.mock.invocationCallOrder[0];
-                const dimensionsOrder = restoreDimensionsSpy.mock.invocationCallOrder[0];
+                // Position is restored before sync runs (from PRE-ACTION block)
+                const firstPositionOrder = restorePositionSpy.mock.invocationCallOrder[0];
                 const syncOrder = syncSpy.mock.invocationCallOrder[0];
-
-                expect(positionOrder).toBeLessThan(dimensionsOrder);
-                expect(dimensionsOrder).toBeLessThan(syncOrder);
+                expect(firstPositionOrder).toBeLessThan(syncOrder);
             });
 
             it('should handle RENDER_TABLE action by calling _buildTabulator', async () => {

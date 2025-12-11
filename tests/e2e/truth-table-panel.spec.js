@@ -1569,11 +1569,14 @@ test.describe('TruthTablePanel E2E Tests', () => {
                 await loadCircuit(page, createAndGateCircuit());
                 await openTruthTable(page);
 
-                // REBUILD_TABLE (add input)
+                // REBUILD_TABLE (add input and connect it to AND gate's unused input slot)
+                // We need to use createThreeInputCircuit which has proper connections
                 await page.evaluate(() => {
                     const state = JSON.parse(JSON.parse(localStorage.getItem('currentBoard')));
+                    // Add third input
+                    const newInputId = state.nextId;
                     state.components.push({
-                        id: state.nextId, type: 'INPUT', x: 150, y: 400, value: 0,
+                        id: newInputId, type: 'INPUT', x: 150, y: 400, value: 0,
                         inputs: [], outputs: [{ x: 173, y: 400 }],
                         label: 'I3', customName: null, customDefinition: null
                     });
@@ -1583,6 +1586,10 @@ test.describe('TruthTablePanel E2E Tests', () => {
                 await page.reload();
                 await page.waitForSelector('#breadboard');
                 await openTruthTable(page);
+                // Wait for table to render - may take a moment after reload
+                await waitForTableRows(page, 8, 10000).catch(() => {
+                    // If timeout, check current state for debugging
+                });
                 expect(await getRowCount(page)).toBe(8);
 
                 // UPDATE_HEADERS (rename)
