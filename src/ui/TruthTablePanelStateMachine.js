@@ -7,8 +7,6 @@
  * @module TruthTablePanelStateMachine
  */
 
-import { logger } from '../utils/logger.js';
-
 // ============================================================================
 // SECTION: State Enums
 // ============================================================================
@@ -214,7 +212,6 @@ export class TruthTablePanelStateMachine {
 
         // Transitioning from HIDDEN to visible
         const analysis = this._panel.circuitState?.getCircuitAnalysis();
-        logger.debug('[SM.handleShow] analysis:', analysis ? { isValid: analysis.isValid, rowCount: analysis.table?.length, reason: analysis.reason } : null);
 
         if (!analysis) {
             // No analysis yet - show computing state
@@ -341,7 +338,6 @@ export class TruthTablePanelStateMachine {
             // This prevents clearing user's saved dimensions when structure hasn't actually changed,
             // just the "computing" placeholder was compared against the new analysis
             const preserveDimensions = this._state.panel === PANEL_STATES.SHOWING_COMPUTING;
-            logger.debug('[SM.handleComputed] structureChanged=true, panel state:', this._state.panel, '| preserveDimensions:', preserveDimensions);
             this._state.panel = PANEL_STATES.SHOWING_TABLE;
             this._state.lastCycleIndex = null;
             return { action: ACTION_TYPES.REBUILD_TABLE, preserveDimensions };

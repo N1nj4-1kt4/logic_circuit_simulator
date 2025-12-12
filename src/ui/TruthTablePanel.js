@@ -12,7 +12,6 @@ import {
     RenderQueue,
     ACTION_TYPES
 } from './TruthTablePanelStateMachine.js';
-import { logger } from '../utils/logger.js';
 
 /**
  * TruthTablePanel - Manages the truth table UI using Tabulator.js
@@ -135,11 +134,9 @@ export class TruthTablePanel {
         }
 
         // 2. Restore saved state
-        logger.debug('[TTP.init] savedState:', JSON.stringify(savedState ? { width: savedState.width, height: savedState.height, rowHeight: savedState.rowHeight } : null));
         if (savedState) {
             this._setState(savedState);
         }
-        logger.debug('[TTP.init] After _setState, this.state:', JSON.stringify(this.state ? { width: this.state.width, height: this.state.height, rowHeight: this.state.rowHeight } : null));
 
         // 3. Setup close button (one-time)
         this._setupCloseButton();
@@ -247,10 +244,7 @@ export class TruthTablePanel {
         this.circuitAnalysis = this._deepCopyAnalysis(analysis);
 
         // State machine determines appropriate action based on what changed
-        const smStateBefore = this._stateMachine.getState();
-        logger.debug('[TTP._handleComputed] Before handleComputed - SM state:', smStateBefore.panel, '| oldAnalysis:', oldAnalysis ? { inputs: oldAnalysis.inputs?.length, outputs: oldAnalysis.outputs?.length } : null);
         const action = this._stateMachine.handleComputed(analysis, oldAnalysis);
-        logger.debug('[TTP._handleComputed] After handleComputed - action:', JSON.stringify(action), '| this.state dims:', JSON.stringify(this.state ? { width: this.state.width, height: this.state.height } : null));
 
         await this._executeAction(action);
     }
@@ -406,7 +400,6 @@ export class TruthTablePanel {
         // Only for show() calls that need to reveal the panel
         // ========================================================================
         const shouldReveal = this._shouldRevealPanel(action);
-        logger.debug('[TTP._executeAction] PRE-ACTION - action:', action.action, '| isShowCall:', isShowCall, '| wasHidden:', wasHidden, '| shouldReveal:', shouldReveal);
         if (isShowCall && wasHidden && shouldReveal) {
             // Reveal panel with opacity 0 until content ready (for slow paths)
             this.panel.classList.remove('hidden');
@@ -415,10 +408,8 @@ export class TruthTablePanel {
             this.panel.style.pointerEvents = 'auto';
 
             // Restore saved position AND dimensions before rendering (avoids flicker)
-            logger.debug('[TTP._executeAction] PRE-ACTION - Restoring dimensions. this.state:', JSON.stringify(this.state ? { width: this.state.width, height: this.state.height } : null));
             this._restoreSavedPosition();
             this._restoreSavedDimensions();
-            logger.debug('[TTP._executeAction] PRE-ACTION - After restore, panel dims:', this.panel.style.width, 'x', this.panel.style.height);
         }
 
         // ========================================================================
@@ -484,16 +475,12 @@ export class TruthTablePanel {
             case ACTION_TYPES.REBUILD_TABLE:
                 // Structure changed - handle dimensions based on context
                 // Column order is preserved - merge logic handles structure changes
-                logger.debug('[TTP._executeAction] REBUILD_TABLE - preserveDimensions:', action.preserveDimensions, '| this.state:', JSON.stringify(this.state ? { width: this.state.width, height: this.state.height } : null));
-
                 if (action.preserveDimensions) {
                     // Initial computation after page refresh - DON'T call _saveState()
                     // because it would overwrite saved dimensions with progress bar size
-                    logger.debug('[TTP._executeAction] REBUILD_TABLE - PRESERVING dimensions (skipping _saveState)');
                 } else {
                     // Actual structure change - save current state then clear dimensions
                     this._saveState();
-                    logger.debug('[TTP._executeAction] REBUILD_TABLE - CLEARING dimensions');
                     if (this.state) {
                         this.state.height = '';
                         this.state.width = '';
@@ -806,22 +793,12 @@ export class TruthTablePanel {
         const tableRowCount = this.circuitAnalysis?.table?.length || 0;
         const isLargeTable = tableRowCount > TRUTH_TABLE.SPINNER_THRESHOLD_ROWS;
         const shouldShowSpinner = !isQuickRebuild && (this.tabulatorInstance || isLargeTable);
-        logger.debug('[TTP._buildTabulator] Spinner decision:', {
-            tableRowCount,
-            threshold: TRUTH_TABLE.SPINNER_THRESHOLD_ROWS,
-            isLargeTable,
-            isQuickRebuild,
-            hasTabulatorInstance: !!this.tabulatorInstance,
-            hasPanel: !!this.panel,
-            shouldShowSpinner
-        });
         if (shouldShowSpinner && this.panel) {
             // Clear any stale content before showing spinner
             // This prevents invalid messages from previous sessions appearing alongside spinner
             if (content) {
                 content.innerHTML = '';
             }
-            logger.debug('[TTP._buildTabulator] Showing rendering spinner');
             this._showRenderingSpinner();
         }
 
@@ -1785,10 +1762,7 @@ export class TruthTablePanel {
         const wasHidden = !this._isVisible();
 
         // Get action from state machine
-        const smState = this._stateMachine.getState();
-        logger.debug('[TTP.show] Before handleShow - SM state:', smState.panel, '| this.state dims:', JSON.stringify(this.state ? { width: this.state.width, height: this.state.height } : null));
         const action = this._stateMachine.handleShow();
-        logger.debug('[TTP.show] After handleShow - action:', JSON.stringify(action), '| wasHidden:', wasHidden);
 
         // Delegate to unified dispatcher
         await this._executeAction(action, { isShowCall: true, wasHidden });
