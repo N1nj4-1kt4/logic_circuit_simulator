@@ -214,6 +214,7 @@ export class TruthTablePanelStateMachine {
 
         // Transitioning from HIDDEN to visible
         const analysis = this._panel.circuitState?.getCircuitAnalysis();
+        logger.debug('[SM.handleShow] analysis:', analysis ? { isValid: analysis.isValid, rowCount: analysis.table?.length, reason: analysis.reason } : null);
 
         if (!analysis) {
             // No analysis yet - show computing state

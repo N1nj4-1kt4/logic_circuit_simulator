@@ -8,6 +8,7 @@
 import { eventBus, EVENT_TYPES } from '../utils/eventBus.js';
 import { captureCircuitSnapshot } from '../utils/stateSnapshot.js';
 import { logger } from '../utils/logger.js';
+import { TRUTH_TABLE } from '../constants.js';
 
 export class AutoSaveManager {
     /**
@@ -139,8 +140,8 @@ export class AutoSaveManager {
             // Auto-cycling state (to resume on page refresh)
             isAutoCycling: this.state.isAutoCyclingActive(),
             // Circuit analysis cache (to avoid recomputation on page refresh)
-            // Only cache if valid and not too large (≤512 rows to avoid storage bloat)
-            circuitAnalysis: circuitAnalysis?.isValid && circuitAnalysis?.table?.length <= 512
+            // Only cache if valid and not too large (to avoid storage bloat)
+            circuitAnalysis: circuitAnalysis?.isValid && circuitAnalysis?.table?.length <= TRUTH_TABLE.CACHE_MAX_ROWS
                 ? circuitAnalysis
                 : null
         };

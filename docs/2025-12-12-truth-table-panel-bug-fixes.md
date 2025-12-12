@@ -393,3 +393,132 @@ return cleanColumns;
 3. **Bug 3 verification:** Hide panel → Refresh page → Open panel → Table appears instantly (no "Computing...")
 4. **Issue #6 verification:** Auto-fit → close → rename label → reopen → row height same
 5. **Bug 1 verification:** No console warning about componentId
+
+---
+
+## Code Redundancy Analysis (December 2025 Session)
+
+### Context
+After implementing Bug 5 fix (re-position panel after table built for large tables), an analysis was done to identify redundant code.
+
+### 1. SHOW_COMPUTING Default Dimensions (lines 432-443) - **NOT REDUNDANT** ✅
+
+**Code:**
+```javascript
+case ACTION_TYPES.SHOW_COMPUTING:
+    if (this.panel) {
+        if (!this.state?.width || this.state.width === '') {
+            this.panel.style.width = '400px';
+        }
+        if (!this.state?.height || this.state.height === '') {
+            this.panel.style.height = '300px';
+        }
+    }
+```
+
+**Why it's needed:**
+- PRE-ACTION calls `_restoreSavedDimensions()` which only sets dimensions IF saved state exists
+- For NEW boards, there's no saved state, so PRE-ACTION sets nothing
+- This code provides reasonable defaults (400x300) for first open of new board
+- Without this, panel appears tiny on first open
+
+**Verdict:** Keep as-is.
+
+---
+
+### 2. Triple Positioning for Large Tables - **COMPLEX INTERACTION, DO NOT SIMPLIFY** ⚠️
+
+**Current flow for RENDER_TABLE (large table >64 rows) with `wasHidden=true`:**
+
+1. **PRE-ACTION (line 419):** `_restoreSavedPosition()` - restores saved position if exists
+2. **RENDER_TABLE (line 467):** `_positionPanelIfNeeded(false)` - positions for spinner display
+3. **RENDER_TABLE (line 479-480):** `positionPanelSmartly()` - re-positions after table built (Bug 5 fix)
+4. **show() (line 1799):** `_positionPanelIfNeeded(false)` - positions after _executeAction returns
+
+**Initial Analysis:** Call #4 appeared redundant since #3 already positioned the panel.
+
+**CRITICAL FINDING:** The "redundant" call at #4 is actually NECESSARY!
+
+**Scenario: Large table with SAVED position:**
+- #1, #2: Restore saved position
+- #3: `positionPanelSmartly()` **OVERWRITES saved position** with smart position
+- #4: `_positionPanelIfNeeded()` → `_restoreState()` **RESTORES saved position**
+
+Without #4, user's saved position would be lost for large tables!
+
+**Root Issue:** The Bug 5 fix at line 479-480 calls `positionPanelSmartly()` unconditionally, which ignores saved positions. The "redundant" call #4 accidentally fixes this by restoring the saved position afterward.
+
+**Proper Fix (Future):**
+Change line 479-480 from:
+```javascript
+if (wasHidden && this.circuitAnalysis?.table?.length > TRUTH_TABLE.SPINNER_THRESHOLD_ROWS) {
+    positionPanelSmartly(this.panel, this.canvas, this.components);
+}
+```
+To:
+```javascript
+if (wasHidden && this.circuitAnalysis?.table?.length > TRUTH_TABLE.SPINNER_THRESHOLD_ROWS) {
+    // Only smart position if no saved position, otherwise just constrain to viewport
+    this._positionPanelIfNeeded(false);
+}
+```
+
+Or better: Create `_constrainPanelToViewport()` that keeps saved position but ensures it doesn't overflow.
+
+**Current Status:** Leave as-is. The "redundant" call is actually a safety net that prevents the Bug 5 fix from breaking saved positions.
+
+---
+
+### 3. Content Clearing Before Spinner (lines 790-794) - **NOT REDUNDANT** ✅
+
+**Code:**
+```javascript
+if (shouldShowSpinner && this.panel) {
+    if (content) {
+        content.innerHTML = '';  // Clear stale invalid messages
+    }
+    this._showRenderingSpinner();
+}
+```
+
+**Why it's needed:**
+- Spinner is appended to `panel` element
+- Invalid messages are in `truthTableContent` div (different DOM element)
+- Without clearing, both are visible simultaneously during spinner phase
+
+**Verdict:** Keep as-is.
+
+---
+
+### Summary Table
+
+| Code Section | Status | Reasoning |
+|--------------|--------|-----------|
+| SHOW_COMPUTING default dimensions | ✅ Keep | Needed for new boards with no saved state |
+| Content clearing before spinner | ✅ Keep | Prevents stale invalid messages showing with spinner |
+| Triple positioning for large tables | ⚠️ Keep (with caveats) | "Redundant" call actually fixes a bug in Bug 5 fix |
+| positionPanelSmartly after build | ⚠️ Needs refinement | Overwrites saved position; should respect user's saved position |
+
+---
+
+### Debug Logging to Remove
+
+After all bugs are verified fixed, remove these logger.debug calls:
+
+**TruthTablePanel.js:**
+- `[TTP.init] savedState:`
+- `[TTP.init] After _setState, this.state:`
+- `[TTP._handleComputed] Before handleComputed`
+- `[TTP._handleComputed] After handleComputed`
+- `[TTP._executeAction] PRE-ACTION`
+- `[TTP._executeAction] PRE-ACTION - Restoring dimensions`
+- `[TTP._executeAction] REBUILD_TABLE - preserveDimensions`
+- `[TTP._executeAction] REBUILD_TABLE - PRESERVING dimensions`
+- `[TTP._executeAction] REBUILD_TABLE - CLEARING dimensions`
+- `[TTP._buildTabulator] Spinner decision`
+- `[TTP._buildTabulator] Showing rendering spinner`
+- `[TTP.show] Before/After handleShow`
+
+**TruthTablePanelStateMachine.js:**
+- `[SM.handleShow] analysis:`
+- `[SM.handleComputed] structureChanged=true`

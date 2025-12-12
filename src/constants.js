@@ -132,7 +132,10 @@ export const TRUTH_TABLE = {
     // Height estimation constants (for estimatePanelHeight utility)
     HEADER_HEIGHT: 60,        // Column group header + column header
     PANEL_HEADER_HEIGHT: 30,  // .panel-header (title bar)
-    MAX_VISIBLE_ROWS: 10      // Cap to prevent huge panels
+    MAX_VISIBLE_ROWS: 10,     // Cap to prevent huge panels
+    // Performance thresholds
+    SPINNER_THRESHOLD_ROWS: 64,  // Show rendering spinner for tables larger than this
+    CACHE_MAX_ROWS: 512          // Only cache analysis in localStorage for tables ≤ this size
 };
 
 // ==================== TIMING ====================

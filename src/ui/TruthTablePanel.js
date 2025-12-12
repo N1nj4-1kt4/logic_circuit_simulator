@@ -456,11 +456,28 @@ export class TruthTablePanel {
                 if (isShowCall && wasHidden) {
                     this._setCircuitAnalysisLocalCopy();
                 }
+                // For large tables, make panel visible BEFORE build so spinner is visible
+                // (PRE-ACTION sets opacity:0, but spinner is shown in _buildTabulator and
+                // removed by tableBuilt callback - so we need opacity:1 before the async build)
+                // IMPORTANT: Position panel BEFORE making visible to avoid flicker at wrong position
+                {
+                    const isLargeTable = this.circuitAnalysis?.table?.length > TRUTH_TABLE.SPINNER_THRESHOLD_ROWS;
+                    if (isLargeTable && this.panel && wasHidden) {
+                        // Position panel first (uses saved position or smart positioning)
+                        this._positionPanelIfNeeded(false);
+                        this.panel.style.opacity = '1';
+                    }
+                }
                 this._stateMachine.renderStarted();
                 try {
                     await this._buildTabulator({ isQuickRebuild: false });
                 } finally {
                     this._stateMachine.renderCompleted();
+                }
+                // Re-position after table built for large tables (panel dimensions may have changed)
+                // positionPanelSmartly already handles viewport constraints
+                if (wasHidden && this.circuitAnalysis?.table?.length > TRUTH_TABLE.SPINNER_THRESHOLD_ROWS) {
+                    positionPanelSmartly(this.panel, this.canvas, this.components);
                 }
                 break;
 
@@ -781,11 +798,31 @@ export class TruthTablePanel {
             };
             this.panel.style.width = `${preservedDimensions.width}px`;
             this.panel.style.height = `${preservedDimensions.height}px`;
+        }
 
-            // Show rendering spinner before destroying old table (only for full renders)
-            if (!isQuickRebuild) {
-                this._showRenderingSpinner();
+        // Show rendering spinner for:
+        // 1. Full rebuilds when replacing existing table (current behavior)
+        // 2. First open with large tables (prevents blank panel during slow renders)
+        const tableRowCount = this.circuitAnalysis?.table?.length || 0;
+        const isLargeTable = tableRowCount > TRUTH_TABLE.SPINNER_THRESHOLD_ROWS;
+        const shouldShowSpinner = !isQuickRebuild && (this.tabulatorInstance || isLargeTable);
+        logger.debug('[TTP._buildTabulator] Spinner decision:', {
+            tableRowCount,
+            threshold: TRUTH_TABLE.SPINNER_THRESHOLD_ROWS,
+            isLargeTable,
+            isQuickRebuild,
+            hasTabulatorInstance: !!this.tabulatorInstance,
+            hasPanel: !!this.panel,
+            shouldShowSpinner
+        });
+        if (shouldShowSpinner && this.panel) {
+            // Clear any stale content before showing spinner
+            // This prevents invalid messages from previous sessions appearing alongside spinner
+            if (content) {
+                content.innerHTML = '';
             }
+            logger.debug('[TTP._buildTabulator] Showing rendering spinner');
+            this._showRenderingSpinner();
         }
 
         // Destroy existing Tabulator instance right before creating a new one
