@@ -429,6 +429,18 @@ export class TruthTablePanel {
                 if (!isShowCall) {
                     this._revealPanel();
                 }
+                // Set reasonable default dimensions if no saved dimensions exist.
+                // Without this, the panel appears tiny on first open of a new board
+                // because there are no saved dimensions yet and _renderComputingState()
+                // doesn't have access to circuitAnalysis for height estimation.
+                if (this.panel) {
+                    if (!this.state?.width || this.state.width === '') {
+                        this.panel.style.width = '400px';
+                    }
+                    if (!this.state?.height || this.state.height === '') {
+                        this.panel.style.height = '300px';
+                    }
+                }
                 this._renderComputingState();
                 break;
 
@@ -1415,6 +1427,12 @@ export class TruthTablePanel {
         if (isShowCall) {
             this._saveVisibleState();
             eventBus.emit(EVENT_TYPES.TRUTH_TABLE_SHOWN);
+        } else if (this.tabulatorInstance) {
+            // Event-driven table rebuilds (REBUILD_TABLE from CIRCUIT_ANALYSIS_COMPUTED):
+            // Save the new auto-fitted dimensions so they persist to localStorage.
+            // Without this, dimensions cleared during REBUILD_TABLE are never re-saved,
+            // causing empty dimensions in localStorage and tiny panel on next refresh.
+            this._saveState();
         }
     }
 
