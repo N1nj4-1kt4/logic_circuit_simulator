@@ -2062,7 +2062,8 @@ describe('TruthTablePanel', () => {
     });
 
     describe('show() fast path (Bug #2 fix)', () => {
-        it('should use lastCycleIndex for highlighting when panel is shown', async () => {
+        it('should call _updateHighlight when panel is shown with tabulatorInstance', async () => {
+            // Bug 2 fix: now uses _updateHighlight to recalculate from current input values
             const validCache = createValidCache();
             const circuitState = createMockCircuitState(validCache);
             const panel = new TruthTablePanel(
@@ -2100,8 +2101,8 @@ describe('TruthTablePanel', () => {
                 lastCycleIndex: 2
             });
 
-            // Spy on _highlightRowByIndex
-            const highlightSpy = vi.spyOn(panel, '_highlightRowByIndex');
+            // Spy on _updateHighlight (Bug 2 fix: uses _updateHighlight instead of _highlightRowByIndex)
+            const updateHighlightSpy = vi.spyOn(panel, '_updateHighlight');
 
             // Mock getElementById to return null for truthTableContent to skip quick rebuild
             // (quick rebuild requires Tabulator constructor which isn't available in tests)
@@ -2116,8 +2117,8 @@ describe('TruthTablePanel', () => {
             // Restore
             document.getElementById = originalGetById;
 
-            // Should highlight using lastCycleIndex from state machine
-            expect(highlightSpy).toHaveBeenCalledWith(2);
+            // Bug 2 fix: should call _updateHighlight to recalculate row
+            expect(updateHighlightSpy).toHaveBeenCalled();
         });
 
         it('should not highlight if lastCycleIndex is null', async () => {
@@ -2170,7 +2171,8 @@ describe('TruthTablePanel', () => {
             expect(highlightSpy).not.toHaveBeenCalled();
         });
 
-        it('should sync and then highlight when state machine returns SYNC', async () => {
+        it('should sync and then call _updateHighlight when state machine returns SYNC', async () => {
+            // Bug 2 fix: uses _updateHighlight to recalculate row from current input values
             const validCache = createValidCache();
             const circuitState = createMockCircuitState(validCache);
             const panel = new TruthTablePanel(
@@ -2205,14 +2207,14 @@ describe('TruthTablePanel', () => {
 
             // Spy on methods
             const syncSpy = vi.spyOn(panel, '_syncTabulatorWithAnalysis').mockResolvedValue();
-            const highlightSpy = vi.spyOn(panel, '_highlightRowByIndex');
+            const updateHighlightSpy = vi.spyOn(panel, '_updateHighlight');
 
             await panel.show();
 
             // Should sync first
             expect(syncSpy).toHaveBeenCalled();
-            // Should highlight after sync
-            expect(highlightSpy).toHaveBeenCalledWith(1);
+            // Bug 2 fix: should call _updateHighlight to recalculate row
+            expect(updateHighlightSpy).toHaveBeenCalled();
         });
 
         it('should preserve column order when reopening table with NONE action', async () => {
@@ -2943,6 +2945,7 @@ describe('TruthTablePanel', () => {
                 panel.tabulatorInstance = {
                     destroy: vi.fn(),
                     on: vi.fn(),
+                    deselectRow: vi.fn(),
                     getRows: vi.fn().mockReturnValue([]),
                     getColumns: vi.fn().mockReturnValue([])
                 };
@@ -3053,7 +3056,8 @@ describe('TruthTablePanel', () => {
                 expect(renderCompletedSpy).toHaveBeenCalled();
             });
 
-            it('should highlight row using state machine lastCycleIndex after RENDER_TABLE', async () => {
+            it('should call _updateHighlight after RENDER_TABLE (Bug 2 fix)', async () => {
+                // Bug 2 fix: uses _updateHighlight to recalculate row from current input values
                 const validCache = createValidCache();
                 const circuitState = createMockCircuitState(validCache);
                 const panel = new TruthTablePanel(
@@ -3088,14 +3092,15 @@ describe('TruthTablePanel', () => {
                 vi.spyOn(panel, '_positionPanelIfNeeded').mockImplementation(() => {});
                 vi.spyOn(panel, '_setupInteractions').mockImplementation(() => {});
 
-                const highlightSpy = vi.spyOn(panel, '_highlightRowByIndex');
+                const updateHighlightSpy = vi.spyOn(panel, '_updateHighlight');
 
                 await panel.show();
 
-                expect(highlightSpy).toHaveBeenCalledWith(2);
+                expect(updateHighlightSpy).toHaveBeenCalled();
             });
 
-            it('should highlight row on SYNC action when lastCycleIndex is set', async () => {
+            it('should call _updateHighlight on SYNC action (Bug 2 fix)', async () => {
+                // Bug 2 fix: uses _updateHighlight to recalculate row from current input values
                 const validCache = createValidCache();
                 const circuitState = createMockCircuitState(validCache);
                 const panel = new TruthTablePanel(
@@ -3123,11 +3128,11 @@ describe('TruthTablePanel', () => {
                 });
                 vi.spyOn(panel, '_syncTabulatorWithAnalysis').mockResolvedValue();
 
-                const highlightSpy = vi.spyOn(panel, '_highlightRowByIndex');
+                const updateHighlightSpy = vi.spyOn(panel, '_updateHighlight');
 
                 await panel.show();
 
-                expect(highlightSpy).toHaveBeenCalledWith(1);
+                expect(updateHighlightSpy).toHaveBeenCalled();
             });
         });
     });
@@ -3308,6 +3313,8 @@ describe('TruthTablePanel', () => {
                 panel.panel = mockDOM.panelEl;
                 panel.tabulatorInstance = {
                     destroy: vi.fn(),
+                    deselectRow: vi.fn(),
+                    getRows: vi.fn().mockReturnValue([]),
                     getColumns: vi.fn().mockReturnValue([])
                 };
                 panel.circuitAnalysis = oldCache;
@@ -3515,16 +3522,16 @@ describe('TruthTablePanel', () => {
                     lastCycleIndex: 2
                 });
 
-                // Spy on highlight method
-                const highlightSpy = vi.spyOn(panel, '_highlightRowByIndex');
+                // Spy on highlight method (Bug 2 fix: uses _updateHighlight instead of _highlightRowByIndex)
+                const updateHighlightSpy = vi.spyOn(panel, '_updateHighlight');
 
                 await panel.show();
 
                 // Restore
                 document.getElementById = originalGetById;
 
-                // Should have called highlight with the tracked cycle index
-                expect(highlightSpy).toHaveBeenCalledWith(2);
+                // Bug 2 fix: should call _updateHighlight to recalculate row
+                expect(updateHighlightSpy).toHaveBeenCalled();
             });
 
             it('should not highlight if lastCycleIndex is null when panel shown (fallback path)', async () => {
@@ -3696,7 +3703,8 @@ describe('TruthTablePanel', () => {
                     expect(saveVisibleStateSpy).toHaveBeenCalled();
                 });
 
-                it('should call _highlightRowByIndex() when lastCycleIndex is set', async () => {
+                it('should call _updateHighlight() when tabulatorInstance exists (Bug 2 fix)', async () => {
+                    // Bug 2 fix: _updateHighlight recalculates row based on current input values
                     const { panel } = createInitializedPanel();
                     panel.tabulatorInstance = createMockTabulator();
 
@@ -3707,11 +3715,11 @@ describe('TruthTablePanel', () => {
                     });
                     vi.spyOn(panel, '_syncTabulatorWithAnalysis').mockResolvedValue();
 
-                    const highlightSpy = vi.spyOn(panel, '_highlightRowByIndex');
+                    const updateHighlightSpy = vi.spyOn(panel, '_updateHighlight');
 
                     await panel.show();
 
-                    expect(highlightSpy).toHaveBeenCalledWith(2);
+                    expect(updateHighlightSpy).toHaveBeenCalled();
                 });
 
                 it('should emit TRUTH_TABLE_SHOWN event', async () => {
@@ -3802,7 +3810,8 @@ describe('TruthTablePanel', () => {
                     expect(saveVisibleStateSpy).toHaveBeenCalled();
                 });
 
-                it('should call _highlightRowByIndex() when lastCycleIndex is set', async () => {
+                it('should call _updateHighlight() when tabulatorInstance exists (Bug 2 fix)', async () => {
+                    // Bug 2 fix: _updateHighlight recalculates row based on current input values
                     const { panel } = createInitializedPanel();
                     panel.tabulatorInstance = createMockTabulator();
 
@@ -3819,13 +3828,13 @@ describe('TruthTablePanel', () => {
                         return originalGetById?.(id);
                     });
 
-                    const highlightSpy = vi.spyOn(panel, '_highlightRowByIndex');
+                    const updateHighlightSpy = vi.spyOn(panel, '_updateHighlight');
 
                     await panel.show();
 
                     document.getElementById = originalGetById;
 
-                    expect(highlightSpy).toHaveBeenCalledWith(3);
+                    expect(updateHighlightSpy).toHaveBeenCalled();
                 });
 
                 it('should emit TRUTH_TABLE_SHOWN event', async () => {
@@ -3978,7 +3987,8 @@ describe('TruthTablePanel', () => {
                     expect(saveVisibleStateSpy).toHaveBeenCalled();
                 });
 
-                it('should call _highlightRowByIndex() when lastCycleIndex is set', async () => {
+                it('should call _updateHighlight() when tabulatorInstance exists (Bug 2 fix)', async () => {
+                    // Bug 2 fix: _updateHighlight recalculates row based on current input values
                     const { panel } = createInitializedPanel();
                     panel.tabulatorInstance = createMockTabulator();
 
@@ -3994,13 +4004,13 @@ describe('TruthTablePanel', () => {
                         lastCycleIndex: 1
                     });
 
-                    const highlightSpy = vi.spyOn(panel, '_highlightRowByIndex');
+                    const updateHighlightSpy = vi.spyOn(panel, '_updateHighlight');
 
                     await panel.show();
 
                     document.getElementById = originalGetById;
 
-                    expect(highlightSpy).toHaveBeenCalledWith(1);
+                    expect(updateHighlightSpy).toHaveBeenCalled();
                 });
 
                 it('should emit TRUTH_TABLE_SHOWN event', async () => {
@@ -4081,7 +4091,8 @@ describe('TruthTablePanel', () => {
                     eventBus.off(EVENT_TYPES.TRUTH_TABLE_SHOWN, eventHandler);
                 });
 
-                it('should call _highlightRowByIndex() when lastCycleIndex is set and panel state is VISIBLE_TABLE', async () => {
+                it('should call _updateHighlight() when tabulatorInstance exists after build (Bug 2 fix)', async () => {
+                    // Bug 2 fix: _updateHighlight recalculates row based on current input values
                     const { panel } = createInitializedPanel();
                     panel.tabulatorInstance = null;
 
@@ -4098,11 +4109,11 @@ describe('TruthTablePanel', () => {
                     vi.spyOn(panel._stateMachine, 'renderStarted').mockImplementation(() => {});
                     vi.spyOn(panel._stateMachine, 'renderCompleted').mockImplementation(() => {});
 
-                    const highlightSpy = vi.spyOn(panel, '_highlightRowByIndex');
+                    const updateHighlightSpy = vi.spyOn(panel, '_updateHighlight');
 
                     await panel.show();
 
-                    expect(highlightSpy).toHaveBeenCalledWith(2);
+                    expect(updateHighlightSpy).toHaveBeenCalled();
                 });
             });
 
@@ -4533,123 +4544,119 @@ describe('TruthTablePanel', () => {
         });
 
         // ============================================================================
-        // SECTION: _finalizeShow() Helper Method Tests
-        // These tests verify the new _finalizeShow() method works correctly
+        // SECTION: _finalizeAction() Helper Method Tests
+        // These tests verify the _finalizeAction() method works correctly
+        // (Renamed from _finalizeShow() to reflect that it handles all action paths)
         // ============================================================================
 
-        describe('_finalizeShow() helper method', () => {
+        describe('_finalizeAction() helper method', () => {
             it('should exist as a private method', () => {
                 const { panel } = createInitializedPanel();
-                expect(typeof panel._finalizeShow).toBe('function');
+                expect(typeof panel._finalizeAction).toBe('function');
             });
 
-            it('should call _setupInteractions() by default', async () => {
+            it('should always call _setupInteractions() for all visible states', async () => {
                 const { panel } = createInitializedPanel();
                 panel.tabulatorInstance = createMockTabulator();
 
                 const setupInteractionsSpy = vi.spyOn(panel, '_setupInteractions');
 
-                await panel._finalizeShow();
+                await panel._finalizeAction();
 
                 expect(setupInteractionsSpy).toHaveBeenCalled();
             });
 
-            it('should skip _setupInteractions() when skipInteractions option is true', async () => {
+            it('should call _setupInteractions() even for non-table paths (Bug 4 fix)', async () => {
                 const { panel } = createInitializedPanel();
-                panel.tabulatorInstance = createMockTabulator();
+                // No tabulatorInstance - simulating invalid/computing state
+                panel.tabulatorInstance = null;
 
                 const setupInteractionsSpy = vi.spyOn(panel, '_setupInteractions');
 
-                await panel._finalizeShow({ skipInteractions: true });
+                await panel._finalizeAction({ isShowCall: true, skipHighlight: true });
 
-                expect(setupInteractionsSpy).not.toHaveBeenCalled();
+                expect(setupInteractionsSpy).toHaveBeenCalled();
             });
 
-            it('should call _highlightRowByIndex() when lastCycleIndex is set and tabulatorInstance exists', async () => {
+            it('should call _updateHighlight() when tabulatorInstance exists (Bug 2 fix)', async () => {
                 const { panel } = createInitializedPanel();
                 panel.tabulatorInstance = createMockTabulator();
 
-                vi.spyOn(panel._stateMachine, 'getState').mockReturnValue({
-                    panel: 'visible_table',
-                    lastCycleIndex: 3
-                });
+                const updateHighlightSpy = vi.spyOn(panel, '_updateHighlight');
 
-                const highlightSpy = vi.spyOn(panel, '_highlightRowByIndex');
+                await panel._finalizeAction();
 
-                await panel._finalizeShow();
-
-                expect(highlightSpy).toHaveBeenCalledWith(3);
+                expect(updateHighlightSpy).toHaveBeenCalled();
             });
 
-            it('should skip _highlightRowByIndex() when skipHighlight option is true', async () => {
+            it('should skip _updateHighlight() when skipHighlight option is true', async () => {
                 const { panel } = createInitializedPanel();
                 panel.tabulatorInstance = createMockTabulator();
 
-                vi.spyOn(panel._stateMachine, 'getState').mockReturnValue({
-                    panel: 'visible_table',
-                    lastCycleIndex: 3
-                });
+                const updateHighlightSpy = vi.spyOn(panel, '_updateHighlight');
 
-                const highlightSpy = vi.spyOn(panel, '_highlightRowByIndex');
+                await panel._finalizeAction({ skipHighlight: true });
 
-                await panel._finalizeShow({ skipHighlight: true });
-
-                expect(highlightSpy).not.toHaveBeenCalled();
+                expect(updateHighlightSpy).not.toHaveBeenCalled();
             });
 
-            it('should not call _highlightRowByIndex() when lastCycleIndex is null', async () => {
-                const { panel } = createInitializedPanel();
-                panel.tabulatorInstance = createMockTabulator();
-
-                vi.spyOn(panel._stateMachine, 'getState').mockReturnValue({
-                    panel: 'visible_table',
-                    lastCycleIndex: null
-                });
-
-                const highlightSpy = vi.spyOn(panel, '_highlightRowByIndex');
-
-                await panel._finalizeShow();
-
-                expect(highlightSpy).not.toHaveBeenCalled();
-            });
-
-            it('should not call _highlightRowByIndex() when tabulatorInstance is null', async () => {
+            it('should not call _updateHighlight() when tabulatorInstance is null', async () => {
                 const { panel } = createInitializedPanel();
                 panel.tabulatorInstance = null;
 
-                vi.spyOn(panel._stateMachine, 'getState').mockReturnValue({
-                    panel: 'visible_table',
-                    lastCycleIndex: 3
-                });
+                const updateHighlightSpy = vi.spyOn(panel, '_updateHighlight');
 
-                const highlightSpy = vi.spyOn(panel, '_highlightRowByIndex');
+                await panel._finalizeAction();
 
-                await panel._finalizeShow();
-
-                expect(highlightSpy).not.toHaveBeenCalled();
+                expect(updateHighlightSpy).not.toHaveBeenCalled();
             });
 
-            it('should call _saveVisibleState()', async () => {
+            it('should call _saveVisibleState() when isShowCall is true', async () => {
                 const { panel } = createInitializedPanel();
                 panel.tabulatorInstance = createMockTabulator();
 
                 const saveVisibleStateSpy = vi.spyOn(panel, '_saveVisibleState');
 
-                await panel._finalizeShow();
+                await panel._finalizeAction({ isShowCall: true });
 
                 expect(saveVisibleStateSpy).toHaveBeenCalled();
             });
 
-            it('should emit TRUTH_TABLE_SHOWN event', async () => {
+            it('should NOT call _saveVisibleState() when isShowCall is false', async () => {
+                const { panel } = createInitializedPanel();
+                panel.tabulatorInstance = createMockTabulator();
+
+                const saveVisibleStateSpy = vi.spyOn(panel, '_saveVisibleState');
+
+                await panel._finalizeAction({ isShowCall: false });
+
+                expect(saveVisibleStateSpy).not.toHaveBeenCalled();
+            });
+
+            it('should emit TRUTH_TABLE_SHOWN event when isShowCall is true', async () => {
                 const { panel } = createInitializedPanel();
                 panel.tabulatorInstance = createMockTabulator();
 
                 const eventHandler = vi.fn();
                 eventBus.on(EVENT_TYPES.TRUTH_TABLE_SHOWN, eventHandler);
 
-                await panel._finalizeShow();
+                await panel._finalizeAction({ isShowCall: true });
 
                 expect(eventHandler).toHaveBeenCalled();
+
+                eventBus.off(EVENT_TYPES.TRUTH_TABLE_SHOWN, eventHandler);
+            });
+
+            it('should NOT emit TRUTH_TABLE_SHOWN event when isShowCall is false', async () => {
+                const { panel } = createInitializedPanel();
+                panel.tabulatorInstance = createMockTabulator();
+
+                const eventHandler = vi.fn();
+                eventBus.on(EVENT_TYPES.TRUTH_TABLE_SHOWN, eventHandler);
+
+                await panel._finalizeAction({ isShowCall: false });
+
+                expect(eventHandler).not.toHaveBeenCalled();
 
                 eventBus.off(EVENT_TYPES.TRUTH_TABLE_SHOWN, eventHandler);
             });
@@ -4661,8 +4668,8 @@ describe('TruthTablePanel', () => {
         // ============================================================================
 
         describe('Unified show() architecture', () => {
-            describe('SHOW_COMPUTING path should call _finalizeShow()', () => {
-                it('should call _finalizeShow() with skipInteractions: true', async () => {
+            describe('SHOW_COMPUTING path should call _finalizeAction()', () => {
+                it('should call _finalizeAction() with skipHighlight: true', async () => {
                     const circuitState = createMockCircuitState(null);
                     const panel = new TruthTablePanel(
                         mockDOM.canvasEl,
@@ -4676,19 +4683,20 @@ describe('TruthTablePanel', () => {
                     vi.spyOn(panel._stateMachine, 'handleShow').mockReturnValue({ action: 'SHOW_COMPUTING' });
                     vi.spyOn(panel, '_renderComputingState').mockImplementation(() => {});
 
-                    const finalizeShowSpy = vi.spyOn(panel, '_finalizeShow');
+                    const finalizeActionSpy = vi.spyOn(panel, '_finalizeAction');
 
                     await panel.show();
 
-                    expect(finalizeShowSpy).toHaveBeenCalled();
-                    // Verify it was called with skipInteractions since no table
-                    const callArgs = finalizeShowSpy.mock.calls[0][0] || {};
-                    expect(callArgs.skipInteractions).toBe(true);
+                    expect(finalizeActionSpy).toHaveBeenCalled();
+                    // Verify it was called with skipHighlight since no table
+                    const callArgs = finalizeActionSpy.mock.calls[0][0] || {};
+                    expect(callArgs.skipHighlight).toBe(true);
+                    expect(callArgs.isShowCall).toBe(true);
                 });
             });
 
-            describe('SHOW_INVALID path should call _finalizeShow()', () => {
-                it('should call _finalizeShow() with skipInteractions: true', async () => {
+            describe('SHOW_INVALID path should call _finalizeAction()', () => {
+                it('should call _finalizeAction() with skipHighlight: true', async () => {
                     const invalidCache = createInvalidCache('Circuit incomplete');
                     const circuitState = createMockCircuitState(invalidCache);
                     const panel = new TruthTablePanel(
@@ -4706,18 +4714,19 @@ describe('TruthTablePanel', () => {
                     });
                     vi.spyOn(panel, '_renderInvalidState').mockImplementation(() => {});
 
-                    const finalizeShowSpy = vi.spyOn(panel, '_finalizeShow');
+                    const finalizeActionSpy = vi.spyOn(panel, '_finalizeAction');
 
                     await panel.show();
 
-                    expect(finalizeShowSpy).toHaveBeenCalled();
-                    const callArgs = finalizeShowSpy.mock.calls[0][0] || {};
-                    expect(callArgs.skipInteractions).toBe(true);
+                    expect(finalizeActionSpy).toHaveBeenCalled();
+                    const callArgs = finalizeActionSpy.mock.calls[0][0] || {};
+                    expect(callArgs.skipHighlight).toBe(true);
+                    expect(callArgs.isShowCall).toBe(true);
                 });
             });
 
-            describe('RENDER_TABLE path should call _finalizeShow()', () => {
-                it('should call _finalizeShow() with default options', async () => {
+            describe('RENDER_TABLE path should call _finalizeAction()', () => {
+                it('should call _finalizeAction() with isShowCall: true', async () => {
                     const { panel } = createInitializedPanel();
                     panel.tabulatorInstance = null;
 
@@ -4730,16 +4739,18 @@ describe('TruthTablePanel', () => {
                     vi.spyOn(panel._stateMachine, 'renderStarted').mockImplementation(() => {});
                     vi.spyOn(panel._stateMachine, 'renderCompleted').mockImplementation(() => {});
 
-                    const finalizeShowSpy = vi.spyOn(panel, '_finalizeShow');
+                    const finalizeActionSpy = vi.spyOn(panel, '_finalizeAction');
 
                     await panel.show();
 
-                    expect(finalizeShowSpy).toHaveBeenCalled();
+                    expect(finalizeActionSpy).toHaveBeenCalled();
+                    const callArgs = finalizeActionSpy.mock.calls[0][0] || {};
+                    expect(callArgs.isShowCall).toBe(true);
                 });
             });
 
-            describe('SYNC path should call _finalizeShow()', () => {
-                it('should call _finalizeShow()', async () => {
+            describe('SYNC path should call _finalizeAction()', () => {
+                it('should call _finalizeAction()', async () => {
                     const { panel } = createInitializedPanel();
                     panel.tabulatorInstance = createMockTabulator();
 
@@ -4750,16 +4761,16 @@ describe('TruthTablePanel', () => {
                     });
                     vi.spyOn(panel, '_syncTabulatorWithAnalysis').mockResolvedValue();
 
-                    const finalizeShowSpy = vi.spyOn(panel, '_finalizeShow');
+                    const finalizeActionSpy = vi.spyOn(panel, '_finalizeAction');
 
                     await panel.show();
 
-                    expect(finalizeShowSpy).toHaveBeenCalled();
+                    expect(finalizeActionSpy).toHaveBeenCalled();
                 });
             });
 
-            describe('NONE path should call _finalizeShow()', () => {
-                it('should call _finalizeShow()', async () => {
+            describe('NONE path should call _finalizeAction()', () => {
+                it('should call _finalizeAction()', async () => {
                     const { panel } = createInitializedPanel();
                     panel.tabulatorInstance = createMockTabulator();
 
@@ -4776,13 +4787,13 @@ describe('TruthTablePanel', () => {
                         return originalGetById?.(id);
                     });
 
-                    const finalizeShowSpy = vi.spyOn(panel, '_finalizeShow');
+                    const finalizeActionSpy = vi.spyOn(panel, '_finalizeAction');
 
                     await panel.show();
 
                     document.getElementById = originalGetById;
 
-                    expect(finalizeShowSpy).toHaveBeenCalled();
+                    expect(finalizeActionSpy).toHaveBeenCalled();
                 });
             });
         });
@@ -5115,7 +5126,9 @@ describe('TruthTablePanel', () => {
                     }
                 });
 
-                it('should NOT setup interactions for non-table paths', async () => {
+                it('should ALSO setup interactions for non-table paths (Bug 4 fix)', async () => {
+                    // Bug 4 fix: interactions must work even in invalid/computing states
+                    // This allows drag/resize to work and persist position even without a table
                     const nonTablePaths = [
                         { action: 'SHOW_COMPUTING', setup: (p) => {
                             vi.spyOn(p, '_renderComputingState').mockImplementation(() => {});
@@ -5152,13 +5165,16 @@ describe('TruthTablePanel', () => {
 
                         await panel.show();
 
-                        expect(setupInteractionsSpy).not.toHaveBeenCalled();
+                        // Bug 4 fix: interactions are now ALWAYS setup for all visible states
+                        expect(setupInteractionsSpy).toHaveBeenCalled();
                     }
                 });
             });
 
             describe('Row highlighting preserved', () => {
-                it('should highlight row when lastCycleIndex is set and table is visible', async () => {
+                it('should call _updateHighlight when table is visible (Bug 2 fix)', async () => {
+                    // Bug 2 fix: _updateHighlight recalculates row based on current input values
+                    // instead of relying on lastCycleIndex (which may be stale after structure change)
                     const { panel } = createInitializedPanel();
                     panel.tabulatorInstance = createMockTabulator();
 
@@ -5169,11 +5185,12 @@ describe('TruthTablePanel', () => {
                     });
                     vi.spyOn(panel, '_syncTabulatorWithAnalysis').mockResolvedValue();
 
-                    const highlightSpy = vi.spyOn(panel, '_highlightRowByIndex');
+                    const updateHighlightSpy = vi.spyOn(panel, '_updateHighlight');
 
                     await panel.show();
 
-                    expect(highlightSpy).toHaveBeenCalledWith(2);
+                    // Bug 2 fix: calls _updateHighlight instead of _highlightRowByIndex
+                    expect(updateHighlightSpy).toHaveBeenCalled();
                 });
             });
 
@@ -5322,7 +5339,8 @@ describe('TruthTablePanel', () => {
                 global.getComputedStyle = originalGetComputedStyle;
             });
 
-            it('should not pass targetRowHeight when state has rowHeight but no height', () => {
+            it('should pass targetRowHeight when state has rowHeight even without height (Issue #6 fix)', () => {
+                // Issue #6 fix: rowHeight should be preserved even when auto-fit didn't set explicit height
                 const validCache = createValidCache(2, 1);
                 const circuitState = createMockCircuitState(validCache);
                 const panel = new TruthTablePanel(
@@ -5334,7 +5352,7 @@ describe('TruthTablePanel', () => {
 
                 panel.panel = mockDOM.panelEl;
                 panel.tabulatorInstance = { getRows: vi.fn().mockReturnValue([]) };
-                // Set state with rowHeight but no height
+                // Set state with rowHeight but no height (auto-fit scenario)
                 panel.state = { rowHeight: 28 };
 
                 const originalGetComputedStyle = global.getComputedStyle;
@@ -5347,9 +5365,11 @@ describe('TruthTablePanel', () => {
 
                 panel._ensureTableHeight({ fitPanel: false });
 
+                // Issue #6 fix: targetRowHeight is now passed based on rowHeight alone
+                // (not requiring height to be set)
                 expect(applyTableHeightSpy).toHaveBeenCalledWith(
                     expect.any(Number),
-                    { fitPanel: false }
+                    expect.objectContaining({ targetRowHeight: 28 })
                 );
 
                 global.getComputedStyle = originalGetComputedStyle;

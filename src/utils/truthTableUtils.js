@@ -62,14 +62,19 @@ export function buildTruthTableColumns(inputs, outputs, savedColumnOrder = null,
         strategy
     );
 
+    // Strip componentId from columns before passing to Tabulator
+    // componentId is used internally for sorting but Tabulator warns about unrecognized properties
+    const cleanInputCols = orderedInputCols.map(({ componentId, ...rest }) => rest);
+    const cleanOutputCols = orderedOutputCols.map(({ componentId, ...rest }) => rest);
+
     return [
         {
             title: 'Inputs',
-            columns: orderedInputCols
+            columns: cleanInputCols
         },
         {
             title: 'Outputs',
-            columns: orderedOutputCols
+            columns: cleanOutputCols
         }
     ];
 }

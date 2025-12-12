@@ -123,6 +123,10 @@ export class AutoSaveManager {
         // Capture circuit state using shared utility (includes truthTablePanelState for auto-save)
         const circuitSnapshot = captureCircuitSnapshot(this.state, { includeTruthTablePanelState: true });
 
+        // Get circuit analysis for caching
+        // This fixes Bug 3: persisting analysis avoids "Computing..." on page refresh
+        const circuitAnalysis = this.state.getCircuitAnalysis();
+
         const boardData = {
             // Circuit state from shared snapshot
             ...circuitSnapshot,
@@ -133,7 +137,12 @@ export class AutoSaveManager {
             // Base state for revert (persisted from CircuitState)
             lastSavedState: this.state.getLastSavedState(),
             // Auto-cycling state (to resume on page refresh)
-            isAutoCycling: this.state.isAutoCyclingActive()
+            isAutoCycling: this.state.isAutoCyclingActive(),
+            // Circuit analysis cache (to avoid recomputation on page refresh)
+            // Only cache if valid and not too large (≤512 rows to avoid storage bloat)
+            circuitAnalysis: circuitAnalysis?.isValid && circuitAnalysis?.table?.length <= 512
+                ? circuitAnalysis
+                : null
         };
 
         // DEBUG: Log input component values being saved
@@ -184,8 +193,14 @@ export class AutoSaveManager {
                     this.state.setTruthTablePanelState(boardData.truthTablePanelState);
                 }
 
-                // Compute circuit analysis for the restored circuit
-                if (circuitAnalysisManager) {
+                // Restore cached circuit analysis if available, otherwise recompute
+                // This fixes Bug 3: persisting analysis avoids "Computing..." on page refresh
+                if (boardData.circuitAnalysis) {
+                    // Restore cached analysis immediately
+                    this.state.setCircuitAnalysis(boardData.circuitAnalysis);
+                    logger.debug('[AutoSaveManager] loadBoardState - restored cached circuit analysis');
+                } else if (circuitAnalysisManager) {
+                    // No cached analysis - need to recompute
                     circuitAnalysisManager.recomputeAnalysis();
                 }
 

@@ -393,7 +393,7 @@ export class TruthTablePanel {
                 await this._buildTabulator({ isQuickRebuild: true, clearDimensionsOnStructureChange: false });
 
                 // POST-ACTION: Finalization
-                this._finalizeShow();
+                this._finalizeAction({ isShowCall: true });
             }
             return;
         }
@@ -511,11 +511,11 @@ export class TruthTablePanel {
 
         if (this._needsFinalization(action, options)) {
             // Full finalization for show() calls
-            const skipInteractions = !this._isTableAction(action);
-            this._finalizeShow({ skipInteractions });
+            const skipHighlight = !this._isTableAction(action);
+            this._finalizeAction({ isShowCall: true, skipHighlight });
         } else if (this._isTableAction(action) && !isShowCall) {
-            // Event-driven table builds: only setup interactions (no state save/event)
-            this._setupInteractions();
+            // Event-driven table builds: setup interactions and re-highlight
+            this._finalizeAction({ isShowCall: false });
         }
     }
 
@@ -1154,9 +1154,11 @@ export class TruthTablePanel {
         if (availableHeight > 0) {
             const options = { fitPanel };
 
-            // Preserve saved row height when panel has saved dimensions
+            // Preserve saved row height when available
             // This ensures user's row height preference persists across show/hide cycles
-            if (preserveRowHeight && this.state?.rowHeight && this.state?.height) {
+            // Note: Only check rowHeight, not height - auto-fit may not set explicit height
+            // but rowHeight is always set when table is displayed
+            if (preserveRowHeight && this.state?.rowHeight != null) {
                 options.targetRowHeight = this.state.rowHeight;
             }
 
@@ -1297,16 +1299,22 @@ export class TruthTablePanel {
     // ============================================================================
 
     /**
-     * Save panel state
+     * Save panel state.
+     * Works with or without tabulatorInstance to ensure position/size are saved
+     * even when showing invalid/computing states.
      * @private
      */
     _saveState() {
-        if (!this.panel || !this.tabulatorInstance) {
-            logger.debug('[TruthTablePanel] _saveState - skipped, panel:', !!this.panel, 'tabulatorInstance:', !!this.tabulatorInstance);
+        if (!this.panel) {
+            logger.debug('[TruthTablePanel] _saveState - skipped, no panel');
             return;
         }
 
-        const columns = this.tabulatorInstance.getColumns().map(col => col.getField()).filter(f => f);
+        // Column order only available when Tabulator exists
+        // Preserve existing column order if no Tabulator (e.g., invalid state)
+        const columns = this.tabulatorInstance
+            ? this.tabulatorInstance.getColumns().map(col => col.getField()).filter(f => f)
+            : (this.state?.columnOrder || []);
 
         // Read position from data-x/data-y attributes (set by both smart positioning and dragging)
         const x = parseFloat(this.panel.getAttribute('data-x')) || 0;
@@ -1374,38 +1382,39 @@ export class TruthTablePanel {
     }
 
     /**
-     * Finalize show() operation with common post-render setup.
-     * Called by all show() action paths to ensure consistent behavior.
+     * Finalize an action with common post-render setup.
+     * Called after any action that changes panel content or visibility.
      *
      * This method centralizes the "finalization" operations that must happen
-     * after any show() action:
-     * - Setup drag/resize interactions (for table paths)
-     * - Highlight current simulation row (if tracking)
-     * - Persist visible state
-     * - Emit TRUTH_TABLE_SHOWN event
+     * after any action:
+     * - Setup drag/resize interactions (ALL visible states, including invalid/computing)
+     * - Highlight based on current input values (recalculates, works after structure change)
+     * - Persist visible state (only for show() calls)
+     * - Emit TRUTH_TABLE_SHOWN event (only for show() calls)
      *
      * @param {Object} options - Configuration options
-     * @param {boolean} options.skipInteractions - Skip interaction setup (for non-table paths)
+     * @param {boolean} options.isShowCall - True for show() calls (saves state, emits event)
      * @param {boolean} options.skipHighlight - Skip row highlighting
      * @private
      */
-    _finalizeShow(options = {}) {
-        const { skipInteractions = false, skipHighlight = false } = options;
+    _finalizeAction(options = {}) {
+        const { isShowCall = true, skipHighlight = false } = options;
 
-        // Setup drag/resize interactions (only for paths that render tables)
-        if (!skipInteractions) {
-            this._setupInteractions();
+        // Interactions needed for ALL visible states (including invalid/computing)
+        // This fixes Bug 4: interactions must work even when showing invalid state
+        this._setupInteractions();
+
+        // Highlight based on current input values (recalculates, works after structure change)
+        // This fixes Bug 2: re-highlight row after REBUILD_TABLE based on current input values
+        if (!skipHighlight && this.tabulatorInstance) {
+            this._updateHighlight();
         }
 
-        // Highlight current simulation row if tracking
-        const state = this._stateMachine.getState();
-        if (!skipHighlight && state.lastCycleIndex !== null && this.tabulatorInstance) {
-            this._highlightRowByIndex(state.lastCycleIndex);
+        // State save and event only for show() calls
+        if (isShowCall) {
+            this._saveVisibleState();
+            eventBus.emit(EVENT_TYPES.TRUTH_TABLE_SHOWN);
         }
-
-        // Always save visible state and emit event
-        this._saveVisibleState();
-        eventBus.emit(EVENT_TYPES.TRUTH_TABLE_SHOWN);
     }
 
     // ============================================================================
