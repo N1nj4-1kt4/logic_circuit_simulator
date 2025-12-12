@@ -7,6 +7,8 @@
  * @module TruthTablePanelStateMachine
  */
 
+import { logger } from '../utils/logger.js';
+
 // ============================================================================
 // SECTION: State Enums
 // ============================================================================
@@ -334,9 +336,14 @@ export class TruthTablePanelStateMachine {
             analysis.outputs.length !== oldAnalysis.outputs.length;
 
         if (structureChanged) {
+            // Preserve dimensions if coming from SHOWING_COMPUTING (initial computation after page refresh)
+            // This prevents clearing user's saved dimensions when structure hasn't actually changed,
+            // just the "computing" placeholder was compared against the new analysis
+            const preserveDimensions = this._state.panel === PANEL_STATES.SHOWING_COMPUTING;
+            logger.debug('[SM.handleComputed] structureChanged=true, panel state:', this._state.panel, '| preserveDimensions:', preserveDimensions);
             this._state.panel = PANEL_STATES.SHOWING_TABLE;
             this._state.lastCycleIndex = null;
-            return { action: ACTION_TYPES.REBUILD_TABLE };
+            return { action: ACTION_TYPES.REBUILD_TABLE, preserveDimensions };
         }
 
         // No structure change - determine state-specific action

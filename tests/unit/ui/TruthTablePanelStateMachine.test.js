@@ -631,6 +631,64 @@ describe('TruthTablePanelStateMachine', () => {
 
             expect(sm.getState().lastCycleIndex).toBeNull();
         });
+
+        // Tests for preserveDimensions flag (fixes large table page refresh bug)
+        it('should return REBUILD_TABLE with preserveDimensions=true when from SHOWING_COMPUTING', () => {
+            const mockPanel = createMockPanel(null);
+            const sm = new TruthTablePanelStateMachine(mockPanel);
+
+            // Start in SHOWING_COMPUTING state (e.g., page refresh for large table)
+            sm.handleShow();
+            expect(sm.getState().panel).toBe(PANEL_STATES.SHOWING_COMPUTING);
+
+            // Analysis completes - oldAnalysis is null (first computation)
+            const validAnalysis = createValidAnalysis(2, 1);
+            const action = sm.handleComputed(validAnalysis, null);
+
+            expect(action.action).toBe(ACTION_TYPES.REBUILD_TABLE);
+            // KEY: preserveDimensions should be true because we were showing computing
+            // (This is a first computation, not an actual structure change)
+            expect(action.preserveDimensions).toBe(true);
+        });
+
+        it('should return REBUILD_TABLE with preserveDimensions=false when from VISIBLE_TABLE (actual structure change)', () => {
+            const oldAnalysis = createValidAnalysis(2, 1);
+            const mockPanel = createMockPanel(oldAnalysis);
+            const sm = new TruthTablePanelStateMachine(mockPanel);
+
+            // Start with a valid table visible
+            sm.handleShow();
+            sm.renderCompleted();
+            expect(sm.getState().panel).toBe(PANEL_STATES.VISIBLE_TABLE);
+
+            // Structure actually changes (3 inputs instead of 2)
+            const newAnalysis = createValidAnalysis(3, 1);
+            const action = sm.handleComputed(newAnalysis, oldAnalysis);
+
+            expect(action.action).toBe(ACTION_TYPES.REBUILD_TABLE);
+            // KEY: preserveDimensions should be false/undefined because this is an actual structure change
+            expect(action.preserveDimensions).toBeFalsy();
+        });
+
+        it('should return REBUILD_TABLE with preserveDimensions=false when from VISIBLE_COMPUTING (actual structure change)', () => {
+            const oldAnalysis = createValidAnalysis(2, 1);
+            const mockPanel = createMockPanel(oldAnalysis);
+            const sm = new TruthTablePanelStateMachine(mockPanel);
+
+            // Start with a valid table, then computing
+            sm.handleShow();
+            sm.renderCompleted();
+            sm.handleComputing({ percent: 50, current: 50, total: 100 });
+            expect(sm.getState().panel).toBe(PANEL_STATES.VISIBLE_COMPUTING);
+
+            // Structure changes during recomputation
+            const newAnalysis = createValidAnalysis(3, 1);
+            const action = sm.handleComputed(newAnalysis, oldAnalysis);
+
+            expect(action.action).toBe(ACTION_TYPES.REBUILD_TABLE);
+            // KEY: preserveDimensions should be false because we were VISIBLE_COMPUTING, not SHOWING_COMPUTING
+            expect(action.preserveDimensions).toBeFalsy();
+        });
     });
 
     describe('handleStepCompleted()', () => {

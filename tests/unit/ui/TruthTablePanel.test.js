@@ -4299,6 +4299,97 @@ describe('TruthTablePanel', () => {
                     // REBUILD_TABLE happens while visible, so no need to save visible state
                     expect(saveVisibleStateSpy).not.toHaveBeenCalled();
                 });
+
+                // Tests for preserveDimensions flag (fixes large table page refresh bug)
+                it('should NOT clear dimensions when preserveDimensions=true', async () => {
+                    const { panel } = createInitializedPanel();
+                    panel.tabulatorInstance = createMockTabulator();
+
+                    mockDOM.panelEl.classList.classes.delete('hidden');
+                    mockDOM.panelEl.style.display = 'block';
+
+                    // Setup state with saved dimensions
+                    panel.state = {
+                        width: '860px',
+                        height: '840px',
+                        rowHeight: 32,
+                        columnOrder: ['input_1', 'output_2'],
+                        x: 100,
+                        y: 100,
+                        visible: true
+                    };
+
+                    vi.spyOn(panel, '_saveState').mockImplementation(() => {});
+                    vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
+
+                    // Execute with preserveDimensions=true (simulates page refresh for large table)
+                    await panel._executeAction({ action: 'REBUILD_TABLE', preserveDimensions: true });
+
+                    // Dimensions should NOT be cleared
+                    expect(panel.state.width).toBe('860px');
+                    expect(panel.state.height).toBe('840px');
+                    expect(panel.state.rowHeight).toBe(32);
+                });
+
+                it('should clear dimensions when preserveDimensions=false', async () => {
+                    const { panel } = createInitializedPanel();
+                    panel.tabulatorInstance = createMockTabulator();
+
+                    mockDOM.panelEl.classList.classes.delete('hidden');
+                    mockDOM.panelEl.style.display = 'block';
+
+                    // Setup state with saved dimensions
+                    panel.state = {
+                        width: '500px',
+                        height: '400px',
+                        rowHeight: 28,
+                        columnOrder: ['input_1', 'output_2'],
+                        x: 100,
+                        y: 100,
+                        visible: true
+                    };
+
+                    vi.spyOn(panel, '_saveState').mockImplementation(() => {});
+                    vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
+
+                    // Execute with preserveDimensions=false (simulates actual structure change)
+                    await panel._executeAction({ action: 'REBUILD_TABLE', preserveDimensions: false });
+
+                    // Dimensions SHOULD be cleared
+                    expect(panel.state.width).toBe('');
+                    expect(panel.state.height).toBe('');
+                    expect(panel.state.rowHeight).toBeNull();
+                });
+
+                it('should clear dimensions when preserveDimensions is undefined (default behavior)', async () => {
+                    const { panel } = createInitializedPanel();
+                    panel.tabulatorInstance = createMockTabulator();
+
+                    mockDOM.panelEl.classList.classes.delete('hidden');
+                    mockDOM.panelEl.style.display = 'block';
+
+                    // Setup state with saved dimensions
+                    panel.state = {
+                        width: '500px',
+                        height: '400px',
+                        rowHeight: 28,
+                        columnOrder: ['input_1', 'output_2'],
+                        x: 100,
+                        y: 100,
+                        visible: true
+                    };
+
+                    vi.spyOn(panel, '_saveState').mockImplementation(() => {});
+                    vi.spyOn(panel, '_buildTabulator').mockResolvedValue();
+
+                    // Execute without preserveDimensions (should default to clearing)
+                    await panel._executeAction({ action: 'REBUILD_TABLE' });
+
+                    // Dimensions SHOULD be cleared (default behavior)
+                    expect(panel.state.width).toBe('');
+                    expect(panel.state.height).toBe('');
+                    expect(panel.state.rowHeight).toBeNull();
+                });
             });
 
             describe('RENDER_TABLE action path (via _executeAction)', () => {

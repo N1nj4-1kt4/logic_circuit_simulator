@@ -7,12 +7,12 @@ import { buildTruthTableColumns, inputValuesToIndex, estimatePanelHeight } from 
 import { createFieldName } from '../utils/columnOrderStrategies.js';
 import { UI, TRUTH_TABLE } from '../constants.js';
 import { eventBus, EVENT_TYPES } from '../utils/eventBus.js';
-import { logger } from '../utils/logger.js';
 import {
     TruthTablePanelStateMachine,
     RenderQueue,
     ACTION_TYPES
 } from './TruthTablePanelStateMachine.js';
+import { logger } from '../utils/logger.js';
 
 /**
  * TruthTablePanel - Manages the truth table UI using Tabulator.js
@@ -135,9 +135,11 @@ export class TruthTablePanel {
         }
 
         // 2. Restore saved state
+        logger.debug('[TTP.init] savedState:', JSON.stringify(savedState ? { width: savedState.width, height: savedState.height, rowHeight: savedState.rowHeight } : null));
         if (savedState) {
             this._setState(savedState);
         }
+        logger.debug('[TTP.init] After _setState, this.state:', JSON.stringify(this.state ? { width: this.state.width, height: this.state.height, rowHeight: this.state.rowHeight } : null));
 
         // 3. Setup close button (one-time)
         this._setupCloseButton();
@@ -187,9 +189,7 @@ export class TruthTablePanel {
      * @private
      */
     _handleStepCompleted(data) {
-        logger.debug('[TruthTablePanel] _handleStepCompleted - cycleIndex:', data.cycleIndex, 'totalCombinations:', data.totalCombinations);
         const action = this._stateMachine.handleStepCompleted(data);
-        logger.debug('[TruthTablePanel] _handleStepCompleted - action:', action);
         this._executeAction(action);
     }
 
@@ -247,7 +247,10 @@ export class TruthTablePanel {
         this.circuitAnalysis = this._deepCopyAnalysis(analysis);
 
         // State machine determines appropriate action based on what changed
+        const smStateBefore = this._stateMachine.getState();
+        logger.debug('[TTP._handleComputed] Before handleComputed - SM state:', smStateBefore.panel, '| oldAnalysis:', oldAnalysis ? { inputs: oldAnalysis.inputs?.length, outputs: oldAnalysis.outputs?.length } : null);
         const action = this._stateMachine.handleComputed(analysis, oldAnalysis);
+        logger.debug('[TTP._handleComputed] After handleComputed - action:', JSON.stringify(action), '| this.state dims:', JSON.stringify(this.state ? { width: this.state.width, height: this.state.height } : null));
 
         await this._executeAction(action);
     }
@@ -403,19 +406,8 @@ export class TruthTablePanel {
         // Only for show() calls that need to reveal the panel
         // ========================================================================
         const shouldReveal = this._shouldRevealPanel(action);
-        logger.debug('[TruthTablePanel] PRE-ACTION check:', {
-            isShowCall,
-            wasHidden,
-            shouldReveal,
-            action: action?.action,
-            willEnterBlock: isShowCall && wasHidden && shouldReveal
-        });
+        logger.debug('[TTP._executeAction] PRE-ACTION - action:', action.action, '| isShowCall:', isShowCall, '| wasHidden:', wasHidden, '| shouldReveal:', shouldReveal);
         if (isShowCall && wasHidden && shouldReveal) {
-            logger.debug('[TruthTablePanel] PRE-ACTION - entering block, state:', {
-                hasState: !!this.state,
-                width: this.state?.width,
-                height: this.state?.height
-            });
             // Reveal panel with opacity 0 until content ready (for slow paths)
             this.panel.classList.remove('hidden');
             this.panel.style.display = 'block';
@@ -423,8 +415,10 @@ export class TruthTablePanel {
             this.panel.style.pointerEvents = 'auto';
 
             // Restore saved position AND dimensions before rendering (avoids flicker)
+            logger.debug('[TTP._executeAction] PRE-ACTION - Restoring dimensions. this.state:', JSON.stringify(this.state ? { width: this.state.width, height: this.state.height } : null));
             this._restoreSavedPosition();
             this._restoreSavedDimensions();
+            logger.debug('[TTP._executeAction] PRE-ACTION - After restore, panel dims:', this.panel.style.width, 'x', this.panel.style.height);
         }
 
         // ========================================================================
@@ -459,13 +453,23 @@ export class TruthTablePanel {
                 break;
 
             case ACTION_TYPES.REBUILD_TABLE:
-                // Structure changed - clear saved dimensions before rebuild
+                // Structure changed - handle dimensions based on context
                 // Column order is preserved - merge logic handles structure changes
-                this._saveState();
-                if (this.state) {
-                    this.state.height = '';
-                    this.state.width = '';
-                    this.state.rowHeight = null;
+                logger.debug('[TTP._executeAction] REBUILD_TABLE - preserveDimensions:', action.preserveDimensions, '| this.state:', JSON.stringify(this.state ? { width: this.state.width, height: this.state.height } : null));
+
+                if (action.preserveDimensions) {
+                    // Initial computation after page refresh - DON'T call _saveState()
+                    // because it would overwrite saved dimensions with progress bar size
+                    logger.debug('[TTP._executeAction] REBUILD_TABLE - PRESERVING dimensions (skipping _saveState)');
+                } else {
+                    // Actual structure change - save current state then clear dimensions
+                    this._saveState();
+                    logger.debug('[TTP._executeAction] REBUILD_TABLE - CLEARING dimensions');
+                    if (this.state) {
+                        this.state.height = '';
+                        this.state.width = '';
+                        this.state.rowHeight = null;
+                    }
                 }
                 this._stateMachine.renderStarted();
                 try {
@@ -747,23 +751,12 @@ export class TruthTablePanel {
         // This prevents the rendering spinner from appearing in a too-small panel
         // Skip if we have a saved height - user's preference takes priority
         const hasValidSavedHeightForEstimate = this.state && this.state.height && this.state.height !== '';
-        logger.debug('[TruthTablePanel] _buildTabulator - height estimation check:', {
-            hasState: !!this.state,
-            stateHeight: this.state?.height,
-            hasValidSavedHeight: hasValidSavedHeightForEstimate,
-            isQuickRebuild,
-            hasTabulatorInstance: !!this.tabulatorInstance,
-            tableLength: this.circuitAnalysis?.table?.length
-        });
         if (!isQuickRebuild && !this.tabulatorInstance && this.circuitAnalysis?.table?.length && !hasValidSavedHeightForEstimate) {
             const estimatedHeight = estimatePanelHeight(
                 this.circuitAnalysis.table.length,
                 TRUTH_TABLE
             );
             this.panel.style.height = `${estimatedHeight}px`;
-            logger.debug('[TruthTablePanel] _buildTabulator - estimated height applied:', estimatedHeight);
-        } else if (hasValidSavedHeightForEstimate) {
-            logger.debug('[TruthTablePanel] _buildTabulator - skipping height estimate, using saved height:', this.state.height);
         }
 
         // PRESERVE DIMENSIONS before destroying old Tabulator (prevents panel shrink)
@@ -846,13 +839,6 @@ export class TruthTablePanel {
                 const hasValidSavedHeight = this.state && this.state.height && this.state.height !== '';
                 const hasValidSavedWidth = this.state && this.state.width && this.state.width !== '';
                 const savedRowHeight = this.state?.rowHeight;
-
-                logger.debug('[TruthTablePanel] tableBuilt - state:', {
-                    hasValidSavedHeight,
-                    savedRowHeight,
-                    panelHeight: this.panel.offsetHeight,
-                    isQuickRebuild
-                });
 
                 // Apply height - for quick rebuilds, always preserve existing row height
                 if (availableHeight > 0) {
@@ -1066,7 +1052,6 @@ export class TruthTablePanel {
             if (targetRowHeight !== null) {
                 // Use provided target row height (from saved state)
                 rowHeight = Math.max(minRowHeight, Math.min(maxRowHeight, targetRowHeight));
-                logger.debug('[TruthTablePanel] _applyTableHeight - using targetRowHeight:', targetRowHeight);
             } else if (fitPanel) {
                 // When fitting panel to content, use max row height for optimal display
                 rowHeight = maxRowHeight;
@@ -1086,8 +1071,6 @@ export class TruthTablePanel {
 
             // Apply row height via CSS on the rows and cells
             this._applyRowStyles(content, rowHeight);
-
-            logger.debug('[TruthTablePanel] _applyTableHeight - applied rowHeight:', rowHeight, 'rowCount:', rowCount);
         }
 
         // Calculate actual total height needed (header + rows)
@@ -1328,7 +1311,6 @@ export class TruthTablePanel {
      */
     _saveState() {
         if (!this.panel) {
-            logger.debug('[TruthTablePanel] _saveState - skipped, no panel');
             return;
         }
 
@@ -1348,7 +1330,6 @@ export class TruthTablePanel {
         const height = this.panel.style.height || (this.panel.offsetHeight + 'px');
 
         const stateMachineState = this._stateMachine.getState();
-        logger.debug('[TruthTablePanel] _saveState - stateMachine.lastCycleIndex:', stateMachineState.lastCycleIndex);
 
         this.state = {
             columnOrder: columns,
@@ -1360,8 +1341,6 @@ export class TruthTablePanel {
             visible: this.panel.style.opacity !== '0',
             highlightedRow: stateMachineState.lastCycleIndex
         };
-
-        logger.debug('[TruthTablePanel] _saveState - saving state:', JSON.stringify(this.state), 'rowHeight:', this._currentRowHeight);
 
         // Trigger callback to save to localStorage
         if (this.onStateChange) {
@@ -1516,21 +1495,13 @@ export class TruthTablePanel {
      * @private
      */
     _restoreSavedDimensions() {
-        logger.debug('[TruthTablePanel] _restoreSavedDimensions - state:', {
-            hasState: !!this.state,
-            hasPanel: !!this.panel,
-            width: this.state?.width,
-            height: this.state?.height
-        });
         if (!this.state || !this.panel) return;
 
         if (this.state.width && this.state.width !== '') {
             this.panel.style.width = this.state.width;
-            logger.debug('[TruthTablePanel] _restoreSavedDimensions - applied width:', this.state.width);
         }
         if (this.state.height && this.state.height !== '') {
             this.panel.style.height = this.state.height;
-            logger.debug('[TruthTablePanel] _restoreSavedDimensions - applied height:', this.state.height);
         }
     }
 
@@ -1541,36 +1512,20 @@ export class TruthTablePanel {
     _restoreState(state) {
         if (!state || !this.panel) return;
 
-        logger.debug('[TruthTablePanel] _restoreState - input state:', {
-            width: state.width,
-            height: state.height,
-            x: state.x,
-            y: state.y
-        });
-
         // Restore size exactly as saved - trust the saved dimensions
         // since they were valid when the user set them
         if (state.width && state.width !== '') {
             const savedWidth = parseFloat(state.width);
             if (savedWidth > 0) {
                 this.panel.style.width = state.width;
-                logger.debug('[TruthTablePanel] _restoreState - applied width:', state.width);
             }
         }
         if (state.height && state.height !== '') {
             const savedHeight = parseFloat(state.height);
             if (savedHeight > 0) {
                 this.panel.style.height = state.height;
-                logger.debug('[TruthTablePanel] _restoreState - applied height:', state.height);
             }
         }
-
-        logger.debug('[TruthTablePanel] _restoreState - after applying dimensions:', {
-            styleWidth: this.panel.style.width,
-            styleHeight: this.panel.style.height,
-            offsetWidth: this.panel.offsetWidth,
-            offsetHeight: this.panel.offsetHeight
-        });
 
         // Restore position (prefer transform over left/top)
         if (state.x !== undefined && state.y !== undefined) {
@@ -1773,14 +1728,12 @@ export class TruthTablePanel {
 
         // Track if panel was hidden before (for positioning and pre-action setup)
         const wasHidden = !this._isVisible();
-        logger.debug('[TruthTablePanel] show() - wasHidden:', wasHidden, 'state:', {
-            hasState: !!this.state,
-            width: this.state?.width,
-            height: this.state?.height
-        });
 
         // Get action from state machine
+        const smState = this._stateMachine.getState();
+        logger.debug('[TTP.show] Before handleShow - SM state:', smState.panel, '| this.state dims:', JSON.stringify(this.state ? { width: this.state.width, height: this.state.height } : null));
         const action = this._stateMachine.handleShow();
+        logger.debug('[TTP.show] After handleShow - action:', JSON.stringify(action), '| wasHidden:', wasHidden);
 
         // Delegate to unified dispatcher
         await this._executeAction(action, { isShowCall: true, wasHidden });
@@ -1819,7 +1772,6 @@ export class TruthTablePanel {
      * @private
      */
     _setState(state) {
-        logger.debug('[TruthTablePanel] _setState - received state:', JSON.stringify(state));
         if (!state) {
             this.state = null;
             return;
@@ -1846,7 +1798,6 @@ export class TruthTablePanel {
         }
         // Restore highlighted row to state machine for scroll position restoration
         if (sanitizedState.highlightedRow !== undefined && sanitizedState.highlightedRow !== null) {
-            logger.debug('[TruthTablePanel] _setState - restoring highlightedRow:', sanitizedState.highlightedRow);
             this._stateMachine.setLastCycleIndex(sanitizedState.highlightedRow);
         }
     }
