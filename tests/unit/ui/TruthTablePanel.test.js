@@ -4120,6 +4120,32 @@ describe('TruthTablePanel', () => {
             describe('SHOW_COMPUTING action path', () => {
                 // SHOW_COMPUTING occurs when: no analysis available yet (async computation)
 
+                it('should restore saved dimensions from state (fixes large table page refresh bug)', async () => {
+                    const circuitState = createMockCircuitState(null); // No analysis yet
+                    const panel = new TruthTablePanel(
+                        mockDOM.canvasEl,
+                        [],
+                        [],
+                        circuitState
+                    );
+                    panel._initialized = true;
+                    panel.panel = mockDOM.panelEl;
+                    // Setup: Panel is initially hidden (simulates page refresh scenario)
+                    mockDOM.panelEl.classList.classes.add('hidden');
+                    mockDOM.panelEl.style.display = 'none';
+                    // Setup: Panel was previously sized by user (saved in state)
+                    panel.state = { x: 100, y: 100, width: '500px', height: '400px' };
+
+                    vi.spyOn(panel._stateMachine, 'handleShow').mockReturnValue({ action: 'SHOW_COMPUTING' });
+                    vi.spyOn(panel, '_renderComputingState').mockImplementation(() => {});
+
+                    await panel.show();
+
+                    // Verify: Dimensions restored immediately (before computation completes)
+                    expect(panel.panel.style.width).toBe('500px');
+                    expect(panel.panel.style.height).toBe('400px');
+                });
+
                 it('should call _saveVisibleState()', async () => {
                     const circuitState = createMockCircuitState(null); // No analysis yet
                     const panel = new TruthTablePanel(

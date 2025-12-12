@@ -402,15 +402,29 @@ export class TruthTablePanel {
         // PRE-ACTION: Panel visibility and geometry restoration
         // Only for show() calls that need to reveal the panel
         // ========================================================================
-        if (isShowCall && wasHidden && this._shouldRevealPanel(action)) {
+        const shouldReveal = this._shouldRevealPanel(action);
+        logger.debug('[TruthTablePanel] PRE-ACTION check:', {
+            isShowCall,
+            wasHidden,
+            shouldReveal,
+            action: action?.action,
+            willEnterBlock: isShowCall && wasHidden && shouldReveal
+        });
+        if (isShowCall && wasHidden && shouldReveal) {
+            logger.debug('[TruthTablePanel] PRE-ACTION - entering block, state:', {
+                hasState: !!this.state,
+                width: this.state?.width,
+                height: this.state?.height
+            });
             // Reveal panel with opacity 0 until content ready (for slow paths)
             this.panel.classList.remove('hidden');
             this.panel.style.display = 'block';
             this.panel.style.opacity = '0';
             this.panel.style.pointerEvents = 'auto';
 
-            // Restore saved position before rendering (avoids flicker)
+            // Restore saved position AND dimensions before rendering (avoids flicker)
             this._restoreSavedPosition();
+            this._restoreSavedDimensions();
         }
 
         // ========================================================================
@@ -733,6 +747,14 @@ export class TruthTablePanel {
         // This prevents the rendering spinner from appearing in a too-small panel
         // Skip if we have a saved height - user's preference takes priority
         const hasValidSavedHeightForEstimate = this.state && this.state.height && this.state.height !== '';
+        logger.debug('[TruthTablePanel] _buildTabulator - height estimation check:', {
+            hasState: !!this.state,
+            stateHeight: this.state?.height,
+            hasValidSavedHeight: hasValidSavedHeightForEstimate,
+            isQuickRebuild,
+            hasTabulatorInstance: !!this.tabulatorInstance,
+            tableLength: this.circuitAnalysis?.table?.length
+        });
         if (!isQuickRebuild && !this.tabulatorInstance && this.circuitAnalysis?.table?.length && !hasValidSavedHeightForEstimate) {
             const estimatedHeight = estimatePanelHeight(
                 this.circuitAnalysis.table.length,
@@ -1494,13 +1516,21 @@ export class TruthTablePanel {
      * @private
      */
     _restoreSavedDimensions() {
+        logger.debug('[TruthTablePanel] _restoreSavedDimensions - state:', {
+            hasState: !!this.state,
+            hasPanel: !!this.panel,
+            width: this.state?.width,
+            height: this.state?.height
+        });
         if (!this.state || !this.panel) return;
 
         if (this.state.width && this.state.width !== '') {
             this.panel.style.width = this.state.width;
+            logger.debug('[TruthTablePanel] _restoreSavedDimensions - applied width:', this.state.width);
         }
         if (this.state.height && this.state.height !== '') {
             this.panel.style.height = this.state.height;
+            logger.debug('[TruthTablePanel] _restoreSavedDimensions - applied height:', this.state.height);
         }
     }
 
@@ -1743,6 +1773,11 @@ export class TruthTablePanel {
 
         // Track if panel was hidden before (for positioning and pre-action setup)
         const wasHidden = !this._isVisible();
+        logger.debug('[TruthTablePanel] show() - wasHidden:', wasHidden, 'state:', {
+            hasState: !!this.state,
+            width: this.state?.width,
+            height: this.state?.height
+        });
 
         // Get action from state machine
         const action = this._stateMachine.handleShow();
