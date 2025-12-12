@@ -475,9 +475,9 @@ export class TruthTablePanel {
                     this._stateMachine.renderCompleted();
                 }
                 // Re-position after table built for large tables (panel dimensions may have changed)
-                // positionPanelSmartly already handles viewport constraints
+                // _positionPanelIfNeeded respects saved position while handling viewport constraints
                 if (wasHidden && this.circuitAnalysis?.table?.length > TRUTH_TABLE.SPINNER_THRESHOLD_ROWS) {
-                    positionPanelSmartly(this.panel, this.canvas, this.components);
+                    this._positionPanelIfNeeded(false);
                 }
                 break;
 
