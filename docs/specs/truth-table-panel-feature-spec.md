@@ -665,17 +665,46 @@ if (this.truthTablePanel) {
 
 ---
 
-## 14. Related Documentation
+## 14. Action Path Invariants
 
+**CRITICAL:** Every code path through `show()` and event handlers must satisfy these invariants.
+
+### After ANY show() operation (all paths):
+
+| Invariant | Method | Why |
+|-----------|--------|-----|
+| Panel is draggable/resizable | `_setupInteractions()` | User can reposition panel |
+| Panel state is saved | `_saveState()` | Persists visible:true |
+| Row is highlighted | `_updateHighlight()` | Shows current simulation row |
+| Event is emitted | `emit(TRUTH_TABLE_SHOWN)` | Other components can react |
+| Dimensions are restored | `_restoreSavedDimensions()` | User's sizing preserved |
+
+### After ANY table rebuild:
+
+| Invariant | Method | Why |
+|-----------|--------|-----|
+| Row heights are correct | `_reapplyRowHeights()` | Tabulator resets styles |
+| Highlight is restored | `_updateHighlight()` | Tabulator clears selection |
+| Column order preserved | `_generateColumns()` | User's arrangement kept |
+
+See [Development Guidelines](../TRUTH_TABLE_GUIDELINES.md) for the full invariant checklist.
+
+---
+
+## 15. Related Documentation
+
+- [Development Guidelines](../TRUTH_TABLE_GUIDELINES.md) - **START HERE** before making changes
 - [Truth Table Flow Diagram](./truth-table-flow-diagram.md) - Visual flow documentation
 - [Truth Table Panel Internal Flow](./truth-table-panel-internal-flow.md) - Method call graphs
+- [Refactoring Lessons](./truth-table-refactoring-lessons.md) - Historical regression analysis
 - [Manual Test Cases](../manual-tests/truth-table-panel.md) - Comprehensive test scenarios
 - [Architecture Overview](../../ARCHITECTURE.md) - System architecture
 
 ---
 
-## 15. Document History
+## 16. Document History
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1 | 2025-12-12 | Added Action Path Invariants section, linked to guidelines |
 | 1.0 | 2025-12-08 | Initial complete specification |

@@ -303,6 +303,8 @@ Non-canvas UI components using modern libraries.
 
 #### TruthTablePanel Architecture
 
+> **Before modifying TruthTablePanel**, read [Truth Table Guidelines](docs/TRUTH_TABLE_GUIDELINES.md)
+
 The TruthTablePanel is organized into clearly delineated sections:
 
 | Section | Purpose |
@@ -686,6 +688,8 @@ npm test         # Run unit tests
 
 - [Architecture Flow Diagram](docs/specs/architecture-flow-diagram.md) - Visual flow diagrams for the event-driven architecture
 - [Architecture Evolution Proposal](docs/specs/architecture-evolution-proposal.md) - Original design document for live editing
+- [Truth Table Guidelines](docs/TRUTH_TABLE_GUIDELINES.md) - **Read before modifying TruthTablePanel**
+- [Truth Table Refactoring Lessons](docs/specs/truth-table-refactoring-lessons.md) - Historical regression analysis
 
 ## State Ownership
 

@@ -416,3 +416,5 @@ Events describe what happened, not what listeners should do:
 
 - [Architecture Evolution Proposal](./architecture-evolution-proposal.md) - Original design document
 - [ARCHITECTURE.md](../../ARCHITECTURE.md) - Overall codebase architecture
+- [Truth Table Guidelines](../TRUTH_TABLE_GUIDELINES.md) - Guidelines for TruthTablePanel changes
+- [Truth Table Refactoring Lessons](./truth-table-refactoring-lessons.md) - Historical regression analysis

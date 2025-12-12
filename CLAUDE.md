@@ -339,6 +339,28 @@ it('emits CANVAS_REDRAW after component placement', () => {
 
 Run tests: `npm test` (watch) or `npm run test:run` (single)
 
+### Invariant Test Policy
+
+Files in `tests/invariants/` are **PROTECTED**:
+
+- **NEVER** modify invariant tests to make them pass
+- If an invariant test fails, the production code has a regression - **fix the code, not the test**
+- Only modify invariant tests when the user explicitly requests a behavior change
+- When adding new action paths to TruthTablePanel, ADD tests to the invariant matrix (don't remove existing tests)
+
+These tests exist because 16 bugs were fixed multiple times due to refactoring regressions.
+
+**Test Matrix:** 3 circuit types × 4 situations × 14 actions = 168 scenarios
+
+**Invariants verified:**
+- Position preserved (unless action explicitly changes it)
+- Size preserved (or auto-fit on structure change)
+- Column order preserved
+- Row height preserved after table operations
+- Panel draggable after any show operation
+
+See `docs/TRUTH_TABLE_GUIDELINES.md` for detailed invariant documentation.
+
 ## Code Style
 
 ### JavaScript
@@ -448,6 +470,8 @@ const boardManager = new BoardManager(storage);
 ### State Machine + Action Path Pattern
 
 Used by TruthTablePanel for managing complex UI with multiple code paths. The pattern separates **decision logic** (state machine) from **execution logic** (action handlers).
+
+> **IMPORTANT:** Before modifying TruthTablePanel, read [docs/TRUTH_TABLE_GUIDELINES.md](docs/TRUTH_TABLE_GUIDELINES.md) - it documents invariants that must be preserved and historical regression patterns.
 
 **Architecture:**
 ```
@@ -719,6 +743,8 @@ npm run test:run # Single test run
 | `src/utils/logger.js` | Development logging utility |
 | `src/constants.js` | All configuration values |
 | `src/ui/messages.js` | User-facing strings |
+| `src/ui/TruthTablePanel.js` | Truth table display panel |
 | `src/ui/TruthTablePanelStateMachine.js` | State machine for TruthTablePanel action paths |
 | `ARCHITECTURE.md` | Detailed architecture documentation |
-| `docs/TRUTH_TABLE_PANEL_REFACTORING.md` | Action path pattern analysis and refactoring plan |
+| `docs/TRUTH_TABLE_GUIDELINES.md` | **Guidelines for TruthTablePanel changes** |
+| `docs/specs/truth-table-refactoring-lessons.md` | Historical regression analysis |
